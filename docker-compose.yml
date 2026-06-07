@@ -76,7 +76,7 @@ services:
   # Prometheus — collecte des métriques
   # ───────────────────────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:v2.51.2
+    image: prom/prometheus:v2.55.1
     container_name: pylos-prometheus
     restart: unless-stopped
     ports:
