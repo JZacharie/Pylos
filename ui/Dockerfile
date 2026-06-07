@@ -7,7 +7,7 @@ COPY . .
 RUN npm run build
 
 # ── Runtime : nginx pour servir le SPA ──────────────────────────────────────
-FROM nginx:1.27 AS runtime
+FROM nginx:1.31 AS runtime
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
