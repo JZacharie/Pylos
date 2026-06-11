@@ -71,8 +71,8 @@ impl LlmPlugin for StructuredOutputPlugin {
                 // 2. Validate against schema if json_schema is specified
                 if format_type == "json_schema" {
                     if let Some(ref schema_val) = response_format.json_schema {
-                        let compiled = match jsonschema::JSONSchema::compile(schema_val) {
-                            Ok(c) => c,
+                        let validator = match jsonschema::validator_for(schema_val) {
+                            Ok(v) => v,
                             Err(e) => {
                                 warn!(
                                     "StructuredOutputPlugin: Invalid JSON Schema in request: {}",
@@ -85,11 +85,15 @@ impl LlmPlugin for StructuredOutputPlugin {
                             }
                         };
 
-                        if let Err(errors) = compiled.validate(&parsed_json) {
+                        let errors: Vec<_> = validator.iter_errors(&parsed_json).collect();
+                        if !errors.is_empty() {
                             let mut err_msgs = Vec::new();
-                            for err in errors {
-                                err_msgs
-                                    .push(format!("Path: {}, Error: {}", err.instance_path, err));
+                            for err in &errors {
+                                err_msgs.push(format!(
+                                    "Path: {}, Error: {}",
+                                    err.instance_path(),
+                                    err
+                                ));
                             }
                             let error_summary = err_msgs.join("; ");
                             warn!(
