@@ -23,6 +23,7 @@ import Login from './pages/Login'
 import Callback from './pages/Callback'
 import Prompts from './pages/Prompts'
 import Placeholder from './pages/Placeholder'
+import McpServers from './pages/McpServers'
 import {
   Menu,
   LayoutDashboard,
@@ -185,7 +186,7 @@ export default function App() {
             <Route path="/tools/policies" element={<ToolPolicies />} />
             
             <Route path="/agents" element={<Placeholder title="Agents" description="Configure, deploy, and monitor autonomous AI agents and agent groups." />} />
-            <Route path="/mcp-servers" element={<Placeholder title="MCP Servers" description="Connect and manage Model Context Protocol (MCP) servers to provide tools to your agents." />} />
+            <Route path="/mcp-servers" element={<McpServers />} />
             <Route path="/guardrails-monitor" element={<Placeholder title="Guardrails Monitor" description="Real-time monitoring and alerting for guardrail interventions, safety violations, and content filtering." />} />
             <Route path="/api-reference" element={<Placeholder title="API Reference" description="Explore the Pylos API documentation and interactive specifications." />} />
             <Route path="/ai-hub" element={<Placeholder title="AI Hub" description="Discover pre-built prompts, workflows, and model evaluations from the Pylos community." />} />
