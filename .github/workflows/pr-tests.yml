@@ -28,7 +28,7 @@ jobs:
       should-skip: ${{ steps.check.outputs.should-skip }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Check if pipeline should be skipped
         id: check
         run: |
@@ -51,7 +51,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -61,7 +61,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v3
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2
