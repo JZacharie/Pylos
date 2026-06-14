@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { virtualKeysApi, providersApi, modelsApi, type VirtualKey, type VkBudgetResponse } from '../lib/api'
-import { providerColor } from '../lib/utils'
+import { providerColor, getCurrentUser, isCurrentUserAdmin } from '../lib/utils'
 import {
   KeyRound, CheckCircle, XCircle, Shield, TrendingUp,
   ChevronDown, ChevronUp, Plus, Pencil, Trash2, X, Check,
@@ -570,10 +570,21 @@ export default function VirtualKeys() {
     onSuccess: () => { invalidate(); setDeletingVk(null) },
   })
 
-  const filtered = useMemo(() => {
+  const userVks = useMemo(() => {
     if (!data?.virtual_keys) return []
+    const user = getCurrentUser()
+    if (!user || isCurrentUserAdmin()) return data.virtual_keys
+    return data.virtual_keys.filter(vk =>
+      vk.user_id === user.id ||
+      vk.user_email === user.email ||
+      (vk.team_id && user.team_ids.includes(vk.team_id))
+    )
+  }, [data])
+
+  const filtered = useMemo(() => {
+    if (!userVks?.length) return []
     const q = search.toLowerCase()
-    return data.virtual_keys.filter(vk => {
+    return userVks.filter(vk => {
       if (!q) return true
       const fields: Record<string, string> = {
         all: [vk.id, vk.name, vk.team_alias ?? '', vk.team_id ?? '', vk.organization_id ?? '', vk.access_group_id ?? '',
@@ -598,15 +609,17 @@ export default function VirtualKeys() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Virtual Keys</h1>
-          <p className="text-sm text-zinc-400 mt-1">{filtered.length} / {data?.total ?? '—'} configured</p>
+          <p className="text-sm text-zinc-400 mt-1">{filtered.length} / {userVks.length ?? '—'} configured</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => refetch()} disabled={isFetching}
             className="flex items-center justify-center p-2 text-zinc-400 hover:text-white bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 disabled:opacity-50 rounded-lg transition-colors" title="Refresh keys"
           ><RotateCw size={15} className={isFetching ? 'animate-spin' : ''} /></button>
-          <button onClick={() => { setMutationError(null); setShowCreate(true) }}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-sm rounded-lg transition-colors"
-          ><Plus size={15} /> Create key</button>
+          {isCurrentUserAdmin() && (
+            <button onClick={() => { setMutationError(null); setShowCreate(true) }}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-sm rounded-lg transition-colors"
+            ><Plus size={15} /> Create key</button>
+          )}
         </div>
       </div>
 
@@ -770,12 +783,16 @@ export default function VirtualKeys() {
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => { setMutationError(null); setEditingVk(vk) }}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 rounded transition-all" title="Edit"
-                          ><Pencil size={12} /></button>
-                          <button onClick={() => setDeletingVk(vk)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all" title="Delete"
-                          ><Trash2 size={12} /></button>
+                          {isCurrentUserAdmin() && (
+                            <>
+                              <button onClick={() => { setMutationError(null); setEditingVk(vk) }}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 rounded transition-all" title="Edit"
+                              ><Pencil size={12} /></button>
+                              <button onClick={() => setDeletingVk(vk)}
+                                className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all" title="Delete"
+                              ><Trash2 size={12} /></button>
+                            </>
+                          )}
                           <span className="text-zinc-600 ml-1">{expandedId === vk.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
                         </div>
                       </td>

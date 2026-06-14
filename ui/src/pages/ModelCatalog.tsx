@@ -6,6 +6,7 @@ import {
   AlertTriangle, RotateCcw, AlertCircle, Search, Filter, Info, RefreshCw, Plus,
   Activity, Play, Globe, Key, Network, Sliders, Tags, FileJson
 } from 'lucide-react'
+import { isCurrentUserAdmin } from '../lib/utils'
 
 const PROVIDERS = ['all', 'anthropic', 'gemini', 'groq', 'mistral', 'deepseek', 'ollama-jo3', 'lemonade-jo3', 'lemonade-optimus']
 
@@ -1252,7 +1253,9 @@ export default function ModelCatalog() {
         {(
           [
             { id: 'all-models', label: 'All Models' },
-            { id: 'add-model', label: 'Add Model', onClick: () => { setMutationError(null); setShowCreate(true); } },
+            ...(isCurrentUserAdmin()
+              ? [{ id: 'add-model' as const, label: 'Add Model' as const, onClick: () => { setMutationError(null); setShowCreate(true); } }]
+              : []),
             { id: 'llm-credentials', label: 'LLM Credentials' },
             { id: 'endpoints', label: 'Pass-Through Endpoints' },
             { id: 'health', label: 'Health Status' },

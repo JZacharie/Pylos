@@ -507,6 +507,25 @@ export interface VectorCollection {
   distance: string
 }
 
+export interface SystemPrompt {
+  id: string
+  name: string
+  prompt: string
+}
+
+export const systemPromptsApi = {
+  getAll: () =>
+    api.get<{ system_prompts: SystemPrompt[]; total: number }>('/api/system-prompts').then(r => r.data),
+  get: (id: string) =>
+    api.get<{ system_prompt: SystemPrompt }>(`/api/system-prompts/${id}`).then(r => r.data),
+  create: (data: { id: string; name: string; prompt: string }) =>
+    api.post<{ message: string; id: string }>('/api/system-prompts', data).then(r => r.data),
+  update: (id: string, data: { name: string; prompt: string }) =>
+    api.put<{ message: string; id: string }>(`/api/system-prompts/${id}`, data).then(r => r.data),
+  remove: (id: string) =>
+    api.delete<{ message: string }>(`/api/system-prompts/${id}`).then(r => r.data),
+}
+
 export const vectorStoresApi = {
   getAll: () =>
     api.get<{ collections: VectorCollection[] }>('/api/vector-stores/collections').then(r => r.data),

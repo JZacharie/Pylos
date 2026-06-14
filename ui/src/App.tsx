@@ -21,6 +21,7 @@ import VectorStores from './pages/VectorStores'
 import ToolPolicies from './pages/ToolPolicies'
 import Login from './pages/Login'
 import Callback from './pages/Callback'
+import Prompts from './pages/Prompts'
 import Placeholder from './pages/Placeholder'
 import {
   Menu,
@@ -191,7 +192,7 @@ export default function App() {
             <Route path="/learning-resources" element={<Placeholder title="Learning Resources" description="Guides, tutorials, and documentation to master AI Gateway management." />} />
             
             <Route path="/experimental/caching" element={<Placeholder title="Prompt Caching" description="Configure semantic caching and prefix caching to reduce latency and API costs." />} />
-            <Route path="/experimental/prompts" element={<Placeholder title="Prompts Management" description="Collaborative prompt engineering, version control, and A/B testing playground." />} />
+            <Route path="/experimental/prompts" element={<Prompts />} />
             <Route path="/experimental/api-playground" element={<Placeholder title="API Playground" description="Test Pylos API endpoints directly from your browser with built-in request builders." />} />
             <Route path="/experimental/tag-management" element={<Placeholder title="Tag Management" description="Create and manage tags to organize, query, and filter your virtual keys and logs." />} />
             <Route path="/experimental/claude-plugins" element={<Placeholder title="Claude Code Plugins" description="Configure and manage plugins for Claude Code integration." />} />

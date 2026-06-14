@@ -493,23 +493,25 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         </div>
 
         {/* Admin Key Configuration */}
-        <button
-          onClick={() => {
-            if (onClose) onClose();
-            const currentKey = localStorage.getItem('pylos_admin_key') || '';
-            const newKey = window.prompt("Configure Pylos Admin Key (PYLOS_ADMIN_KEY):", currentKey);
-            if (newKey !== null) {
-              localStorage.setItem('pylos_admin_key', newKey);
-              window.location.reload();
-            }
-          }}
-          className="flex items-center gap-3 px-4 py-3 border-t border-zinc-800/50
-            text-zinc-500 hover:text-white hover:bg-zinc-800/50 transition-colors text-sm w-full text-left"
-          title="Configure Admin Key"
-        >
-          <KeyRound size={16} className="flex-shrink-0" />
-          {(!collapsed || isOpen) && <span>Admin Key</span>}
-        </button>
+        {isAdmin() && (
+          <button
+            onClick={() => {
+              if (onClose) onClose();
+              const currentKey = localStorage.getItem('pylos_admin_key') || '';
+              const newKey = window.prompt("Configure Pylos Admin Key (PYLOS_ADMIN_KEY):", currentKey);
+              if (newKey !== null) {
+                localStorage.setItem('pylos_admin_key', newKey);
+                window.location.reload();
+              }
+            }}
+            className="flex items-center gap-3 px-4 py-3 border-t border-zinc-800/50
+              text-zinc-500 hover:text-white hover:bg-zinc-800/50 transition-colors text-sm w-full text-left"
+            title="Configure Admin Key"
+          >
+            <KeyRound size={16} className="flex-shrink-0" />
+            {(!collapsed || isOpen) && <span>Admin Key</span>}
+          </button>
+        )}
 
         {/* User profile card */}
         {user ? (

@@ -26,24 +26,6 @@ struct CircuitBreakerState {
     last_failure: Option<Instant>,
 }
 
-/// Compteur Round-Robin pour chaque modèle.
-/// Permet de distribuer les requêtes séquentiellement entre les providers
-/// qui supportent un modèle donné.
-#[derive(Debug, Default)]
-struct RoundRobinState {
-    counters: Mutex<HashMap<String, usize>>,
-}
-
-impl RoundRobinState {
-    fn select_and_advance(&self, model: &str, provider_count: usize) -> usize {
-        let mut counters = self.counters.lock().unwrap();
-        let entry = counters.entry(model.to_string()).or_insert(0);
-        let current = *entry;
-        *entry = (*entry + 1) % provider_count;
-        current
-    }
-}
-
 /// Trait permettant à weighted_shuffle d'extraire le poids d'un item.
 trait HasWeight {
     fn weight(&self) -> f64;
@@ -63,7 +45,6 @@ pub struct InferenceOrchestrator {
     providers: Arc<RwLock<ProviderList>>,
     plugins: Vec<Arc<dyn LlmPlugin>>,
     circuit_breakers: Arc<Mutex<HashMap<String, CircuitBreakerState>>>,
-    round_robin: RoundRobinState,
 }
 
 impl InferenceOrchestrator {
@@ -72,7 +53,6 @@ impl InferenceOrchestrator {
             providers: Arc::new(RwLock::new(providers)),
             plugins,
             circuit_breakers: Arc::new(Mutex::new(HashMap::new())),
-            round_robin: RoundRobinState::default(),
         }
     }
 
@@ -221,26 +201,21 @@ impl InferenceOrchestrator {
             }
         }
 
-        let (mut active_supporting, broken_supporting): (Vec<_>, Vec<_>) = supporting
+        let (active_supporting, broken_supporting): (Vec<_>, Vec<_>) = supporting
             .into_iter()
             .partition(|(_, _, _, is_open)| !*is_open);
 
-        // 3. Round-Robin selection among ACTIVE supporting providers
+        // 3. Stable provider/endpoint selection (no round-robin rotation)
         let n_active = active_supporting.len();
         if n_active > 0 {
-            let rr_index = self.round_robin.select_and_advance(model, n_active);
-            active_supporting.rotate_left(rr_index);
-
             let selected_provider = &active_supporting[0].0;
             info!(
                 model = %model,
                 selected_provider = %selected_provider.name(),
-                round_robin_index = rr_index,
                 total_active_supporting = n_active,
-                "[Routing] Model: {} -> Selected Provider: {} (Round-Robin index: {})",
+                "[Routing] Model: {} -> Selected Provider: {} (No rotation: provider not saturated)",
                 model,
                 selected_provider.name(),
-                rr_index,
             );
         } else {
             info!(
@@ -249,12 +224,12 @@ impl InferenceOrchestrator {
             );
         }
 
-        // 4. Weighted shuffle for remaining ordering
+        // 4. Order remaining providers
+        // We preserve configured order for active providers, and shuffle broken ones for retry logic.
         let broken_supporting = Self::weighted_shuffle(broken_supporting);
         let (active_non_supporting, broken_non_supporting): (Vec<_>, Vec<_>) = non_supporting
             .into_iter()
             .partition(|(_, _, _, is_open)| !*is_open);
-        let active_non_supporting = Self::weighted_shuffle(active_non_supporting);
         let broken_non_supporting = Self::weighted_shuffle(broken_non_supporting);
 
         let mut ordered = Vec::new();
@@ -680,20 +655,27 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
         }
     }
 
-    let is_pro = model.contains("pro")
+    let is_pro = (model.contains("pro")
         || model.contains("opus")
         || model.contains("large")
         || model.contains("sonnet")
         || model.contains("70b")
+        || model.contains("405b")
         || model.contains("gpt-4")
         || model.contains("o1")
-        || model.contains("o3");
+        || model.contains("o3")
+        || model.contains("reasoner"))
+        && !((model.contains("mini") && !model.contains("gemini"))
+            || model.contains("flash")
+            || model.contains("haiku")
+            || model.contains("8b")
+            || model.contains("lite"));
 
     // 2. Sinon, on associe les familles de modèles standards aux modèles équivalents supportés par le provider
     match provider_name {
         "openai" => {
             if model.contains("flash")
-                || model.contains("mini")
+                || (model.contains("mini") && !model.contains("gemini"))
                 || model.contains("haiku")
                 || model.contains("8b")
                 || model.contains("lite")
@@ -705,7 +687,7 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
         }
         "anthropic" => {
             if model.contains("flash")
-                || model.contains("mini")
+                || (model.contains("mini") && !model.contains("gemini"))
                 || model.contains("haiku")
                 || model.contains("8b")
                 || model.contains("lite")
@@ -833,6 +815,12 @@ mod tests {
         // Test fallback to deepseek-v4-flash for a flash model
         assert_eq!(
             map_model_for_provider("deepseek", "gemini-3.5-flash", &[]),
+            "deepseek-v4-flash"
+        );
+
+        // Test fallback to deepseek-v4-flash for gpt-4o-mini (preventing mini from being classified as pro)
+        assert_eq!(
+            map_model_for_provider("deepseek", "gpt-4o-mini", &[]),
             "deepseek-v4-flash"
         );
 

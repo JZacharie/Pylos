@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { providersApi, type Provider } from '../lib/api'
-import { providerColor } from '../lib/utils'
+import { providerColor, isCurrentUserAdmin } from '../lib/utils'
 import { Key, Globe, RotateCcw, Plus, Pencil, Trash2, X, Check, AlertTriangle } from 'lucide-react'
 import { ProviderIcon } from '../components/ProviderIcon'
 
@@ -362,14 +362,16 @@ export default function Providers() {
             {data?.total ?? '—'} configured
           </p>
         </div>
-        <button
-          onClick={() => { setMutationError(null); setShowCreate(true) }}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98]
-            text-white text-sm rounded-lg transition-colors"
-        >
-          <Plus size={15} />
-          Add provider
-        </button>
+        {isCurrentUserAdmin() && (
+          <button
+            onClick={() => { setMutationError(null); setShowCreate(true) }}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98]
+              text-white text-sm rounded-lg transition-colors"
+          >
+            <Plus size={15} />
+            Add provider
+          </button>
+        )}
       </div>
 
       {/* Grid */}
@@ -463,6 +465,7 @@ function ProviderCard({
     }
   }
 
+  const isAdmin = isCurrentUserAdmin()
   return (
     <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-5 hover:border-zinc-700/50
       transition-colors group">
@@ -504,22 +507,26 @@ function ProviderCard({
             <RotateCcw size={13} className={testing ? 'animate-spin' : ''} />
           </button>
           {/* Actions — visible on hover */}
-          <button
-            onClick={e => { e.stopPropagation(); onEdit() }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-white
-              hover:bg-zinc-800/50 rounded-lg transition-all"
-            title="Edit"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            onClick={e => { e.stopPropagation(); onDelete() }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-red-400
-              hover:bg-red-400/10 rounded-lg transition-all"
-            title="Delete"
-          >
-            <Trash2 size={13} />
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={e => { e.stopPropagation(); onEdit() }}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-white
+                  hover:bg-zinc-800/50 rounded-lg transition-all"
+                title="Edit"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); onDelete() }}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-red-400
+                  hover:bg-red-400/10 rounded-lg transition-all"
+                title="Delete"
+              >
+                <Trash2 size={13} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 

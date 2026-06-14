@@ -1,6 +1,6 @@
 use crate::interfaces::http::{
     access_control, auth, completions, config, embeddings, health, images, inference, logs,
-    metrics, models, vector_stores,
+    metrics, models, system_prompts, vector_stores,
 };
 use crate::mcp;
 use crate::mcp_proxy;
@@ -205,6 +205,27 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/vector-stores/collections/:name/search",
             post(vector_stores::search_collection),
+        )
+        // System Prompt management routes
+        .route(
+            "/api/system-prompts",
+            get(system_prompts::list_system_prompts),
+        )
+        .route(
+            "/api/system-prompts",
+            post(system_prompts::create_system_prompt),
+        )
+        .route(
+            "/api/system-prompts/:id",
+            get(system_prompts::get_system_prompt),
+        )
+        .route(
+            "/api/system-prompts/:id",
+            put(system_prompts::update_system_prompt),
+        )
+        .route(
+            "/api/system-prompts/:id",
+            delete(system_prompts::delete_system_prompt),
         )
         // MCP Server management routes
         .route("/api/mcp-servers", get(mcp::list_mcp_servers))

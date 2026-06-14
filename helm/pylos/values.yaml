@@ -43,6 +43,36 @@ config: |
           "retry_backoff_max_ms": 5000
         }
       },
+      "ollama-optimus": {
+        "keys": [
+          {
+            "name": "local",
+            "value": "ollama",
+            "models": [
+              "gemma4:e2b",
+              "gemma4:12b",
+              "gemma4:12b-it-qat",
+              "codestral:22b-v0.1-q4_K_M",
+              "qwen2.5-coder:14b",
+              "deepseek-coder-v2:16b",
+              "qwen3-embedding:latest",
+              "starcoder2:3b",
+              "nomic-embed-text:latest",
+              "qwen2.5-coder:7b",
+              "qwen2.5-coder:1.5b-base",
+              "llama3.1:8b"
+            ],
+            "weight": 1.0
+          }
+        ],
+        "network": {
+          "base_url": "http://192.168.0.58:11434/v1",
+          "timeout_secs": 120,
+          "max_retries": 2,
+          "retry_backoff_initial_ms": 500,
+          "retry_backoff_max_ms": 5000
+        }
+      },
       "lemonade-jo3": {
         "keys": [
           {

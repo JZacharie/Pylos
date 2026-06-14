@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { logsApi, type LogEntry } from '../lib/api'
-import { formatTimestamp, formatLatency, formatCost, formatNumber, providerColor } from '../lib/utils'
+import { logsApi, virtualKeysApi, type LogEntry, type VirtualKey } from '../lib/api'
+import { formatTimestamp, formatLatency, formatCost, formatNumber, providerColor, getCurrentUser, isCurrentUserAdmin } from '../lib/utils'
 import { RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const LIMIT = 50
@@ -20,6 +20,23 @@ export default function Logs() {
     queryFn: () => logsApi.getFilterData(),
     staleTime: 30_000,
   })
+
+  const { data: allVks } = useQuery({
+    queryKey: ['virtual-keys'],
+    queryFn: () => virtualKeysApi.getAll(),
+    staleTime: 30_000,
+  })
+
+  const visibleVkNames = useMemo(() => {
+    const user = getCurrentUser()
+    if (!user || isCurrentUserAdmin()) return null
+    const userFiltered = (allVks?.virtual_keys ?? []).filter((vk: VirtualKey) =>
+      vk.user_id === user.id ||
+      vk.user_email === user.email ||
+      (vk.team_id && user.team_ids.includes(vk.team_id))
+    )
+    return new Set(userFiltered.map((vk: VirtualKey) => vk.name))
+  }, [allVks])
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['logs', offset, period, provider, status, virtualKey, model],
@@ -85,7 +102,11 @@ export default function Logs() {
             className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:border-emerald-500/50 focus:outline-none"
           >
             <option value="">All keys</option>
-            {(filterData?.virtual_keys ?? []).map((vk: { id: string; name: string } | string) => {
+            {(filterData?.virtual_keys ?? []).filter((vk: { id: string; name: string } | string) => {
+              if (!visibleVkNames) return true
+              const name = typeof vk === 'string' ? vk : vk.name
+              return visibleVkNames.has(name)
+            }).map((vk: { id: string; name: string } | string) => {
               const id = typeof vk === 'string' ? vk : vk.id
               const name = typeof vk === 'string' ? vk : vk.name
               return <option key={id} value={name}>{name}</option>

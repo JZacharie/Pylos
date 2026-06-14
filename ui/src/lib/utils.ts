@@ -56,3 +56,26 @@ export const STATUS_COLORS = {
   success: '#22c55e',
   error: '#ef4444',
 }
+
+export interface CurrentUser {
+  id: string
+  email: string
+  name: string
+  role: string
+  team_ids: string[]
+  group: string
+}
+
+export function getCurrentUser(): CurrentUser | null {
+  if (typeof window === 'undefined') return null
+  const raw = localStorage.getItem('pylos_user')
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch { return null }
+}
+
+export function isCurrentUserAdmin(): boolean {
+  if (typeof window === 'undefined') return false
+  const user = getCurrentUser()
+  if (user) return user.role === 'admin'
+  return !!localStorage.getItem('pylos_admin_key')
+}

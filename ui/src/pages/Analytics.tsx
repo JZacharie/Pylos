@@ -1,37 +1,36 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { logsApi } from '../lib/api'
+import { logsApi, organizationsApi, teamsApi, usersApi, virtualKeysApi } from '../lib/api'
+import type { Organization, Team, InternalUser, VirtualKey } from '../lib/api'
+import { getCurrentUser, isCurrentUserAdmin } from '../lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 import {
-  Activity, TrendingUp, Zap, Shield, DollarSign, Clock, AlertTriangle, Cpu
+  Activity, TrendingUp, Zap, Shield, DollarSign, Clock, AlertTriangle, Cpu,
+  Building2, Users, User, Filter,
 } from 'lucide-react'
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const PERIODS = ['1h', '6h', '24h', '7d'] as const
 type Period = typeof PERIODS[number]
 
-// Prix GPT-4o de référence pour calcul d'économies ($/M tokens)
+type ViewMode = 'all' | 'org' | 'team' | 'user'
+
 const GPT4O_PRICE_PER_1M_IN  = 5.0
 const GPT4O_PRICE_PER_1M_OUT = 15.0
 
 const PROVIDER_COLORS: Record<string, string> = {
-  deepseek:   '#6366f1', // indigo
-  ollama:     '#10b981', // green (local, gratuit)
-  openrouter: '#f59e0b', // amber
-
-  graphon:    '#8b5cf6', // violet
-  lemonade:   '#ec4899', // pink
+  deepseek:   '#6366f1',
+  ollama:     '#10b981',
+  openrouter: '#f59e0b',
+  graphon:    '#8b5cf6',
+  lemonade:   '#ec4899',
 }
 
 function providerColor(p: string): string {
   const key = Object.keys(PROVIDER_COLORS).find(k => p.toLowerCase().includes(k))
   return key ? PROVIDER_COLORS[key] : '#6b7280'
 }
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProviderStats {
   provider: string
@@ -46,8 +45,6 @@ interface ProviderStats {
   successCount: number
   latencies: number[]
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatCost(v: number): string {
   if (v === 0) return '$0.00'
@@ -73,13 +70,9 @@ function percentile(arr: number[], p: number): number {
   return sorted[Math.max(0, idx)]
 }
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-800 rounded ${className ?? ''}`} />
 }
-
-// ─── StatCard ─────────────────────────────────────────────────────────────────
 
 function RumCard({
   label, value, sub, icon, accent = 'blue',
@@ -110,10 +103,49 @@ function RumCard({
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+function Select<T extends string>({
+  value, onChange, options, placeholder, icon,
+}: {
+  value: T | null
+  onChange: (v: T) => void
+  options: { value: T; label: string }[]
+  placeholder: string
+  icon: React.ReactNode
+}) {
+  return (
+    <div className="relative">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+        {icon}
+      </span>
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value as T)}
+        className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-8 pr-3 py-2 appearance-none cursor-pointer hover:border-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >
+        <option value="">{placeholder}</option>
+        {options.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function defaultUserState(): { viewMode: ViewMode; userId: string | null } {
+  const user = getCurrentUser()
+  if (user && !isCurrentUserAdmin()) {
+    return { viewMode: 'user', userId: user.id }
+  }
+  return { viewMode: 'all', userId: null }
+}
 
 export default function Analytics() {
+  const userState = defaultUserState()
   const [period, setPeriod] = useState<Period>('24h')
+  const [viewMode, setViewMode] = useState<ViewMode>(userState.viewMode)
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(userState.userId)
 
   const logsQ = useQuery({
     queryKey: ['rum-logs', period],
@@ -127,14 +159,76 @@ export default function Analytics() {
     refetchInterval: 60_000,
   })
 
+  const orgsQ = useQuery({
+    queryKey: ['rum-orgs'],
+    queryFn: () => organizationsApi.getAll(),
+    staleTime: 120_000,
+  })
+
+  const teamsQ = useQuery({
+    queryKey: ['rum-teams'],
+    queryFn: () => teamsApi.getAll(),
+    staleTime: 120_000,
+  })
+
+  const usersQ = useQuery({
+    queryKey: ['rum-users'],
+    queryFn: () => usersApi.getAll(),
+    staleTime: 120_000,
+  })
+
+  const vksQ = useQuery({
+    queryKey: ['rum-vks'],
+    queryFn: () => virtualKeysApi.getAll(),
+    staleTime: 120_000,
+  })
+
   const logs = logsQ.data?.logs ?? []
   const stats = statsQ.data
+  const orgs: Organization[] = orgsQ.data?.organizations ?? []
+  const teams: Team[] = teamsQ.data?.teams ?? []
+  const users: InternalUser[] = usersQ.data?.users ?? []
+  const virtualKeys: VirtualKey[] = vksQ.data?.virtual_keys ?? []
 
-  // ── Calculs dérivés ─────────────────────────────────────────────────────────
+  const filteredVkNames = useMemo(() => {
+    if (viewMode === 'all') return null
+
+    let matching: string[] = []
+
+    if (viewMode === 'org' && selectedOrgId) {
+      matching = virtualKeys
+        .filter(vk => vk.organization_id === selectedOrgId)
+        .map(vk => vk.name)
+    } else if (viewMode === 'team' && selectedTeamId) {
+      matching = virtualKeys
+        .filter(vk => vk.team_id === selectedTeamId)
+        .map(vk => vk.name)
+    } else if (viewMode === 'user' && selectedUserId) {
+      const user = users.find(u => u.id === selectedUserId)
+      if (user) {
+        matching = virtualKeys
+          .filter(vk =>
+            vk.user_id === selectedUserId ||
+            vk.user_email === user.email ||
+            (vk.team_id && user.team_ids.includes(vk.team_id))
+          )
+          .map(vk => vk.name)
+      }
+    }
+
+    return matching.length > 0 ? new Set(matching) : null
+  }, [viewMode, selectedOrgId, selectedTeamId, selectedUserId, virtualKeys, users])
+
+  const filteredLogs = useMemo(() => {
+    if (!filteredVkNames) return logs
+    return logs.filter(l => l.virtual_key && filteredVkNames.has(l.virtual_key))
+  }, [logs, filteredVkNames])
+
   const { providerStats, deepseekStats, savings, cacheHits, allLatencies } = useMemo(() => {
+    const source = filteredLogs
     const map = new Map<string, ProviderStats>()
 
-    for (const log of logs) {
+    for (const log of source) {
       const p = log.provider || 'unknown'
       if (!map.has(p)) {
         map.set(p, {
@@ -163,8 +257,7 @@ export default function Analytics() {
     }
     providerStats.sort((a, b) => b.requests - a.requests)
 
-    // Stats DeepSeek
-    const dsLogs = logs.filter(l => l.provider?.toLowerCase().includes('deepseek'))
+    const dsLogs = source.filter(l => l.provider?.toLowerCase().includes('deepseek'))
     const dsPrompt = dsLogs.reduce((a, l) => a + l.prompt_tokens, 0)
     const dsCompletion = dsLogs.reduce((a, l) => a + l.completion_tokens, 0)
     const dsCost = dsLogs.reduce((a, l) => a + l.cost_usd, 0)
@@ -173,32 +266,63 @@ export default function Analytics() {
       promptTokens: dsPrompt,
       completionTokens: dsCompletion,
       totalCost: dsCost,
-      pct: logs.length > 0 ? (dsLogs.length / logs.length) * 100 : 0,
+      pct: source.length > 0 ? (dsLogs.length / source.length) * 100 : 0,
     }
 
-    // Économies estimées vs GPT-4o
     const equivalentGpt4oCost =
       (dsPrompt / 1_000_000) * GPT4O_PRICE_PER_1M_IN +
       (dsCompletion / 1_000_000) * GPT4O_PRICE_PER_1M_OUT
     const savings = Math.max(0, equivalentGpt4oCost - dsCost)
 
-    // Cache hits (cost=0 mais tokens > 0)
-    const cacheHits = logs.filter(l => l.cost_usd === 0 && l.total_tokens > 0).length
+    const cacheHits = source.filter(l => l.cost_usd === 0 && l.total_tokens > 0).length
 
-    // Latences globales
-    const allLatencies = logs.map(l => l.latency_ms)
+    const allLatencies = source.map(l => l.latency_ms)
 
     return { providerStats, deepseekStats, savings, cacheHits, allLatencies }
-  }, [logs])
+  }, [filteredLogs])
 
   const p50 = percentile(allLatencies, 50)
   const p95 = percentile(allLatencies, 95)
   const successRate = stats?.success_rate ?? 0
 
   const isLoading = logsQ.isLoading || statsQ.isLoading
-  const isEmpty = !isLoading && logs.length === 0
+  const isEmpty = !isLoading && filteredLogs.length === 0
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  const activeFilterLabel = useMemo(() => {
+    if (viewMode === 'org' && selectedOrgId) {
+      const org = orgs.find(o => o.id === selectedOrgId)
+      return org ? `Organisation: ${org.name}` : null
+    }
+    if (viewMode === 'team' && selectedTeamId) {
+      const team = teams.find(t => t.id === selectedTeamId)
+      return team ? `Équipe: ${team.name}` : null
+    }
+    if (viewMode === 'user' && selectedUserId) {
+      const user = users.find(u => u.id === selectedUserId)
+      return user ? `Utilisateur: ${user.name} (${user.email})` : null
+    }
+    return null
+  }, [viewMode, selectedOrgId, selectedTeamId, selectedUserId, orgs, teams, users])
+
+  const filteredTeams = useMemo(() => {
+    if (viewMode === 'team') return teams
+    if (viewMode === 'org' && selectedOrgId) {
+      return teams.filter(t => t.organization_id === selectedOrgId)
+    }
+    return []
+  }, [viewMode, selectedOrgId, teams])
+
+  const filteredUsers = useMemo(() => {
+    if (viewMode === 'user') return users
+    if (viewMode === 'org' && selectedOrgId) {
+      return users.filter(u => u.organization_id === selectedOrgId)
+    }
+    if (viewMode === 'team' && selectedTeamId) {
+      return users.filter(u => u.team_ids.includes(selectedTeamId))
+    }
+    return []
+  }, [viewMode, selectedOrgId, selectedTeamId, users])
+
   return (
     <div className="p-6 space-y-8 overflow-y-auto h-full">
 
@@ -236,18 +360,92 @@ export default function Analytics() {
         </div>
       </div>
 
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-lg border border-gray-700 overflow-hidden">
+          {([
+            { value: 'all' as ViewMode, label: 'Tout', icon: <Filter size={12} /> },
+            { value: 'org' as ViewMode, label: 'Organisation', icon: <Building2 size={12} /> },
+            { value: 'team' as ViewMode, label: 'Équipe', icon: <Users size={12} /> },
+            { value: 'user' as ViewMode, label: 'Utilisateur', icon: <User size={12} /> },
+          ]).map(m => (
+            <button
+              key={m.value}
+              onClick={() => {
+                setViewMode(m.value)
+                setSelectedOrgId(null)
+                setSelectedTeamId(null)
+                setSelectedUserId(null)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${
+                viewMode === m.value
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              {m.icon} {m.label}
+            </button>
+          ))}
+        </div>
+
+        {viewMode === 'org' && (
+          <Select
+            value={selectedOrgId}
+            onChange={setSelectedOrgId}
+            options={orgs.filter(o => o.is_active).map(o => ({ value: o.id, label: o.name }))}
+            placeholder="Sélectionner une organisation"
+            icon={<Building2 size={14} />}
+          />
+        )}
+
+        {(viewMode === 'team' || viewMode === 'org') && (
+          <Select
+            value={viewMode === 'team' ? selectedTeamId : selectedTeamId}
+            onChange={v => setSelectedTeamId(v)}
+            options={(viewMode === 'team' ? teams : filteredTeams)
+              .filter(t => t.is_active)
+              .map(t => ({ value: t.id, label: t.name }))}
+            placeholder="Sélectionner une équipe"
+            icon={<Users size={14} />}
+          />
+        )}
+
+        {(viewMode === 'user' || viewMode === 'org' || viewMode === 'team') && (
+          <Select
+            value={selectedUserId}
+            onChange={setSelectedUserId}
+            options={(viewMode === 'user' ? users : filteredUsers)
+              .filter(u => u.is_active)
+              .map(u => ({ value: u.id, label: `${u.name} (${u.email})` }))}
+            placeholder="Sélectionner un utilisateur"
+            icon={<User size={14} />}
+          />
+        )}
+
+        {activeFilterLabel && (
+          <span className="text-xs text-indigo-400 bg-indigo-900/30 px-2.5 py-1 rounded-full border border-indigo-800 flex items-center gap-1.5">
+            <Filter size={10} />
+            {activeFilterLabel}
+          </span>
+        )}
+      </div>
+
       {/* Empty state */}
       {isEmpty && (
         <div className="flex flex-col items-center justify-center py-24 text-gray-600">
           <Activity size={48} className="mb-4 opacity-30" />
           <p className="text-lg">Aucune donnée sur la période</p>
-          <p className="text-sm mt-1">Envoyez des requêtes via Pylos pour voir les métriques RUM</p>
+          <p className="text-sm mt-1">
+            {filteredVkNames
+              ? 'Aucune requête trouvée pour ce filtre'
+              : 'Envoyez des requêtes via Pylos pour voir les métriques RUM'}
+          </p>
         </div>
       )}
 
       {!isEmpty && (
         <>
-          {/* ── Section 1 : Optimisation DeepSeek ──────────────────────────── */}
+          {/* Section 1 : Optimisation DeepSeek */}
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Zap size={14} className="text-indigo-400" />
@@ -261,7 +459,9 @@ export default function Analytics() {
                   <RumCard
                     label="Requêtes DeepSeek"
                     value={`${deepseekStats.pct.toFixed(1)}%`}
-                    sub={`${formatNumber(deepseekStats.requests)} / ${formatNumber(logs.length)} total`}
+                    sub={`${formatNumber(deepseekStats.requests)} / ${formatNumber(filteredLogs.length)} ${
+                      filteredVkNames ? 'filtrées' : 'total'
+                    }`}
                     icon={<Zap size={14} />}
                     accent={deepseekStats.pct >= 30 ? 'green' : 'yellow'}
                   />
@@ -282,7 +482,7 @@ export default function Analytics() {
                   <RumCard
                     label="Cache Hits"
                     value={formatNumber(cacheHits)}
-                    sub={logs.length > 0 ? `${((cacheHits / logs.length) * 100).toFixed(1)}% des requêtes` : '—'}
+                    sub={filteredLogs.length > 0 ? `${((cacheHits / filteredLogs.length) * 100).toFixed(1)}% des requêtes` : '—'}
                     icon={<Shield size={14} />}
                     accent={cacheHits > 0 ? 'green' : 'gray'}
                   />
@@ -291,7 +491,7 @@ export default function Analytics() {
             </div>
           </section>
 
-          {/* ── Section 2 : Coût par provider (chart) ──────────────────────── */}
+          {/* Section 2 : Coût par provider */}
           <section>
             <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
               <h2 className="text-sm font-semibold text-gray-300 mb-5 flex items-center gap-2">
@@ -335,7 +535,7 @@ export default function Analytics() {
             </div>
           </section>
 
-          {/* ── Section 3 : Table performance par provider ──────────────────── */}
+          {/* Section 3 : Table performance par provider */}
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Activity size={14} className="text-blue-400" />
@@ -414,7 +614,7 @@ export default function Analytics() {
             </div>
           </section>
 
-          {/* ── Section 4 : Token efficiency ────────────────────────────────── */}
+          {/* Section 4 : Token efficiency */}
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Zap size={14} className="text-purple-400" />
@@ -460,7 +660,7 @@ export default function Analytics() {
             </div>
           </section>
 
-          {/* ── Section 5 : Santé du gateway ────────────────────────────────── */}
+          {/* Section 5 : Santé du gateway */}
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Shield size={14} className="text-green-400" />
@@ -494,8 +694,8 @@ export default function Analytics() {
                   />
                   <RumCard
                     label="Requêtes analysées"
-                    value={formatNumber(logs.length)}
-                    sub={`Sur ${period} · limit 2000`}
+                    value={formatNumber(filteredLogs.length)}
+                    sub={`Sur ${period}${filteredVkNames ? ' · filtrées' : ' · limit 2000'}`}
                     icon={<AlertTriangle size={14} />}
                     accent="blue"
                   />
@@ -504,7 +704,7 @@ export default function Analytics() {
             </div>
           </section>
 
-          {/* ── Footer badge ────────────────────────────────────────────────── */}
+          {/* Footer badge */}
           <div className="flex items-center justify-center pt-4 pb-2">
             <span className="text-xs text-gray-600 flex items-center gap-1.5">
               <Zap size={10} className="text-indigo-500" />
