@@ -28,6 +28,7 @@ pub struct LogsQuery {
     pub since_ms: Option<i64>,
     pub until_ms: Option<i64>,
     pub virtual_key: Option<String>,
+    pub finish_reason: Option<String>,
 }
 
 fn default_limit() -> usize {
@@ -64,6 +65,7 @@ impl LogsQuery {
             since_ms,
             until_ms: self.until_ms,
             virtual_key: self.virtual_key.clone(),
+            finish_reason: self.finish_reason.clone(),
         }
     }
 }

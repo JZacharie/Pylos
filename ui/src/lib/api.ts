@@ -539,6 +539,14 @@ export const vectorStoresApi = {
     api.post<Array<{ id: string | number; score: number; payload: Record<string, unknown> }>>(`/api/vector-stores/collections/${name}/search`, data).then(r => r.data),
 }
 
+export const guardrailsMonitorApi = {
+  getInterventions: (params: Record<string, string | number>) =>
+    api.get<LogsResponse>('/api/logs', { params }).then(r => r.data),
+
+  getHistogram: (params: Record<string, string | number>) =>
+    api.get<{ buckets: HistogramBucket[]; bucket_size_seconds: number }>('/api/logs/histogram', { params }).then(r => r.data),
+}
+
 export interface McpServer {
   id: string
   name: string

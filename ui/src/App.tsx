@@ -9,6 +9,7 @@ import Providers from './pages/Providers'
 import VirtualKeys from './pages/VirtualKeys'
 import ModelCatalog from './pages/ModelCatalog'
 import Guardrails from './pages/Guardrails'
+import GuardrailsMonitor from './pages/GuardrailsMonitor'
 import Analytics from './pages/Analytics'
 import Teams from './pages/Teams'
 import InternalUsers from './pages/InternalUsers'
@@ -187,7 +188,7 @@ export default function App() {
             
             <Route path="/agents" element={<Placeholder title="Agents" description="Configure, deploy, and monitor autonomous AI agents and agent groups." />} />
             <Route path="/mcp-servers" element={<McpServers />} />
-            <Route path="/guardrails-monitor" element={<Placeholder title="Guardrails Monitor" description="Real-time monitoring and alerting for guardrail interventions, safety violations, and content filtering." />} />
+            <Route path="/guardrails-monitor" element={<GuardrailsMonitor />} />
             <Route path="/api-reference" element={<Placeholder title="API Reference" description="Explore the Pylos API documentation and interactive specifications." />} />
             <Route path="/ai-hub" element={<Placeholder title="AI Hub" description="Discover pre-built prompts, workflows, and model evaluations from the Pylos community." />} />
             <Route path="/learning-resources" element={<Placeholder title="Learning Resources" description="Guides, tutorials, and documentation to master AI Gateway management." />} />

@@ -92,6 +92,7 @@ pub struct LogFilter {
     pub since_ms: Option<i64>,
     pub until_ms: Option<i64>,
     pub virtual_key: Option<String>,
+    pub finish_reason: Option<String>,
 }
 
 impl LogFilter {
@@ -138,6 +139,12 @@ impl LogFilter {
         if let Some(ref vk) = self.virtual_key {
             match &entry.virtual_key {
                 Some(k) if k == vk => {}
+                _ => return false,
+            }
+        }
+        if let Some(ref fr) = self.finish_reason {
+            match &entry.finish_reason {
+                Some(f) if f == fr => {}
                 _ => return false,
             }
         }
@@ -265,6 +272,9 @@ impl SqliteBackend {
         if filter.virtual_key.is_some() {
             conditions.push("virtual_key = ?6".into());
         }
+        if filter.finish_reason.is_some() {
+            conditions.push("finish_reason = ?7".into());
+        }
 
         let where_str = if conditions.is_empty() {
             String::new()
@@ -279,11 +289,12 @@ impl SqliteBackend {
         let p4: Option<i64> = filter.since_ms;
         let p5: Option<i64> = filter.until_ms;
         let p6: Option<String> = filter.virtual_key.clone();
+        let p7: Option<String> = filter.finish_reason.clone();
 
         let count_sql = format!("SELECT COUNT(*) FROM logs {where_str}");
         let total: u64 = self
             .conn
-            .query_row(&count_sql, params![p1, p2, p3, p4, p5, p6], |r| r.get(0))?;
+            .query_row(&count_sql, params![p1, p2, p3, p4, p5, p6, p7], |r| r.get(0))?;
 
         let rows_sql = format!(
             "SELECT id,timestamp,provider,model,object,status,latency_ms,
@@ -291,13 +302,13 @@ impl SqliteBackend {
                     finish_reason,error_message,virtual_key,is_stream,
                     input_preview,output_preview,compression_saved_bytes
              FROM logs {where_str}
-             ORDER BY timestamp DESC LIMIT ?7 OFFSET ?8"
+             ORDER BY timestamp DESC LIMIT ?8 OFFSET ?9"
         );
 
         let mut stmt = self.conn.prepare(&rows_sql)?;
         let entries = stmt
             .query_map(
-                params![p1, p2, p3, p4, p5, p6, limit as i64, offset as i64],
+                params![p1, p2, p3, p4, p5, p6, p7, limit as i64, offset as i64],
                 row_to_entry,
             )?
             .filter_map(|r| r.ok())
@@ -326,6 +337,9 @@ impl SqliteBackend {
         if filter.virtual_key.is_some() {
             conditions.push("virtual_key = ?6".into());
         }
+        if filter.finish_reason.is_some() {
+            conditions.push("finish_reason = ?7".into());
+        }
 
         let where_str = if conditions.is_empty() {
             String::new()
@@ -339,6 +353,7 @@ impl SqliteBackend {
         let p4: Option<i64> = filter.since_ms;
         let p5: Option<i64> = filter.until_ms;
         let p6: Option<String> = filter.virtual_key.clone();
+        let p7: Option<String> = filter.finish_reason.clone();
 
         let sql = format!(
             "SELECT COUNT(*),
@@ -353,7 +368,7 @@ impl SqliteBackend {
         );
 
         self.conn
-            .query_row(&sql, params![p1, p2, p3, p4, p5, p6], |r| {
+            .query_row(&sql, params![p1, p2, p3, p4, p5, p6, p7], |r| {
                 let total: u64 = r.get(0)?;
                 let success: u64 = r.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64;
                 Ok(LogStats {
@@ -398,6 +413,9 @@ impl SqliteBackend {
         if filter.virtual_key.is_some() {
             conditions.push("virtual_key = ?6".into());
         }
+        if filter.finish_reason.is_some() {
+            conditions.push("finish_reason = ?7".into());
+        }
         let where_str = if conditions.is_empty() {
             String::new()
         } else {
@@ -410,6 +428,7 @@ impl SqliteBackend {
         let p4: Option<i64> = filter.since_ms;
         let p5: Option<i64> = filter.until_ms;
         let p6: Option<String> = filter.virtual_key.clone();
+        let p7: Option<String> = filter.finish_reason.clone();
 
         let sql = format!(
             "SELECT (timestamp/{b})*{b} AS ts,
@@ -423,7 +442,7 @@ impl SqliteBackend {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![p1, p2, p3, p4, p5, p6], |r| {
+            .query_map(params![p1, p2, p3, p4, p5, p6, p7], |r| {
                 Ok(HistogramBucket {
                     timestamp: r.get(0)?,
                     count: r.get::<_, i64>(1)? as u64,
@@ -461,6 +480,9 @@ impl SqliteBackend {
         if filter.virtual_key.is_some() {
             conditions.push("virtual_key = ?6".into());
         }
+        if filter.finish_reason.is_some() {
+            conditions.push("finish_reason = ?7".into());
+        }
         let where_str = if conditions.is_empty() {
             String::new()
         } else {
@@ -473,6 +495,7 @@ impl SqliteBackend {
         let p4: Option<i64> = filter.since_ms;
         let p5: Option<i64> = filter.until_ms;
         let p6: Option<String> = filter.virtual_key.clone();
+        let p7: Option<String> = filter.finish_reason.clone();
 
         let sql = format!(
             "SELECT (timestamp/{b})*{b} AS ts,
@@ -486,7 +509,7 @@ impl SqliteBackend {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![p1, p2, p3, p4, p5, p6], |r| {
+            .query_map(params![p1, p2, p3, p4, p5, p6, p7], |r| {
                 Ok(TokenBucket {
                     timestamp: r.get(0)?,
                     prompt_tokens: r.get::<_, Option<i64>>(1)?.unwrap_or(0),
