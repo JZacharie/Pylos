@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use pylos_application::{
     BudgetPlugin, BudgetStore, ConfigStore, GuardrailsPlugin, InferenceOrchestrator, LogStore,
-    McpServerStore, ModelCatalog, OrganizationStore, OtelConfig, PgLogStore, RateLimitPlugin,
-    RateLimitStore, SearchToolStore, SemanticCachePlugin, StructuredOutputPlugin, VirtualKeyStore,
+    McpServerStore, ModelCatalog, OrganizationStore, OtelConfig, PgLogStore, PrefixCachePlugin,
+    RateLimitPlugin, RateLimitStore, SearchToolStore, SemanticCachePlugin, StructuredOutputPlugin,
+    VirtualKeyStore,
 };
 use pylos_core::domain::traits::LlmPlugin;
 
@@ -337,7 +338,6 @@ impl AppState {
         config_store: &Arc<ConfigStore>,
     ) -> Vec<Arc<dyn LlmPlugin>> {
         let mut plugins: Vec<Arc<dyn LlmPlugin>> = Vec::new();
-        plugins.push(Arc::new(StructuredOutputPlugin::new()));
         plugins.push(Arc::new(pylos_application::CacheAlignerPlugin::new()));
 
         let qdrant_url =
@@ -364,6 +364,40 @@ impl AppState {
 
         plugins.push(Arc::new(BudgetPlugin::new(Arc::clone(budget_store))));
         tracing::info!("Budget plugin enabled");
+
+        // StructuredOutputPlugin — check for optional correction config
+        {
+            let so_cfg = cfg
+                .plugins
+                .iter()
+                .find(|p| p.name == "structured_output" && p.enabled);
+            if let Some(so_cfg) = so_cfg {
+                let correction_model = so_cfg
+                    .config
+                    .get("correction_model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("gpt-4o-mini")
+                    .to_string();
+                let max_retries = so_cfg
+                    .config
+                    .get("max_retries")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1) as u32;
+                let so_pylos_base_url = std::env::var("PYLOS_BASE_URL")
+                    .unwrap_or_else(|_| "http://localhost:3000".to_string());
+                let so_pylos_api_key = std::env::var("PYLOS_API_KEY").ok();
+                plugins.push(Arc::new(StructuredOutputPlugin::with_correction(
+                    correction_model.clone(),
+                    max_retries,
+                    so_pylos_base_url,
+                    so_pylos_api_key,
+                )));
+                tracing::info!(name = "structured_output", correction_model = %correction_model, max_retries = max_retries, "Structured Output plugin with correction enabled");
+            } else {
+                plugins.push(Arc::new(StructuredOutputPlugin::new()));
+                tracing::info!("Structured Output plugin enabled (no correction)");
+            }
+        }
 
         let has_rl = cfg
             .governance
@@ -458,6 +492,29 @@ impl AppState {
                         .unwrap_or_else(|_| "http://mem0-sidecar:7577".to_string());
                     plugins.push(Arc::new(pylos_application::Mem0Plugin::new(sidecar_url)));
                     tracing::info!(name = "mem0", "Mem0 plugin enabled");
+                }
+                "prefix_cache" => {
+                    let ttl_secs = plugin_cfg
+                        .config
+                        .get("ttl_secs")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(3600);
+                    let max_capacity = plugin_cfg
+                        .config
+                        .get("max_capacity")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(10_000);
+                    let min_prefix_len = plugin_cfg
+                        .config
+                        .get("min_prefix_len")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize;
+                    plugins.push(Arc::new(PrefixCachePlugin::new(
+                        ttl_secs,
+                        max_capacity,
+                        min_prefix_len,
+                    )));
+                    tracing::info!(name = "prefix_cache", "Prefix Cache plugin enabled");
                 }
                 name => tracing::debug!(name = %name, "Unknown plugin, skipping"),
             }
