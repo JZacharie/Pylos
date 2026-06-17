@@ -555,6 +555,78 @@ impl AppState {
                     )));
                     tracing::info!(name = "prefix_cache", "Prefix Cache plugin enabled");
                 }
+                "batching" => {
+                    let mode = plugin_cfg
+                        .config
+                        .get("mode")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("coalescing");
+                    match mode {
+                        "async_batch" => {
+                            let openai_base_url = plugin_cfg
+                                .config
+                                .get("openai_base_url")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("https://api.openai.com/v1")
+                                .to_string();
+                            let api_key = plugin_cfg
+                                .config
+                                .get("api_key")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let batch_model = plugin_cfg
+                                .config
+                                .get("batch_model")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("gpt-4o-mini")
+                                .to_string();
+                            let poll_interval_secs = plugin_cfg
+                                .config
+                                .get("poll_interval_secs")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(60);
+                            plugins.push(Arc::new(
+                                pylos_application::BatchingPlugin::with_async_batch(
+                                    openai_base_url,
+                                    api_key,
+                                    batch_model,
+                                    poll_interval_secs,
+                                ),
+                            ));
+                            tracing::info!(
+                                name = "batching",
+                                mode = "async_batch",
+                                "Plugin registered"
+                            );
+                        }
+                        _ => {
+                            let delay_ms = plugin_cfg
+                                .config
+                                .get("delay_ms")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(200);
+                            let max_batch_size = plugin_cfg
+                                .config
+                                .get("max_batch_size")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(50)
+                                as usize;
+                            plugins.push(Arc::new(
+                                pylos_application::BatchingPlugin::with_coalescing(
+                                    delay_ms,
+                                    max_batch_size,
+                                ),
+                            ));
+                            tracing::info!(
+                                name = "batching",
+                                mode = "coalescing",
+                                delay_ms = delay_ms,
+                                "Plugin registered"
+                            );
+                        }
+                    }
+                }
                 name => tracing::debug!(name = %name, "Unknown plugin, skipping"),
             }
         }
