@@ -664,6 +664,7 @@ async fn test_semantic_caching_flow() {
         "text-embedding-3-small".to_string(),
         0.90, // score threshold
         3600, // ttl
+        None, // no direct embedding provider
     ));
 
     // Spin up mock provider

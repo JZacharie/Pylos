@@ -7,7 +7,7 @@ use pylos_application::{
     RateLimitPlugin, RateLimitStore, SearchToolStore, SemanticCachePlugin, StructuredOutputPlugin,
     VirtualKeyStore,
 };
-use pylos_core::domain::traits::LlmPlugin;
+use pylos_core::domain::traits::{LlmPlugin, Provider};
 
 use crate::metrics::Metrics;
 
@@ -331,11 +331,41 @@ impl AppState {
         ))
     }
 
+    fn find_provider_for_embedding(
+        providers: &[(
+            Arc<dyn Provider>,
+            pylos_core::domain::provider::ProviderConfig,
+        )],
+        model: &str,
+    ) -> Option<(
+        Arc<dyn Provider>,
+        pylos_core::domain::provider::ProviderConfig,
+    )> {
+        providers
+            .iter()
+            .find(|(_, config)| {
+                if config.allowed_models.is_empty() {
+                    return false;
+                }
+                config.allowed_models.iter().any(|allowed| {
+                    allowed == "*"
+                        || allowed == model
+                        || (allowed.contains('*')
+                            && model.starts_with(allowed.trim_end_matches('*')))
+                })
+            })
+            .cloned()
+    }
+
     fn register_plugins(
         cfg: &pylos_core::domain::config::PylosConfig,
         budget_store: &Arc<BudgetStore>,
         rate_limit_store: &Arc<RateLimitStore>,
         config_store: &Arc<ConfigStore>,
+        providers: &[(
+            Arc<dyn Provider>,
+            pylos_core::domain::provider::ProviderConfig,
+        )],
     ) -> Vec<Arc<dyn LlmPlugin>> {
         let mut plugins: Vec<Arc<dyn LlmPlugin>> = Vec::new();
         plugins.push(Arc::new(pylos_application::CacheAlignerPlugin::new()));
@@ -352,15 +382,21 @@ impl AppState {
         let pylos_model =
             std::env::var("PYLOS_MODEL").unwrap_or_else(|_| "deepseek-coder-v2:16b".to_string());
 
+        let rag_embed_provider = Self::find_provider_for_embedding(providers, &embedding_model);
         plugins.push(Arc::new(pylos_application::RagPlugin::new(
             qdrant_url,
             collection_name,
             pylos_base_url,
             pylos_api_key,
-            embedding_model,
+            embedding_model.clone(),
             pylos_model,
+            rag_embed_provider.clone(),
         )));
-        tracing::info!("RagPlugin registered");
+        if rag_embed_provider.is_some() {
+            tracing::info!("RagPlugin registered (direct embedding provider)");
+        } else {
+            tracing::info!("RagPlugin registered (HTTP embedding fallback)");
+        }
 
         plugins.push(Arc::new(BudgetPlugin::new(Arc::clone(budget_store))));
         tracing::info!("Budget plugin enabled");
@@ -447,6 +483,8 @@ impl AppState {
                         .get("ttl_secs")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(86400);
+                    let sc_embed_provider =
+                        Self::find_provider_for_embedding(providers, &embedding_model);
                     plugins.push(Arc::new(SemanticCachePlugin::new(
                         qdrant_url,
                         collection_name,
@@ -455,6 +493,7 @@ impl AppState {
                         embedding_model,
                         similarity_threshold,
                         ttl_secs,
+                        sc_embed_provider,
                     )));
                     tracing::info!(name = "semantic_cache", "Semantic Cache plugin enabled");
                 }
@@ -622,7 +661,13 @@ impl AppState {
             }
         }
 
-        let plugins = Self::register_plugins(&cfg, &budget_store, &rate_limit_store, &config_store);
+        let plugins = Self::register_plugins(
+            &cfg,
+            &budget_store,
+            &rate_limit_store,
+            &config_store,
+            &providers,
+        );
         let orchestrator = Arc::new(InferenceOrchestrator::new(providers, plugins));
         let metrics = Arc::new(Metrics::new());
         let vk_registry = Self::register_virtual_keys(&cfg, &vk_store).await;

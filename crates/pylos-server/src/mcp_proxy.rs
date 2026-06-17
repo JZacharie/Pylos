@@ -27,7 +27,10 @@ pub async fn mcp_proxy_handler(
     // Valider la Virtual Key (rate limit + existence)
     let virtual_key_id = if let Some(ref t) = token {
         // Check dans le registre mémoire (rate limit)
-        let _ = state.vk_registry.check_and_increment(t).await;
+        if let Err(msg) = state.vk_registry.check_and_increment(t).await {
+            tracing::warn!(key = %t, error = %msg, "MCP proxy rate limit exceeded");
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": msg}))).into_response();
+        }
         // Récupérer l'ID DB depuis le store
         match state.vk_store.get_key_by_value(t).await {
             Ok(Some(vk)) => Some(vk.id.clone()),
@@ -48,8 +51,11 @@ pub async fn mcp_proxy_handler(
         s.name == server_name
             && s.status == pylos_core::domain::mcp_server::McpServerStatus::Active
             && (match (&s.virtual_key_id, &s.team_id) {
-                (Some(vk_id), _) => virtual_key_id.as_ref() == Some(vk_id),
-                (_, Some(t_id)) => team_id.as_ref() == Some(t_id),
+                (Some(vk_id), Some(t_id)) => {
+                    virtual_key_id.as_ref() == Some(vk_id) && team_id.as_ref() == Some(t_id)
+                }
+                (Some(vk_id), None) => virtual_key_id.as_ref() == Some(vk_id),
+                (None, Some(t_id)) => team_id.as_ref() == Some(t_id),
                 (None, None) => false,
             })
     });

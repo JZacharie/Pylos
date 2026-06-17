@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, warn};
 
+use pylos_core::domain::embedding::{EmbeddingInput, EmbeddingRequest};
 use pylos_core::domain::openai::{ChatCompletionResponse, MessageRole};
+use pylos_core::domain::provider::ProviderConfig;
 use pylos_core::domain::request::{PylosRequest, PylosResponse, RequestContext};
-use pylos_core::domain::traits::LlmPlugin;
+use pylos_core::domain::traits::{LlmPlugin, Provider};
 use pylos_core::error::PylosError;
 
 pub struct SemanticCachePlugin {
@@ -17,8 +21,10 @@ pub struct SemanticCachePlugin {
     similarity_threshold: f64,
     ttl_secs: u64,
     client: reqwest::Client,
+    embedding_provider: Option<(Arc<dyn Provider>, ProviderConfig)>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl SemanticCachePlugin {
     pub fn new(
         qdrant_url: String,
@@ -28,6 +34,7 @@ impl SemanticCachePlugin {
         embedding_model: String,
         similarity_threshold: f64,
         ttl_secs: u64,
+        embedding_provider: Option<(Arc<dyn Provider>, ProviderConfig)>,
     ) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
         if let Ok(key) = std::env::var("QDRANT_API_KEY") {
@@ -52,10 +59,36 @@ impl SemanticCachePlugin {
             similarity_threshold,
             ttl_secs,
             client,
+            embedding_provider,
         }
     }
 
     async fn get_embedding(&self, text: &str) -> Result<Vec<f32>, PylosError> {
+        // Direct provider call if available
+        if let Some((ref provider, ref config)) = self.embedding_provider {
+            let req = EmbeddingRequest {
+                model: self.embedding_model.clone(),
+                input: EmbeddingInput::Single(text.to_string()),
+                encoding_format: None,
+                dimensions: None,
+                user: None,
+            };
+            let resp = provider.embed(&req, config).await.map_err(|e| {
+                error!("SemanticCachePlugin: Embedding failed: {:?}", e);
+                PylosError::Internal(format!("Embedding failed: {}", e))
+            })?;
+            return resp
+                .data
+                .into_iter()
+                .next()
+                .map(|d| d.embedding)
+                .ok_or_else(|| {
+                    error!("SemanticCachePlugin: Empty embedding returned");
+                    PylosError::Internal("Empty embedding returned".into())
+                });
+        }
+
+        // Fall back to HTTP loopback
         let embed_url = format!(
             "{}/v1/embeddings",
             self.pylos_base_url.trim_end_matches('/')
@@ -107,8 +140,8 @@ impl SemanticCachePlugin {
             PylosError::Internal(format!("Failed to parse embedding response: {}", e))
         })?;
 
-        match embed_data.data.first() {
-            Some(d) => Ok(d.embedding.clone()),
+        match embed_data.data.into_iter().next() {
+            Some(d) => Ok(d.embedding),
             None => {
                 error!("SemanticCachePlugin: Empty embedding returned from Pylos");
                 Err(PylosError::Internal("Empty embedding returned".into()))

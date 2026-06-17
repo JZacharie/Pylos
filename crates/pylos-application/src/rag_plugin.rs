@@ -1,9 +1,13 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use tracing::{error, info, warn};
 
+use pylos_core::domain::embedding::{EmbeddingInput, EmbeddingRequest};
 use pylos_core::domain::openai::{ChatCompletionMessage, MessageRole};
+use pylos_core::domain::provider::ProviderConfig;
 use pylos_core::domain::request::{PylosRequest, PylosResponse, RequestContext};
-use pylos_core::domain::traits::LlmPlugin;
+use pylos_core::domain::traits::{LlmPlugin, Provider};
 use pylos_core::error::PylosError;
 
 pub struct RagPlugin {
@@ -14,8 +18,10 @@ pub struct RagPlugin {
     embedding_model: String,
     pylos_model: String,
     client: reqwest::Client,
+    embedding_provider: Option<(Arc<dyn Provider>, ProviderConfig)>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl RagPlugin {
     pub fn new(
         qdrant_url: String,
@@ -24,6 +30,7 @@ impl RagPlugin {
         pylos_api_key: Option<String>,
         embedding_model: String,
         pylos_model: String,
+        embedding_provider: Option<(Arc<dyn Provider>, ProviderConfig)>,
     ) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
         if let Ok(key) = std::env::var("QDRANT_API_KEY") {
@@ -47,6 +54,87 @@ impl RagPlugin {
             embedding_model,
             pylos_model,
             client,
+            embedding_provider,
+        }
+    }
+
+    async fn get_embedding(&self, text: &str) -> Result<Vec<f32>, PylosError> {
+        // Direct provider call if available
+        if let Some((ref provider, ref config)) = self.embedding_provider {
+            let req = EmbeddingRequest {
+                model: self.embedding_model.clone(),
+                input: EmbeddingInput::Single(text.to_string()),
+                encoding_format: None,
+                dimensions: None,
+                user: None,
+            };
+            let resp = provider.embed(&req, config).await.map_err(|e| {
+                error!("RagPlugin: Embedding failed: {:?}", e);
+                PylosError::Internal(format!("Embedding failed: {}", e))
+            })?;
+            return resp
+                .data
+                .into_iter()
+                .next()
+                .map(|d| d.embedding)
+                .ok_or_else(|| {
+                    error!("RagPlugin: Empty embedding returned");
+                    PylosError::Internal("Empty embedding returned".into())
+                });
+        }
+
+        // Fall back to HTTP loopback
+        let embed_url = format!(
+            "{}/v1/embeddings",
+            self.pylos_base_url.trim_end_matches('/')
+        );
+        let embed_body = serde_json::json!({
+            "model": self.embedding_model,
+            "input": text
+        });
+
+        let mut embed_req = self.client.post(&embed_url).json(&embed_body);
+        if let Some(ref key) = self.pylos_api_key {
+            embed_req = embed_req.header("Authorization", format!("Bearer {}", key));
+        }
+
+        let embed_resp = embed_req.send().await.map_err(|e| {
+            error!(
+                "RagPlugin: Failed to connect to Pylos for embedding: {:?}",
+                e
+            );
+            PylosError::Internal(format!("Failed to connect to Pylos for embedding: {}", e))
+        })?;
+
+        if !embed_resp.status().is_success() {
+            let err = embed_resp.text().await.unwrap_or_default();
+            error!("RagPlugin: Pylos embedding API returned error: {}", err);
+            return Err(PylosError::Internal(format!(
+                "Pylos embedding error: {}",
+                err
+            )));
+        }
+
+        #[derive(serde::Deserialize)]
+        struct PylosEmbeddingData {
+            embedding: Vec<f32>,
+        }
+        #[derive(serde::Deserialize)]
+        struct PylosEmbeddingResponse {
+            data: Vec<PylosEmbeddingData>,
+        }
+
+        let embed_data: PylosEmbeddingResponse = embed_resp.json().await.map_err(|e| {
+            error!("RagPlugin: Failed to parse embedding response: {:?}", e);
+            PylosError::Internal(format!("Failed to parse embedding response: {}", e))
+        })?;
+
+        match embed_data.data.into_iter().next() {
+            Some(d) => Ok(d.embedding),
+            None => {
+                error!("RagPlugin: Empty embedding returned from Pylos");
+                Err(PylosError::Internal("Empty embedding returned".into()))
+            }
         }
     }
 }
@@ -95,59 +183,8 @@ impl LlmPlugin for RagPlugin {
             return Ok(None);
         }
 
-        // 2. Fetch query embedding via Pylos' own /v1/embeddings endpoint
-        let embed_url = format!(
-            "{}/v1/embeddings",
-            self.pylos_base_url.trim_end_matches('/')
-        );
-        let embed_body = serde_json::json!({
-            "model": self.embedding_model,
-            "input": user_query
-        });
-
-        let mut embed_req = self.client.post(&embed_url).json(&embed_body);
-        if let Some(ref key) = self.pylos_api_key {
-            embed_req = embed_req.header("Authorization", format!("Bearer {}", key));
-        }
-
-        let embed_resp = embed_req.send().await.map_err(|e| {
-            error!(
-                "RagPlugin: Failed to connect to Pylos for embedding: {:?}",
-                e
-            );
-            PylosError::Internal(format!("Failed to connect to Pylos for embedding: {}", e))
-        })?;
-
-        if !embed_resp.status().is_success() {
-            let err = embed_resp.text().await.unwrap_or_default();
-            error!("RagPlugin: Pylos embedding API returned error: {}", err);
-            return Err(PylosError::Internal(format!(
-                "Pylos embedding error: {}",
-                err
-            )));
-        }
-
-        #[derive(serde::Deserialize)]
-        struct PylosEmbeddingData {
-            embedding: Vec<f32>,
-        }
-        #[derive(serde::Deserialize)]
-        struct PylosEmbeddingResponse {
-            data: Vec<PylosEmbeddingData>,
-        }
-
-        let embed_data: PylosEmbeddingResponse = embed_resp.json().await.map_err(|e| {
-            error!("RagPlugin: Failed to parse embedding response: {:?}", e);
-            PylosError::Internal(format!("Failed to parse embedding response: {}", e))
-        })?;
-
-        let query_vector = match embed_data.data.first() {
-            Some(d) => &d.embedding,
-            None => {
-                error!("RagPlugin: Empty embedding returned from Pylos");
-                return Err(PylosError::Internal("Empty embedding returned".into()));
-            }
-        };
+        // 2. Fetch query embedding (direct provider or HTTP fallback)
+        let query_vector = self.get_embedding(&user_query).await?;
 
         // 3. Query Qdrant directly
         let search_url = format!(
