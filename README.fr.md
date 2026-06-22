@@ -76,7 +76,11 @@ cp .env.example .env
 make run
 ```
 
-### 2. Docker Compose (Stack complète)
+### 2. Configuration (`pylos.json`)
+
+Pylos utilise un fichier de configuration centralisé `pylos.json` pour la gouvernance, les budgets, le routage et les plugins. Pour un guide complet sur toutes les clés de configuration disponibles, la syntaxe de substitution des variables d'environnement et les profils de fournisseurs d'API, consultez le [Guide de configuration de Pylos](docs/pylos-config.md).
+
+### 3. Docker Compose (Stack complète)
 
 Démarrez Pylos, l'interface utilisateur, Prometheus et Grafana en une commande :
 

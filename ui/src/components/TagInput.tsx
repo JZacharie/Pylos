@@ -16,6 +16,9 @@ export default function TagInput({ tags, onChange }: { tags: string[]; onChange:
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault()
       addTag()
+    } else if (e.key === 'Tab' && input.trim()) {
+      e.preventDefault()
+      addTag()
     }
   }
 
