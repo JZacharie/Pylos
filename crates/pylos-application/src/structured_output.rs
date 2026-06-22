@@ -56,13 +56,13 @@ impl StructuredOutputPlugin {
 
         if format_type == "json_schema" {
             if let Some(schema) = schema_val {
-                let compiled = jsonschema::JSONSchema::compile(schema)
+                let compiled = jsonschema::validator_for(schema)
                     .map_err(|e| format!("Invalid JSON Schema in request: {}", e))?;
 
                 let validation_result = compiled.validate(&parsed);
-                if let Err(errors) = validation_result {
-                    let err_msgs: Vec<String> = errors
-                        .map(|err| format!("Path: {}, Error: {}", err.instance_path, err))
+                if validation_result.is_err() {
+                    let err_msgs: Vec<String> = compiled.iter_errors(&parsed)
+                        .map(|err| format!("Path: {}, Error: {}", err.instance_path(), err))
                         .collect();
                     return Err(format!(
                         "Response format error: LLM output failed JSON Schema validation. Errors: {}",
