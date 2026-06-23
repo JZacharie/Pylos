@@ -14,6 +14,9 @@ Ce rapport récapitule les fonctionnalités incomplètes, les comportements de t
 6. [Appels HTTP auto-référencés pour les Embeddings (`SemanticCache` & `RagPlugin`)](#6-appels-http-auto-référencés-pour-les-embeddings-semanticcache--ragplugin)
 7. [Bypass du Rate Limit MCP dans le Proxy (`mcp_proxy_handler`)](#7-bypass-du-rate-limit-mcp-dans-le-proxy-mcp_proxy_handler)
 8. [Contrôle d'accès défaillant (ACL) sur les serveurs MCP (`mcp_proxy_handler`)](#8-contrôle-daccès-défaillant-acl-sur-les-serveurs-mcp-mcp_proxy_handler)
+9. [Transformation de Requête / Query Expansion & HyDE (`RagPlugin`)](#9-transformation-de-requête--query-expansion--hyde-ragplugin)
+10. [Découpage Intelligent / Parent-Child Chunking (`vector_stores.rs`)](#10-découpage-intelligent--parent-child-chunking-vector_storesrs)
+11. [Corrective RAG / CRAG (`RagPlugin`)](#11-corrective-rag--crag-ragplugin)
 
 ---
 
@@ -185,4 +188,70 @@ The pattern matching for checking permissions on MCP servers (`virtual_key_id` a
 Tasks:
 - Redesign the ACL verification logic to handle cases where both `virtual_key_id` and `team_id` are set (either applying AND or OR based on the security policy).
 - Ensure clear separation of checks, returning 403 Forbidden if the verification fails.
+```
+
+---
+
+## 9. Transformation de Requête / Query Expansion & HyDE (`RagPlugin`)
+
+*   **Fichier concerné :** [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
+*   **Problème :** Les questions des utilisateurs sont actuellement envoyées directement pour l'embedding et la recherche vectorielle, sans transformation préalable. Cela limite la précision de la recherche pour les questions ambiguës, complexes ou mal formulées.
+
+### Issue Proposée
+
+```markdown
+Title: [Feature] Implement Query Rewriting, Expansion, and HyDE in RagPlugin
+
+Description:
+To improve RAG precision, we should support Query Transformation (Query Expansion/Rewriting and Hypothetical Document Embeddings) before searching Qdrant.
+
+Tasks:
+- Introduce `QueryTransformConfig` in the Pylos configuration (`pylos.json`).
+- Implement Query Expansion by asking a fast model (e.g., Gemini Flash / GPT-4o-mini) to generate 3 variants of the user query.
+- Implement HyDE by generating a hypothetical ideal document/answer via a fast LLM call.
+- Run Qdrant searches in parallel for the transformed queries using `futures::future::join_all` and deduplicate/merge points.
+```
+
+---
+
+## 10. Découpage Intelligent / Parent-Child Chunking (`vector_stores.rs`)
+
+*   **Fichiers concernés :** [vector_stores.rs](file:///home/joseph/git/Pylos/crates/pylos-server/src/interfaces/http/vector_stores.rs) et [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
+*   **Problème :** L'endpoint d'ingestion `/api/vector-stores/collections/:name/points` n'implémente aucun découpage (chunking) intelligent. De plus, il n'y a pas de support pour découpler la recherche précise (petits chunks enfants) de la complétion riche (grands chunks parents).
+
+### Issue Proposée
+
+```markdown
+Title: [Feature] Implement Parent-Child and Semantic Chunking for Vector Ingestion
+
+Description:
+Implement dynamic text splitting strategies and retrieval of parent contexts based on child search matches to improve retrieval accuracy without bloating the LLM prompt with fragmented text.
+
+Tasks:
+- Update the `AddDocumentRequest` payload to accept `chunking_strategy` (`None`, `ParentChild`).
+- Implement a logical parser to divide documents into parent blocks (~1000 tokens) and overlapping child blocks (~150 tokens).
+- Store child vector embeddings in Qdrant with the full parent text embedded inside the child's payload.
+- Update `RagPlugin` to retrieve and inject the parent content instead of the child content when compiling the system prompt.
+```
+
+---
+
+## 11. Corrective RAG / CRAG (`RagPlugin`)
+
+*   **Fichier concerné :** [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
+*   **Problème :** Si les résultats de la recherche vectorielle interne de Pylos ont des scores de similarité médiocres, le système injecte tout de même ces données peu pertinentes ou laisse le LLM répondre à l'aveugle, ce qui conduit à des hallucinations.
+
+### Issue Proposée
+
+```markdown
+Title: [Feature] Implement Corrective RAG (CRAG) using Web Search API fallback
+
+Description:
+Implement a confidence threshold evaluator on search results. If the similarity score is below a certain threshold, trigger an external web search to fetch fresh, reliable context.
+
+Tasks:
+- Add `crag_threshold` and API configurations (e.g., Tavily, SearxNG, or Google Search) to `pylos.json`.
+- In `RagPlugin::pre_hook`, check the maximum similarity score of points returned by Qdrant.
+- If the score is below the threshold, invoke the Web Search API client.
+- Format the external web search results and inject them as the system context.
 ```

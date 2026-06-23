@@ -60,7 +60,7 @@ impl LlmPlugin for MemoryPlugin {
             }
         }
 
-        if !memories.is_empty() || !chat_req.stream.unwrap_or(false) {
+        {
             let mut system_content = String::new();
             if !memories.is_empty() {
                 system_content.push_str("Here is the Knowledge Graph context from your previous conversations with this user:\n");
@@ -72,6 +72,8 @@ impl LlmPlugin for MemoryPlugin {
 
             if !chat_req.stream.unwrap_or(false) {
                 system_content.push_str("IMPORTANT CRITICAL INSTRUCTION: If the user shares any new facts, preferences, or important project context in this turn, you MUST output a Knowledge Graph representing that fact in <memory></memory> tags at the very end of your response. Use the exact format: `EntityA|RELATION|EntityB`. Example: `<memory>User|PREFERS|Rust</memory>`.");
+            } else {
+                system_content.push_str("IMPORTANT CRITICAL INSTRUCTION: After streaming completes, if the user shares any new facts, preferences, or important project context in this turn, you MUST output a Knowledge Graph representing that fact in <memory></memory> tags at the very end of your response. Use the exact format: `EntityA|RELATION|EntityB`. Example: `<memory>User|PREFERS|Rust</memory>`.");
             }
 
             if !system_content.is_empty() {

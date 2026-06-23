@@ -61,7 +61,8 @@ impl StructuredOutputPlugin {
 
                 let validation_result = compiled.validate(&parsed);
                 if validation_result.is_err() {
-                    let err_msgs: Vec<String> = compiled.iter_errors(&parsed)
+                    let err_msgs: Vec<String> = compiled
+                        .iter_errors(&parsed)
                         .map(|err| format!("Path: {}, Error: {}", err.instance_path(), err))
                         .collect();
                     return Err(format!(
