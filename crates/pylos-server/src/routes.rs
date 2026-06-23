@@ -51,12 +51,12 @@ pub fn create_router(state: AppState) -> Router {
         .route("/v1/models", get(models::list_models))
         // Model management routes
         .route(
-            "/v1/models/pull/:provider",
+            "/v1/models/pull/{provider}",
             post(models::pull_provider_models),
         )
         .route("/v1/models/catalog", post(models::upsert_catalog_model))
         .route(
-            "/v1/models/catalog/:provider/:model_id",
+            "/v1/models/catalog/{provider}/{model_id}",
             delete(models::delete_catalog_model),
         )
         .route("/v1/models/pricing/status", get(models::get_pricing_status))
@@ -80,20 +80,20 @@ pub fn create_router(state: AppState) -> Router {
         // Provider management routes (protected)
         .route("/providers", get(config::list_providers))
         .route("/providers", post(config::create_provider))
-        .route("/providers/:name", put(config::upsert_provider))
-        .route("/providers/:name", delete(config::delete_provider))
-        .route("/providers/:name/test", post(config::test_provider))
+        .route("/providers/{name}", put(config::upsert_provider))
+        .route("/providers/{name}", delete(config::delete_provider))
+        .route("/providers/{name}/test", post(config::test_provider))
         // Virtual Key management routes
         .route("/virtual-keys", get(config::list_virtual_keys))
         .route("/virtual-keys", post(config::create_virtual_key))
-        .route("/virtual-keys/:id", put(config::update_virtual_key))
-        .route("/virtual-keys/:id", delete(config::delete_virtual_key))
+        .route("/virtual-keys/{id}", put(config::update_virtual_key))
+        .route("/virtual-keys/{id}", delete(config::delete_virtual_key))
         .route(
-            "/virtual-keys/:id/budget",
+            "/virtual-keys/{id}/budget",
             get(config::get_virtual_key_budget),
         )
         .route(
-            "/virtual-keys/:id/value",
+            "/virtual-keys/{id}/value",
             get(config::reveal_virtual_key_value),
         )
         // Config management routes
@@ -110,27 +110,27 @@ pub fn create_router(state: AppState) -> Router {
             post(access_control::create_organization),
         )
         .route(
-            "/api/organizations/:id",
+            "/api/organizations/{id}",
             get(access_control::get_organization),
         )
         .route(
-            "/api/organizations/:id",
+            "/api/organizations/{id}",
             put(access_control::update_organization),
         )
         .route(
-            "/api/organizations/:id",
+            "/api/organizations/{id}",
             delete(access_control::delete_organization),
         )
         .route("/api/teams", get(access_control::list_teams))
         .route("/api/teams", post(access_control::create_team))
-        .route("/api/teams/:id", get(access_control::get_team))
-        .route("/api/teams/:id", put(access_control::update_team))
-        .route("/api/teams/:id", delete(access_control::delete_team))
+        .route("/api/teams/{id}", get(access_control::get_team))
+        .route("/api/teams/{id}", put(access_control::update_team))
+        .route("/api/teams/{id}", delete(access_control::delete_team))
         .route("/api/users", get(access_control::list_users))
         .route("/api/users", post(access_control::create_user))
-        .route("/api/users/:id", get(access_control::get_user))
-        .route("/api/users/:id", put(access_control::update_user))
-        .route("/api/users/:id", delete(access_control::delete_user))
+        .route("/api/users/{id}", get(access_control::get_user))
+        .route("/api/users/{id}", put(access_control::update_user))
+        .route("/api/users/{id}", delete(access_control::delete_user))
         .route(
             "/api/access-groups",
             get(access_control::list_access_groups),
@@ -140,21 +140,21 @@ pub fn create_router(state: AppState) -> Router {
             post(access_control::create_access_group),
         )
         .route(
-            "/api/access-groups/:id",
+            "/api/access-groups/{id}",
             get(access_control::get_access_group),
         )
         .route(
-            "/api/access-groups/:id",
+            "/api/access-groups/{id}",
             put(access_control::update_access_group),
         )
         .route(
-            "/api/access-groups/:id",
+            "/api/access-groups/{id}",
             delete(access_control::delete_access_group),
         )
         .route("/api/policies", get(access_control::list_policies))
         .route("/api/policies", post(access_control::create_policy))
-        .route("/api/policies/:id", put(access_control::update_policy))
-        .route("/api/policies/:id", delete(access_control::delete_policy))
+        .route("/api/policies/{id}", put(access_control::update_policy))
+        .route("/api/policies/{id}", delete(access_control::delete_policy))
         .route(
             "/api/tool-policies",
             get(access_control::list_tool_policies),
@@ -164,11 +164,11 @@ pub fn create_router(state: AppState) -> Router {
             post(access_control::create_tool_policy),
         )
         .route(
-            "/api/tool-policies/:id",
+            "/api/tool-policies/{id}",
             put(access_control::update_tool_policy),
         )
         .route(
-            "/api/tool-policies/:id",
+            "/api/tool-policies/{id}",
             delete(access_control::delete_tool_policy),
         )
         // Search Tools routes
@@ -178,11 +178,11 @@ pub fn create_router(state: AppState) -> Router {
             post(access_control::create_search_tool),
         )
         .route(
-            "/api/search-tools/:id",
+            "/api/search-tools/{id}",
             put(access_control::update_search_tool),
         )
         .route(
-            "/api/search-tools/:id",
+            "/api/search-tools/{id}",
             delete(access_control::delete_search_tool),
         )
         // Guardrails Monitor routes
@@ -204,29 +204,29 @@ pub fn create_router(state: AppState) -> Router {
             post(vector_stores::create_collection),
         )
         .route(
-            "/api/vector-stores/collections/:name",
+            "/api/vector-stores/collections/{name}",
             delete(vector_stores::delete_collection),
         )
         .route(
-            "/api/vector-stores/collections/:name/points",
+            "/api/vector-stores/collections/{name}/points",
             post(vector_stores::add_document),
         )
         .route(
-            "/api/vector-stores/collections/:name/search",
+            "/api/vector-stores/collections/{name}/search",
             post(vector_stores::search_collection),
         )
         // MCP Server management routes
         .route("/api/mcp-servers", get(mcp::list_mcp_servers))
         .route("/api/mcp-servers", post(mcp::create_mcp_server))
-        .route("/api/mcp-servers/:id", get(mcp::get_mcp_server))
-        .route("/api/mcp-servers/:id", put(mcp::update_mcp_server))
-        .route("/api/mcp-servers/:id", delete(mcp::delete_mcp_server))
+        .route("/api/mcp-servers/{id}", get(mcp::get_mcp_server))
+        .route("/api/mcp-servers/{id}", put(mcp::update_mcp_server))
+        .route("/api/mcp-servers/{id}", delete(mcp::delete_mcp_server))
         .route(
-            "/api/mcp-servers/:id/activate",
+            "/api/mcp-servers/{id}/activate",
             post(mcp::activate_mcp_server),
         )
         .route(
-            "/api/mcp-servers/:id/deactivate",
+            "/api/mcp-servers/{id}/deactivate",
             post(mcp::deactivate_mcp_server),
         )
         .layer(middleware::from_fn_with_state(
@@ -248,9 +248,9 @@ pub fn create_router(state: AppState) -> Router {
 
     // MCP proxy routes — accessibles via Virtual Key (Authorization) ou Team (X-Team-Id)
     let mcp_proxy_routes = Router::new()
-        .route("/mcp/:server_name", get(mcp_proxy::mcp_server_status))
+        .route("/mcp/{server_name}", get(mcp_proxy::mcp_server_status))
         .route(
-            "/mcp/:server_name/*path",
+            "/mcp/{server_name}/{*path}",
             axum::routing::any(mcp_proxy::mcp_proxy_handler),
         );
 

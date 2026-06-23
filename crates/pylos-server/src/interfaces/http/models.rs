@@ -494,6 +494,32 @@ pub async fn pull_provider_models(
                 }
             }
         }
+    } else if provider_name == "anthropic" {
+        let base_url = provider_cfg
+            .network
+            .base_url
+            .clone()
+            .unwrap_or_else(|| "https://api.anthropic.com/v1".to_string());
+        let url = format!("{}/models", base_url.trim_end_matches('/'));
+        let mut req = client.get(&url);
+        if let Some(api_key) = provider_cfg.keys.first().and_then(|k| k.value.resolve()) {
+            if !api_key.is_empty() {
+                req = req
+                    .header("x-api-key", api_key)
+                    .header("anthropic-version", "2023-06-01");
+            }
+        }
+        if let Ok(resp) = req.send().await {
+            if let Ok(body) = resp.json::<serde_json::Value>().await {
+                if let Some(arr) = body["data"].as_array() {
+                    for m in arr {
+                        if let Some(id) = m["id"].as_str() {
+                            model_ids.push(id.to_string());
+                        }
+                    }
+                }
+            }
+        }
     } else {
         let base_url = provider_cfg
             .network

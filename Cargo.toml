@@ -39,7 +39,7 @@ aws-smithy-types = "1.4"
 async-stream = "0.3"
 sqlx = { version = "0.8.3", features = ["runtime-tokio", "sqlite", "postgres", "chrono", "migrate"] }
 fastrand = "2"
-jsonwebtoken = "10.0"
+jsonwebtoken = { version = "10.0", default-features = false, features = ["use_pem", "rust_crypto"] }
 moka = { version = "0.12", features = ["future"] }
 ring = "0.17"
 dotenvy = "0.15"
