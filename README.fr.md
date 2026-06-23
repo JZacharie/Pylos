@@ -1,12 +1,25 @@
 # Pylos — Passerelle LLM & Proxy MCP en Rust (Entreprise)
 
 <p align="center">
+  <img src="logo.png" alt="Pylos Logo" width="200" />
+</p>
+
+<p align="center">
   <a href="README.md"><b>English</b></a> | 
   <a href="README.fr.md"><b>Français</b></a> | 
   <a href="README.es.md"><b>Español</b></a>
 </p>
 
 Pylos est une passerelle IA haute performance et à ultra-faible latence écrite en Rust. Elle sert de proxy unifié et sécurisé pour plus de 20 fournisseurs de LLM, offrant un remplacement transparent pour les SDK compatibles OpenAI. Grâce à une gouvernance intégrée, une gestion rigoureuse des coûts, des garde-fous de confidentialité et un tableau de bord d'administration moderne en React, Pylos aide les équipes à déployer leurs flux de travail IA en toute sécurité.
+
+<p align="center">
+  <img src="docs/image.png" alt="Aperçu d'AI Gateway" width="800" />
+</p>
+
+## 📖 Ressources & Documentation
+
+* **[Présentation Pylos AI Gateway (PDF)](Pylos_AI_Gateway.pdf)**
+* **[Plan d'architecture Pylos AI Gateway (PDF)](docs/Pylos_AI_Gateway_Blueprint.pdf)**
 
 ---
 

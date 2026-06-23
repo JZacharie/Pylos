@@ -1,12 +1,25 @@
 # Pylos — Enterprise-Grade Rust LLM Gateway & MCP Proxy
 
 <p align="center">
+  <img src="logo.png" alt="Pylos Logo" width="200" />
+</p>
+
+<p align="center">
   <a href="README.md"><b>English</b></a> | 
   <a href="README.fr.md"><b>Français</b></a> | 
   <a href="README.es.md"><b>Español</b></a>
 </p>
 
 Pylos is a high-performance, ultra-low latency AI gateway written in Rust. It serves as a unified, secure proxy for 20+ LLM providers, offering a drop-in replacement for OpenAI-compatible SDKs. With built-in governance, cost management, privacy guardrails, and a sleek React admin dashboard, Pylos helps teams safely scale and monitor their AI workflows.
+
+<p align="center">
+  <img src="docs/image.png" alt="AI Gateway Overview" width="800" />
+</p>
+
+## 📖 Resources & Documentation
+
+* **[Pylos AI Gateway Presentation (PDF)](Pylos_AI_Gateway.pdf)**
+* **[Pylos AI Gateway Architecture Blueprint (PDF)](docs/Pylos_AI_Gateway_Blueprint.pdf)**
 
 ---
 
