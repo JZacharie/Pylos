@@ -16,6 +16,10 @@ Pylos est une passerelle IA haute performance et à ultra-faible latence écrite
   <img src="docs/image.png" alt="Aperçu d'AI Gateway" width="800" />
 </p>
 
+> [!WARNING]
+> **Statut du projet : Non prêt pour la production (Non-Production Ready)**
+> Bien que les tests techniques (tests unitaires et d'intégration technique) soient fonctionnels, les **tests d'intégration système (SIT - System Integration Tests)** n'ont pas encore été réalisés. Pylos est actuellement considéré comme **non prêt pour la production**. Une fois les fonctionnalités de test stabilisées, une campagne de tests complète sera menée pour valider définitivement le projet.
+
 ## 📖 Ressources & Documentation
 
 * **[Présentation Pylos AI Gateway (PDF)](Pylos_AI_Gateway.pdf)**
