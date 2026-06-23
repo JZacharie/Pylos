@@ -296,5 +296,9 @@ fn build_cors(state: &AppState) -> CorsLayer {
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
             axum::http::header::HeaderName::from_static("x-admin-key"),
+            axum::http::header::HeaderName::from_static("x-pylos-force-provider"),
+            axum::http::header::HeaderName::from_static("x-pylos-force-model"),
+            axum::http::header::HeaderName::from_static("x-caveman-mode"),
+            axum::http::header::HeaderName::from_static("x-caveman-compress"),
         ])
 }

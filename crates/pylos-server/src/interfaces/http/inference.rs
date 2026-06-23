@@ -89,9 +89,21 @@ pub async fn chat_completions(
         "[Request] POST /v1/chat/completions — Starting inference"
     );
 
+    let force_provider = headers
+        .get("x-pylos-force-provider")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    let force_model = headers
+        .get("x-pylos-force-model")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
     let request = PylosRequest::ChatCompletion(payload);
     let mut ctx = RequestContext {
         trace_id: Some(request_id.clone()),
+        force_provider,
+        force_model,
         ..Default::default()
     };
     if let Some(vk) = &vk_info {
