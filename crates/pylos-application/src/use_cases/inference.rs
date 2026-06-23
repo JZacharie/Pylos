@@ -590,8 +590,11 @@ impl InferenceOrchestrator {
             } else {
                 let is_supported = model_supported_by(config, &stream_model);
                 if !is_supported {
-                    let mapped_model =
-                        map_model_for_provider(provider.name(), &stream_model, &config.allowed_models);
+                    let mapped_model = map_model_for_provider(
+                        provider.name(),
+                        &stream_model,
+                        &config.allowed_models,
+                    );
                     info!(
                         provider = provider.name(),
                         original_model = %stream_model,
