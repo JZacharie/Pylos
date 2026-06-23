@@ -46,7 +46,7 @@ pub use otel_plugin::{OtelConfig, OtelPlugin};
 pub use pg_log_store::PgLogStore;
 pub use prefix_cache::PrefixCachePlugin;
 pub use prompt_registry::PromptRegistryPlugin;
-pub use rag_plugin::RagPlugin;
+pub use rag_plugin::{RagConfig, RagModelRoute, RagPlugin};
 pub use rate_limit_store::{RateLimitPlugin, RateLimitStatus, RateLimitStore};
 pub use semantic_cache::SemanticCachePlugin;
 

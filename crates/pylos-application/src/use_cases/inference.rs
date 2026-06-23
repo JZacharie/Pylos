@@ -5,13 +5,14 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
+use futures::StreamExt;
 use pylos_core::domain::embedding::{EmbeddingRequest, EmbeddingResponse};
 use pylos_core::domain::openai::{
-    ChatCompletionMessage, ChatCompletionRequest, MessageRole, TextCompletionChoice,
-    TextCompletionResponse,
+    ChatCompletionChoice, ChatCompletionMessage, ChatCompletionRequest, ChatCompletionResponse,
+    MessageRole, TextCompletionChoice, TextCompletionResponse,
 };
 use pylos_core::domain::provider::ProviderConfig;
-use pylos_core::domain::request::{PylosRequest, PylosResponse, RequestContext};
+use pylos_core::domain::request::{PylosRequest, PylosResponse, RequestContext, StreamChunk};
 use pylos_core::domain::traits::{ChunkStream, LlmPlugin, Provider};
 use pylos_core::error::PylosError;
 
@@ -577,7 +578,15 @@ impl InferenceOrchestrator {
                         trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
                         "Streaming inference started successfully"
                     );
-                    return Ok((stream, actual_provider));
+
+                    // Wrap the stream to collect chunks and run post-hooks on completion
+                    let wrapped = wrap_stream_with_post_hooks(
+                        stream,
+                        self.plugins.clone(),
+                        request.clone(),
+                        ctx.clone(),
+                    );
+                    return Ok((wrapped, actual_provider));
                 }
                 Err(e) => {
                     self.record_failure(provider.name());
@@ -761,6 +770,99 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
         }
         _ => model.to_string(),
     }
+}
+
+/// Wrap a streaming response to collect chunks and run plugin post-hooks after completion.
+/// Post-hooks run asynchronously after the last chunk is yielded, so the client
+/// receives the stream without additional delay. Post-hook errors are logged but
+/// do not propagate to the client.
+fn wrap_stream_with_post_hooks(
+    stream: ChunkStream,
+    plugins: Vec<Arc<dyn LlmPlugin>>,
+    request: PylosRequest,
+    ctx: RequestContext,
+) -> ChunkStream {
+    let accumulated = Arc::new(Mutex::new(Vec::<StreamChunk>::new()));
+    let acc = accumulated.clone();
+    let collected = stream.map(move |result| {
+        if let Ok(ref chunk) = result {
+            if let Ok(mut guard) = acc.lock() {
+                guard.push(chunk.clone());
+            }
+        }
+        result
+    });
+
+    let plugins_for_done = plugins.clone();
+    let request_for_done = request.clone();
+    let accumulated_for_done = accumulated.clone();
+
+    let done_future = async move {
+        let chunks = {
+            let guard = accumulated_for_done
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            guard.clone()
+        };
+
+        if chunks.is_empty() {
+            return;
+        }
+
+        let full_content: String = chunks
+            .iter()
+            .flat_map(|c| c.choices.iter())
+            .filter_map(|ch| ch.delta.content.as_ref())
+            .cloned()
+            .collect();
+
+        let model = request_for_done.model().to_string();
+        let last_chunk = chunks.last();
+        let finish_reason = last_chunk
+            .and_then(|c| c.choices.first())
+            .and_then(|ch| ch.finish_reason.clone());
+
+        let mut response = PylosResponse::ChatCompletion(ChatCompletionResponse {
+            id: chunks.first().map(|c| c.id.clone()).unwrap_or_default(),
+            object: "chat.completion".to_string(),
+            created: chunks.first().map(|c| c.created).unwrap_or(0),
+            model,
+            choices: vec![ChatCompletionChoice {
+                index: 0,
+                message: ChatCompletionMessage {
+                    role: MessageRole::Assistant,
+                    content: Some(full_content),
+                    ..Default::default()
+                },
+                finish_reason,
+            }],
+            usage: None,
+        });
+
+        let mut ctx = ctx;
+        for plugin in plugins_for_done.iter().rev() {
+            if let Err(e) = plugin
+                .post_hook(&request_for_done, &mut response, &mut ctx)
+                .await
+            {
+                warn!(plugin = plugin.name(), error = %e, "Post-hook stream error");
+            }
+        }
+    };
+
+    // Chain the collected chunks with a terminal item that triggers post-hooks
+    let done_stream = futures::stream::once(async move {
+        done_future.await;
+        // Return a terminal chunk that ends the stream
+        Err::<StreamChunk, PylosError>(PylosError::Internal("stream-end".into()))
+    });
+
+    Box::pin(collected.chain(done_stream).take_while(|item| {
+        // Stop streaming when we hit the synthetic terminal error
+        let should_continue =
+            !matches!(item, Err(PylosError::Internal(ref msg)) if msg == "stream-end");
+        futures::future::ready(should_continue)
+    }))
 }
 
 /// Crée un chunk de streaming terminal (finish_reason = "stop") à partir d'un contenu texte.
