@@ -27,8 +27,12 @@ pub async fn management_auth_middleware(
     next: Next,
 ) -> Response {
     // Insert default extensions to avoid missing extension errors in downstream handlers
-    request.extensions_mut().insert(None::<pylos_core::domain::organization::InternalUser>);
-    request.extensions_mut().insert(None::<crate::middleware::virtual_key::VirtualKeyInfo>);
+    request
+        .extensions_mut()
+        .insert(None::<pylos_core::domain::organization::InternalUser>);
+    request
+        .extensions_mut()
+        .insert(None::<crate::middleware::virtual_key::VirtualKeyInfo>);
 
     // Extrait la clé depuis Authorization: Bearer ou X-Admin-Key
     let provided = extract_admin_key(request.headers()).map(|s| s.to_string());
@@ -62,7 +66,10 @@ pub async fn management_auth_middleware(
         let email = token_data.claims.sub.to_lowercase();
         // Vérifie si l'utilisateur est toujours actif dans le store
         if let Ok(users) = state.org_store.list_users().await {
-            if let Some(user) = users.iter().find(|u| u.email.to_lowercase() == email && u.is_active) {
+            if let Some(user) = users
+                .iter()
+                .find(|u| u.email.to_lowercase() == email && u.is_active)
+            {
                 request.extensions_mut().insert(Some(user.clone()));
                 return next.run(request).await;
             }
@@ -74,23 +81,57 @@ pub async fn management_auth_middleware(
         if constant_time_eq(provided_key.as_bytes(), expected.as_bytes()) {
             return next.run(request).await;
         }
-    } else {
-        // Si pas de clé d'administration configurée
-        return next.run(request).await;
     }
 
     // 3. Fallback sur la validation de la Virtual Key si c'est un sk-pylos-*
     if provided_key.starts_with(pylos_core::domain::virtual_key::VIRTUAL_KEY_PREFIX) {
         if let Ok(Some(vk_cfg)) = state.vk_store.get_key_by_value(&provided_key).await {
             if vk_cfg.is_active {
-                request.extensions_mut().insert(Some(crate::middleware::virtual_key::VirtualKeyInfo {
-                    name: vk_cfg.name.clone(),
-                    key: provided_key.to_string(),
-                    provider_configs: vk_cfg.provider_configs.clone(),
-                }));
+                // Register/update in the in-memory registry with rate limit
+                let cfg = state.config_store.get().await;
+                let rate_limit = cfg
+                    .governance
+                    .rate_limits
+                    .iter()
+                    .find(|rl| Some(&rl.id) == vk_cfg.rate_limit_id.as_ref())
+                    .map(|rl| rl.request_max_limit)
+                    .unwrap_or(0);
+                let v_key = pylos_core::domain::virtual_key::VirtualKey::new(
+                    provided_key.to_string(),
+                    &vk_cfg.name,
+                )
+                .with_rpm(rate_limit);
+                state.vk_registry.register(v_key).await;
+
+                // Enforce rate limiting on management routes too
+                if let Err(reason) = state.vk_registry.check_and_increment(&provided_key).await {
+                    return (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        Json(json!({
+                            "error": {
+                                "message": reason,
+                                "type": "governance_error",
+                                "code": 429
+                            }
+                        })),
+                    )
+                        .into_response();
+                }
+                request.extensions_mut().insert(Some(
+                    crate::middleware::virtual_key::VirtualKeyInfo {
+                        name: vk_cfg.name.clone(),
+                        key: provided_key.to_string(),
+                        provider_configs: vk_cfg.provider_configs.clone(),
+                    },
+                ));
                 return next.run(request).await;
             }
         }
+    }
+
+    // 4. Mode legacy : si PYLOS_ADMIN_KEY n'est pas défini, endpoints ouverts
+    if state.admin_key.is_none() {
+        return next.run(request).await;
     }
 
     (
@@ -106,7 +147,6 @@ pub async fn management_auth_middleware(
         .into_response()
 }
 
-/// Constant-time string comparison to prevent timing side-channel attacks.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;

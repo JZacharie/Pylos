@@ -36,16 +36,19 @@ fn matches_pattern(pattern: &str, provider: &str, model_id: &str) -> bool {
     };
     if let Some((pat_prov, pat_mod)) = parts {
         let prov_match = pat_prov == "*" || pat_prov == provider;
-        let mod_match = pat_mod == "*" || pat_mod == model_id || (pat_mod.contains('*') && {
-            let prefix = pat_mod.trim_end_matches('*');
-            model_id.starts_with(prefix)
-        });
+        let mod_match = pat_mod == "*"
+            || pat_mod == model_id
+            || (pat_mod.starts_with('*') && pat_mod.ends_with('*') && {
+                let infix = &pat_mod[1..pat_mod.len() - 1];
+                model_id.contains(infix)
+            })
+            || (pat_mod.starts_with('*') && model_id.ends_with(&pat_mod[1..]))
+            || (pat_mod.ends_with('*') && model_id.starts_with(pat_mod.trim_end_matches('*')));
         prov_match && mod_match
     } else {
-        pattern == model_id || (pattern.contains('*') && {
-            let prefix = pattern.trim_end_matches('*');
-            model_id.starts_with(prefix)
-        })
+        pattern == model_id
+            || (pattern.starts_with('*') && model_id.ends_with(&pattern[1..]))
+            || (pattern.ends_with('*') && model_id.starts_with(pattern.trim_end_matches('*')))
     }
 }
 
@@ -68,7 +71,9 @@ pub async fn list_models(
                 patterns.push(format!("{}::{}", pc.provider, m));
             }
         }
-        allowed_model_patterns = Some(patterns);
+        if !patterns.is_empty() {
+            allowed_model_patterns = Some(patterns);
+        }
     } else if let Some(u) = &user {
         if u.role != "admin" {
             let mut patterns = Vec::new();
@@ -102,7 +107,9 @@ pub async fn list_models(
             data.retain(|m| {
                 let provider = m["provider"].as_str().unwrap_or("");
                 let model_id = m["id"].as_str().unwrap_or("");
-                patterns.iter().any(|pat| matches_pattern(pat, provider, model_id))
+                patterns
+                    .iter()
+                    .any(|pat| matches_pattern(pat, provider, model_id))
             });
         }
         return Json(json!({ "object": "list", "data": data }));
@@ -281,7 +288,9 @@ pub async fn list_models(
         models.retain(|m| {
             let provider = m["provider"].as_str().unwrap_or("");
             let model_id = m["id"].as_str().unwrap_or("");
-            patterns.iter().any(|pat| matches_pattern(pat, provider, model_id))
+            patterns
+                .iter()
+                .any(|pat| matches_pattern(pat, provider, model_id))
         });
     }
 
