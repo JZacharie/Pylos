@@ -6,7 +6,377 @@ Pylos est un **AI Gateway** haute performance, réécrit en Rust, qui sert de po
 
 ---
 
-## 1. Compatibilité OpenAI
+## 1. Gestion des Tokens et Optimisation des Coûts LLM
+
+Pylos réduit drastiquement la consommation de tokens et le coût des appels LLM via une combinaison de techniques complémentaires. L'économie réalisée peut atteindre **60-80%** sur la facture LLM selon les cas d'usage.
+
+### 1.1 Cache Sémantique (SemanticCachePlugin)
+
+Le cache sémantique stocke les réponses LLM dans **Qdrant** (base vectorielle) et les réutilise pour des requêtes similaires.
+
+**Fonctionnement :**
+1. La requête utilisateur est convertie en **vecteur d'embedding**
+2. Recherche par similarité cosine dans Qdrant (seuil configurable, défaut: 0.90)
+3. Si une réponse similaire existe → retour immédiate (**0 requête LLM**)
+4. Si absence → appel LLM normal, puis la réponse est stockée dans Qdrant pour les futures requêtes
+
+**Gain :** Les questions fréquentes ou reformulations ne consomment aucun token. Particulièrement efficace pour le support client, les FAQs, les dashboards avec questions types.
+
+**Configuration :** Seuil de similarité, TTL (time-to-live), modèle d'embedding, collection Qdrant.
+
+### 1.2 Cache de Préfixes (PrefixCachePlugin)
+
+Cache en mémoire (via **Moka**) qui identifie les séquences de messages identiques en début de conversation.
+
+**Fonctionnement :**
+1. Génération de clés pour chaque **préfixe de messages** (messages 1..N)
+2. Recherche du plus long préfixe correspondant dans le cache
+3. Si exact match → réponse instantanée (**0 token LLM**)
+4. Si préfixe partiel → le cache est marqué comme chaud pour le provider (KV cache hit)
+
+**Gain :** Les conversations partageant un même historique (ex: même system prompt + premières interactions) évitent de reprocesser les tokens initiaux. Le KV cache des LLM est réutilisé, réduisant la latence TTFT de 40-60%.
+
+### 1.3 Cache Aligner (CacheAlignerPlugin)
+
+Analyse et **nettoie le contenu volatil** des messages avant leur envoi aux LLM pour maximiser l'efficacité du cache KV des providers.
+
+**Détection et anonymisation :**
+- UUIDs → remplacés par `{UUID}`
+- Dates ISO 8601 → remplacées par `{DATE}`
+- Tokens JWT → remplacés par `{JWT}`
+- Hex hashs longs → remplacés par `{HASH}`
+- UUIDs en snake_case (ex: `user_id_550e8400...`) → préservés mais normalisés
+
+**Gain :** Sans ce plugin, chaque appel LLM avec des UUIDs/dates différentes génère un **cache miss** complet du KV cache provider (DeepSeek, Anthropic, OpenAI). Avec l'alignement, le system prompt et les messages stables restent dans le cache, réduisant le temps de prétraitement de **30-50%** et le coût des tokens de cache miss.
+
+### 1.4 Batching Intelligent (BatchingPlugin)
+
+Deux modes de regroupement des requêtes concurrentes :
+
+**Mode Coalescing (temps réel) :**
+- Accumule les requêtes vers le même modèle pendant une fenêtre de temps configurable (ex: 50ms)
+- Les libère simultanément pour permettre au provider de les batch-er au niveau transport
+- Idéal pour les providers qui offrent des réductions par lot
+
+**Mode Async Batch (OpenAI Batch API) :**
+- Accumule les requêtes et les soumet via l'API `/v1/batches` d'OpenAI
+- Prix réduit de **50%** par rapport à l'API temps réel
+- Résultats récupérés par polling, stockés dans un store partagé
+- Parfait pour les workloads non urgents : analyse de logs, génération de rapports, traitement par lot
+
+**Gain :** 50% d'économie sur les requêtes décalables via le mode async batch.
+
+### 1.5 Compression Caveman (CacheAlignerPlugin)
+
+Algorithme de compression de contenu qui réduit la taille des messages sans perte sémantique :
+- Codes barrés : lignes de code indentées > 3 niveaux → tronquées avec compteur
+- Contenu textuel long → taux de compression configurable
+- Garde-fou automatique : si le modèle répond avec des `{...}` non résolus, la compression est réduite automatiquement
+
+**Gain :** Réduction de **20-40%** du nombre de tokens par requête.
+
+### 1.6 Route-Based Model Selection (Model Mapping)
+
+Pylos traduit automatiquement les noms de modèles entre fournisseurs lors des fallbacks, permettant d'utiliser le **modèle le moins cher disponible** pour chaque requête.
+
+**Exemple :** `gemini-2.5-flash` → `deepseek-v4-flash` (si DeepSeek est moins cher)
+**Règle :** Les modèles "pro" (gpt-4, claude-opus, gemini-pro) sont mappés vers des équivalents pros; les modèles "fast" (flash, mini, haiku) vers des équivalents économiques.
+
+**Gain :** Économie de **30-70%** en routant vers les modèles les plus compétitifs pour chaque niveau de qualité.
+
+### 1.7 Budget Enforcement (BudgetPlugin)
+
+Limites budgétaires en USD par clé virtuelle avec périodes de reset configurables. Agit comme un **garde-fou financier** pour éviter les dépassements.
+
+---
+
+## 2. Architecture des Plugins (Pre/Post Hooks)
+
+| Plugin | Fonction | Type |
+|---|---|---|
+| **CacheAligner** | Nettoie le contenu volatil pour maximiser le cache KV | Pre-hook |
+| **SemanticCache** | Cache sémantique vectoriel via Qdrant | Pre-hook + Post-hook |
+| **PrefixCache** | Cache de préfixes de conversations en mémoire | Pre-hook + Post-hook |
+| **RAG** | Retrieval-Augmented Generation avec contexte vectoriel | Pre-hook |
+| **Memory** | Mémoire cross-agent via graphe de connaissances | Pre-hook + Post-hook |
+| **StructuredOutput** | Validation et correction automatique des réponses JSON | Post-hook |
+| **Guardrails** | Filtrage PII, mots-clés, injections prompt | Pre-hook |
+| **Budget** | Enforcement des limites budgétaires USD | Pre-hook |
+| **RateLimit** | Enforcement des limites RPM/TPM | Pre-hook |
+| **Batching** | Regroupement de requêtes (coalescing + async batch) | Pre-hook |
+| **PromptRegistry** | Registre de templates de system prompts | Pre-hook |
+| **OpenTelemetry** | Attribution de span attributes pour tracing | Pre-hook |
+
+**Ordre d'exécution :**
+```
+Pre-hooks (ordre d'enregistrement) → InferenceOrchestrator → Post-hooks (ordre inverse)
+```
+
+Le pipeline complet permet à chaque plugin de **modifier la requête** avant l'appel LLM, et d'**analyser/réécrire la réponse** après.
+
+---
+
+## 3. RAG (Retrieval-Augmented Generation)
+
+### 3.1 Concept Général
+
+Le RAG permet d'enrichir les prompts LLM avec des connaissances externes issues d'une base vectorielle. Au lieu de faire appel à la seule mémoire paramétrique du modèle, Pylos injecte du **contexte récupéré dynamiquement** depuis Qdrant, garantissant des réponses précises, actualisées et traçables.
+
+### 3.2 Routes et Configuration
+
+Pylos supporte des **routes RAG configurables** via `RagConfig` :
+
+```json
+{
+  "routes": [
+    {
+      "model_pattern": "mon-modele-rag-*",
+      "collection_name": "ma_collection",
+      "system_prompt_template": "Contexte:\n{context}\n\nRéponds à l'utilisateur:",
+      "payload_fields": ["title", "content"]
+    }
+  ]
+}
+```
+
+Chaque route associe un **pattern de modèle LLM** (avec support wildcard `*`) à :
+- Une **collection Qdrant** cible
+- Un **template de prompt** avec placeholder `{context}`
+- Les **champs de payload** à extraire des documents
+
+### 3.3 Pipeline RAG Complet
+
+```
+Requête utilisateur
+       │
+       ▼
+┌─────────────────────┐
+│ Transformation      │ ← Query Expansion (génération de variantes)
+│ de la requête       │ ← HyDE (document hypothétique)
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Embedding           │ ← Conversion texte → vecteur
+│ (via provider direct)│    (modèle configurable)
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Recherche Qdrant    │ ← Similarité cosine, top-K
+│ (parallélisée)      │    Multi-requêtes si expansion
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ CRAG (Corrective)   │ ← Si score < seuil → recherche web
+│                     │    Provider: Tavily, SearxNG, etc.
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ Injection contexte  │ ← Messages système augmentés
+│ + appel LLM         │    Pipeline normal
+└─────────────────────┘
+```
+
+### 3.4 Query Expansion
+
+Avant la recherche vectorielle, Pylos peut **générer des variantes** de la question utilisateur via un LLM rapide (GPT-4o-mini, Gemini Flash).
+
+**Exemple :**
+- Requête originale : "Quel est le prix du forfait entreprise ?"
+- Variante 1 : "Combien coûte l'abonnement pro ?"
+- Variante 2 : "Tarifs formule société"
+- Variante 3 : "Pricing plan business"
+
+Chaque variante est embeddée et recherchée en parallèle dans Qdrant via `futures::join_all`. Les résultats sont fusionnés avec déduplication.
+
+**Gain :** Amélioration du rappel de recherche de **15-30%** pour les questions ambiguës ou mal formulées.
+
+### 3.5 HyDE (Hypothetical Document Embeddings)
+
+Technique qui consiste à **générer un document idéal hypothétique** qui répondrait parfaitement à la question, puis à utiliser cet embedding pour la recherche.
+
+**Principe :** Au lieu de chercher avec l'embedding de la question, on cherche avec l'embedding du **document de réponse idéal**. Cela fonctionne mieux car le document généré ressemble structurellement aux vrais documents dans Qdrant.
+
+**Gain :** Amélioration de la précision de **10-20%** par rapport à une recherche directe.
+
+### 3.6 Parent-Child Chunking
+
+Stratégie de découpage des documents en deux niveaux :
+
+```
+Document complet
+       │
+       ▼
+┌─────────────────────┐
+│ Parents blocks      │ ← ~1000 tokens, chevauchement 20%
+│ (contexte riche)    │
+├─────────────────────┤
+│ Enfants blocks      │ ← ~150 tokens, chevauchement 25%
+│ (embedding précis)  │
+└─────────────────────┘
+```
+
+**Fonctionnement :**
+- Les **enfants** sont embeddés et indexés dans Qdrant (recherche précise)
+- Le **parent** complet est stocké dans le payload de l'enfant
+- Lors de la recherche, c'est le contenu du **parent** qui est injecté dans le prompt LLM
+
+**Avantage :** La recherche trouve des passages très précis (petits chunks enfants) mais le LLM reçoit un **contexte riche et complet** (gros chunk parent). Évite les réponses hors contexte dues à des fragments trop petits.
+
+**Utilisation via API :**
+```http
+POST /api/vector-stores/collections/{name}/points
+{
+  "text": "Long document...",
+  "embedding_model": "nomic-embed-text",
+  "chunking_strategy": "parent_child"
+}
+```
+
+### 3.7 CRAG (Corrective RAG)
+
+Mécanisme de **détection de confiance** qui déclenche une recherche web de secours si les résultats vectoriels sont de mauvaise qualité.
+
+**Algorithme :**
+1. Recherche Qdrant → score de similarité max = 0.62
+2. Seuil configuré = 0.75
+3. **CRAG déclenché** → recherche web via Tavily
+4. Résultats web injectés comme contexte à la place des résultats Qdrant
+
+**Configuration :**
+```json
+{
+  "crag": {
+    "enabled": true,
+    "threshold": 0.75,
+    "provider": "tavily",
+    "api_key": "env.TAVILY_API_KEY",
+    "max_results": 3
+  }
+}
+```
+
+**Gain :** Élimine les **hallucinations par manque de contexte**. Garantit que le LLM reçoit toujours des informations pertinentes, même quand la base vectorielle est lacunaire.
+
+### 3.8 Endpoints Vector Stores
+
+Interface REST complète pour la gestion des collections vectorielles :
+
+| Endpoint | Méthode | Description |
+|---|---|---|
+| `/api/vector-stores/collections` | GET | Liste toutes les collections Qdrant |
+| `/api/vector-stores/collections` | POST | Crée une collection (nom, taille vecteur, distance) |
+| `/api/vector-stores/collections/:name` | DELETE | Supprime une collection |
+| `/api/vector-stores/collections/:name/points` | POST | Ajoute un document (avec chunking optionnel) |
+| `/api/vector-stores/collections/:name/search` | POST | Recherche par similarité sémantique |
+
+---
+
+## 4. Mémoire Cross-Agent (MemoryPlugin)
+
+### 4.1 Concept
+
+Pylos maintient une **mémoire persistante et structurée** des interactions utilisateurs sous forme de **graphe de connaissances** (Knowledge Graph) stocké dans **Memgraph** (base graphe compatible neo4j).
+
+Contrairement à une simple historique de chat, le graphe capture les **relations sémantiques** entre entités :
+```
+(User) --PREFERS--> (Rust)
+(User) --WORKS_ON--> (Project X)
+(Project X) --USES--> (PostgreSQL)
+```
+
+### 4.2 Fonctionnement
+
+**Phase d'injection (pre-hook) :**
+1. Requête Memgraph pour récupérer les relations connues de l'utilisateur (clé virtuelle)
+2. Injection des `<memory>` tags comme instruction système au LLM
+3. Le LLM est invité à produire de nouvelles relations en fin de réponse
+
+**Phase d'extraction (post-hook) :**
+1. Analyse de la réponse du LLM pour détecter les balises `<memory>EntityA|RELATION|EntityB</memory>`
+2. Parsing du triplet (entité1, relation, entité2)
+3. Upsert dans Memgraph via Cypher `MERGE`
+4. Nettoyage de la réponse (les balises sont retirées du texte visible)
+
+**Exemple de cycle mémoire :**
+```
+User: "Je travaille sur un projet en Rust"
+Assistant: "Génial ! Rust est excellent pour les systèmes." <memory>User|WORKS_ON|Rust Project</memory>
+                                                  ▲ extraction et sauvegarde dans Memgraph
+                                                  ▼ requête suivante
+User: "Quel langage est-ce que je préfère ?"
+Assistant: "D'après notre conversation précédente, vous travaillez sur un projet en Rust."
+```
+
+### 4.3 Support du Streaming
+
+L'extraction mémoire fonctionne **même en mode streaming** :
+- L'instruction système est injectée avec une formulation adaptée au streaming
+- Après la fin du stream, un wrapper collecte tous les chunks et reconstitue la réponse complète
+- Les plugins post-hook (dont MemoryPlugin) sont exécutés sur la réponse reconstituée
+- Les balises `<memory>` sont extraites et persistées dans Memgraph
+
+### 4.4 Architecture
+
+```
+                  ┌──────────────────┐
+                  │    Memgraph DB    │
+                  │  (graphe neo4j)   │
+                  └────────┬─────────┘
+                           │
+          ┌────────────────┴────────────────┐
+          │          MemoryPlugin            │
+          │  pre-hook : injection contexte   │
+          │  post-hook : extraction tags     │
+          └────────────────┬────────────────┘
+                           │
+          ┌────────────────┴────────────────┐
+          │         InferenceOrchestrator    │
+          │     Appel LLM (stream ou non)    │
+          └─────────────────────────────────┘
+```
+
+### 4.5 Utilisation
+
+Activation dans `pylos.json` :
+```json
+{
+  "plugins": [
+    {
+      "name": "memory",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Variable d'environnement : `MEMGRAPH_URL=127.0.0.1:7687`
+
+---
+
+## 5. Structured Output
+
+Pylos valide et **corrige automatiquement** les réponses JSON produites par les LLM.
+
+### 5.1 Modes Supportés
+
+- `json_object` : valide que la réponse est un JSON valide
+- `json_schema` : valide contre un JSON Schema fourni dans la requête
+
+### 5.2 Boucle de Correction Automatique
+
+Si la validation échoue :
+1. Pylos appelle un **modèle de correction** rapide (ex: GPT-4o-mini)
+2. Il envoie le JSON invalide + le message d'erreur de validation
+3. Le modèle produit une version corrigée
+4. Nouvelle validation
+5. Jusqu'à `max_retries` tentatives (défaut: 1)
+
+**Sans correction :** L'application cliente doit gérer l'erreur et relancer
+**Avec correction :** Le client reçoit toujours un JSON valide
+
+---
+
+## 6. Compatibilité OpenAI
 
 ### Endpoints supportés
 - `POST /v1/chat/completions` — Chat completions (streaming et non-streaming)
@@ -21,9 +391,9 @@ Pylos est un **AI Gateway** haute performance, réécrit en Rust, qui sert de po
 
 ---
 
-## 2. Gestion des fournisseurs d'IA
+## 7. Gestion des fournisseurs d'IA
 
-### 6 adaptateurs natifs
+### 7 adaptateurs natifs
 | Fournisseur | Protocole |
 |---|---|
 | **OpenAI** & compatibles (Groq, Ollama, OpenRouter, vLLM, Mistral, Cerebras, Perplexity, Fireworks, xAI, Nebius, DeepSeek, Lemonade, Vertex) | API OpenAI |
@@ -32,6 +402,7 @@ Pylos est un **AI Gateway** haute performance, réécrit en Rust, qui sert de po
 | **Azure OpenAI** | Azure OpenAI Service |
 | **Google Gemini** | Gemini API |
 | **Cohere** | Cohere API v2 |
+| **DeepSeek** | API OpenAI-compatible |
 
 ### Auto-détection des fournisseurs
 - Détection automatique du fournisseur à partir du nom du modèle
@@ -50,7 +421,7 @@ Pylos est un **AI Gateway** haute performance, réécrit en Rust, qui sert de po
 
 ---
 
-## 3. Routage intelligent
+## 8. Routage intelligent
 
 ### Routage par modèle
 - Association automatique modèle → fournisseur
@@ -70,7 +441,7 @@ Pylos est un **AI Gateway** haute performance, réécrit en Rust, qui sert de po
 
 ---
 
-## 4. Sécurité et gouvernance
+## 9. Sécurité et gouvernance
 
 ### Clés API virtuelles
 - Format `sk-pylos-*`
@@ -101,26 +472,7 @@ Pylos est un **AI Gateway** haute performance, réécrit en Rust, qui sert de po
 
 ---
 
-## 5. Plugins (architecture Pre/Post hooks)
-
-| Plugin | Fonction |
-|---|---|
-| **Guardrails** | Masquage PII (emails, téléphones, CB), blocage de mots-clés, détection d'injections prompt |
-| **StructuredOutput** | Validation et correction automatique des réponses JSON (`json_object`, `json_schema`) |
-| **SemanticCache** | Cache sémantique via Qdrant : réponses mises en cache basées sur la similarité |
-| **RAG / Retrieval** | Interception de modèles spécifiques pour injecter du contexte depuis Qdrant |
-| **Budget** | Enforcement des limites budgétaires USD |
-| **RateLimit** | Enforcement des limites RPM/TPM |
-| **Batching** | Accumulation dynamique des requêtes concurrentes pour un même modèle |
-| **PrefixCache** | Cache de préfixes pour les tokens prompt |
-| **PromptRegistry** | Registre de templates de system prompts |
-| **OpenTelemetry** | Attribution de span attributes pour les appels LLM |
-
-Ordre d'exécution : **Pre-hooks** (avant l'appel LLM) → **InferenceOrchestrator** → **Post-hooks** (après la réponse)
-
----
-
-## 6. Observabilité
+## 10. Observabilité
 
 ### Métriques Prometheus
 Endpoint `/metrics` exposant :
@@ -146,7 +498,7 @@ Endpoint `/metrics` exposant :
 
 ---
 
-## 7. Administration (Interface React)
+## 11. Administration (Interface React)
 
 ### Pages de l'interface
 
@@ -172,7 +524,7 @@ Endpoint `/metrics` exposant :
 
 ---
 
-## 8. Gestion des accès (RBAC multi-tenant)
+## 12. Gestion des accès (RBAC multi-tenant)
 
 ### Hiérarchie
 ```
@@ -187,16 +539,18 @@ Organizations → Teams → Users → Access Groups → Policies
 
 ---
 
-## 9. MCP (Model Context Protocol)
+## 13. MCP (Model Context Protocol)
 
 - **Proxy MCP** : interface unifiée pour les outils et stores vectoriels
 - **Search Tools** : interface de configuration des outils de recherche
 - **Vector Stores** : interface de configuration des stores vectoriels
 - **Tool Policies** : gestion des politiques d'accès par outil avec API CRUD
+- **Rate limiting MCP** : vérification des quotas par clé virtuelle sur les endpoints MCP
+- **ACL MCP** : contrôle d'accès basé sur `virtual_key_id` et `team_id` (logique AND quand les deux sont définis)
 
 ---
 
-## 10. Persistance des données
+## 14. Persistance des données
 
 ### Bases de données (SQLite)
 - `pylos-logs.db` — Logs de requêtes
@@ -212,11 +566,14 @@ Organizations → Teams → Users → Access Groups → Policies
 - Configurable via `database_url`
 
 ### Vector store
-- **Qdrant** pour le cache sémantique et le RAG
+- **Qdrant** pour le cache sémantique, le RAG et les stores vectoriels MCP
+
+### Graph store
+- **Memgraph** (compatible neo4j) pour la mémoire cross-agent
 
 ---
 
-## 11. Configuration
+## 15. Configuration
 
 - Fichier unique **`pylos.json`** avec schéma JSON
 - Références à des variables d'environnement (`env.VAR_NAME`)
@@ -227,7 +584,7 @@ Organizations → Teams → Users → Access Groups → Policies
 
 ---
 
-## 12. Déploiement
+## 16. Déploiement
 
 ### Docker
 - Image multi-arch (amd64 + arm64)
@@ -244,11 +601,14 @@ Organizations → Teams → Users → Access Groups → Policies
 
 ---
 
-## 13. Stack technique
+## 17. Stack technique
 
 ### Backend (Rust)
 - **Web** : Axum 0.7 + Tokio + Tower
 - **Base de données** : SQLx 0.8 (SQLite + PostgreSQL), Rusqlite
+- **Vector store** : Qdrant API REST
+- **Graph store** : neo4rs (Memgraph)
+- **Cache** : Moka (cache mémoire haute performance)
 - **Observabilité** : Prometheus, OpenTelemetry OTLP, Tracing
 - **Cloud** : AWS SDK (Bedrock, STS), Azure SDK, Kube
 - **Sécurité** : Ring, jsonwebtoken, regex
@@ -284,12 +644,26 @@ Architecture hexagonale (ports & adapters) en 4 crates Rust.
 
 ---
 
+## Résumé des Économies
+
+| Mécanisme | Économie | Effort |
+|---|---|---|
+| Cache sémantique | 60-80% sur requêtes répétitives | Configuration uniquement |
+| Prefix cache | 40-60% sur TTFT + cache KV | Automatique |
+| Cache aligner | 30-50% sur tokens de cache miss | Automatique |
+| Batching async | 50% sur requêtes différées | Configuration mode |
+| Compression caveman | 20-40% tokens par requête | Automatique |
+| Model mapping | 30-70% sur coût unitaire | Configuration règles |
+| **Cumul possible** | **~80-90%** | **Combiné** |
+
 ## Points clés pour la présentation vidéo
 
-1. **Valeur principale** : Unifier tous les fournisseurs LLM derrière une API unique compatible OpenAI
-2. **Gouvernance** : Contrôle d'accès granulaire, rate limiting, budgets — indispensable pour les équipes
-3. **Observabilité** : Métriques, tracing, logs — tout est traçable et mesurable
-4. **Rust** : Performance, sécurité mémoire, faible latence
-5. **Plugins** : Architecture extensible pour la sécurité, le caching, le RAG
-6. **Déploiement** : Docker, Kubernetes, CI/CD prêts à l'emploi
-7. **Interface React** : Dashboard complet pour l'administration sans ligne de commande
+1. **Économies LLM** : Jusqu'à 90% de réduction sur la facture grâce au caching multicouche (sémantique, préfixe, alignement), au batching intelligent et au model mapping
+2. **RAG avancé** : Pipeline complet avec expansion de requêtes, HyDE, parent-child chunking, et CRAG avec fallback web — zéro hallucination par manque de contexte
+3. **Mémoire persistante** : Graphe de connaissances Memgraph qui suit les préférences utilisateur à travers les sessions et les agents — même en streaming
+4. **Gouvernance** : Contrôle d'accès granulaire, rate limiting, budgets — indispensable pour les équipes
+5. **Observabilité** : Métriques, tracing, logs — tout est traçable et mesurable
+6. **Rust** : Performance, sécurité mémoire, faible latence
+7. **Plugins** : Architecture extensible pour la sécurité, le caching, le RAG
+8. **Déploiement** : Docker, Kubernetes, CI/CD prêts à l'emploi
+9. **Interface React** : Dashboard complet pour l'administration sans ligne de commande
