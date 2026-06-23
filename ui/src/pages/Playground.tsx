@@ -226,6 +226,7 @@ export default function Playground() {
   const [maxTokens, setMaxTokens] = useState(512)
   const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan'>('off')
   const [cavemanCompress, setCavemanCompress] = useState(false)
+  const [forceProviderModel, setForceProviderModel] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [lastResult, setLastResult] = useState<RunResult | null>(null)
   const [streamingContent, setStreamingContent] = useState('')
@@ -346,6 +347,10 @@ export default function Playground() {
       }
       if (cavemanCompress) {
         headers['x-caveman-compress'] = 'true'
+      }
+      if (forceProviderModel) {
+        headers['x-pylos-force-provider'] = provider
+        headers['x-pylos-force-model'] = model
       }
 
       if (streaming) {
@@ -724,6 +729,23 @@ export default function Playground() {
             >
               <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform
                 ${cavemanCompress ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Force Provider/Model */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs text-zinc-400">Force Provider/Model</span>
+              <span className="text-[10px] text-zinc-500">Bypass routing rules</span>
+            </div>
+            <button
+              onClick={() => setForceProviderModel(!forceProviderModel)}
+              disabled={isRunning}
+              className={`relative w-10 h-5 rounded-full transition-colors
+                ${forceProviderModel ? 'bg-emerald-600' : 'bg-zinc-700'}`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform
+                ${forceProviderModel ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
           </div>
 

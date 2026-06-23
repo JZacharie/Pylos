@@ -119,4 +119,6 @@ pub struct RequestContext {
     pub otel_span: Option<tracing::Span>,
     /// Vecteur d'embedding pour le cache sémantique (évite stockage dans headers HTTP)
     pub cache_query_vector: Option<Vec<f32>>,
+    pub force_provider: Option<String>,
+    pub force_model: Option<String>,
 }

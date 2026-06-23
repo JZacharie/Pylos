@@ -166,9 +166,14 @@ impl InferenceOrchestrator {
         model: &str,
         ctx: &RequestContext,
     ) -> Vec<(Arc<dyn Provider>, ProviderConfig)> {
-        // 1. Filter providers based on allowed providers in virtual key context
+        // 1. Filter providers based on allowed providers in virtual key context or forced provider
         let allowed_providers: Vec<&(Arc<dyn Provider>, ProviderConfig)> =
-            if ctx.virtual_key.is_some() {
+            if let Some(forced_prov) = &ctx.force_provider {
+                providers
+                    .iter()
+                    .filter(|(provider, _)| provider.name() == forced_prov)
+                    .collect()
+            } else if ctx.virtual_key.is_some() {
                 providers
                     .iter()
                     .filter(|(provider, _config)| {
@@ -292,23 +297,31 @@ impl InferenceOrchestrator {
         let providers = self.providers.read().await;
         let mut last_error: Option<PylosError> = None;
 
-        let model = request.model.clone();
+        let model = if let Some(forced_m) = &ctx.force_model {
+            forced_m.clone()
+        } else {
+            request.model.clone()
+        };
         let ordered = self.select_and_order_providers(&providers, &model, &ctx);
 
         for (provider, config) in ordered {
             let mut req_to_send = request.clone();
-            let is_supported = model_supported_by(&config, &model);
-            if !is_supported {
-                let mapped_model =
-                    map_model_for_provider(provider.name(), &model, &config.allowed_models);
-                info!(
-                    provider = provider.name(),
-                    original_model = %model,
-                    mapped_model = %mapped_model,
-                    "[Path] Embedding model '{}' mapped to '{}' for provider '{}'",
-                    model, mapped_model, provider.name()
-                );
-                req_to_send.model = mapped_model;
+            if let Some(forced_m) = &ctx.force_model {
+                req_to_send.model = forced_m.clone();
+            } else {
+                let is_supported = model_supported_by(&config, &model);
+                if !is_supported {
+                    let mapped_model =
+                        map_model_for_provider(provider.name(), &model, &config.allowed_models);
+                    info!(
+                        provider = provider.name(),
+                        original_model = %model,
+                        mapped_model = %mapped_model,
+                        "[Path] Embedding model '{}' mapped to '{}' for provider '{}'",
+                        model, mapped_model, provider.name()
+                    );
+                    req_to_send.model = mapped_model;
+                }
             }
 
             match provider.embed(&req_to_send, &config).await {
@@ -397,7 +410,11 @@ impl InferenceOrchestrator {
         let providers = self.providers.read().await;
         let mut last_error: Option<PylosError> = None;
 
-        let model = request.model().to_string();
+        let model = if let Some(forced_m) = &ctx.force_model {
+            forced_m.clone()
+        } else {
+            request.model().to_string()
+        };
         let ordered = self.select_and_order_providers(&providers, &model, &ctx);
 
         for (provider, config) in &ordered {
@@ -417,19 +434,23 @@ impl InferenceOrchestrator {
             ctx.tried_providers.push(provider.name().to_string());
 
             let mut req_to_send = request.clone();
-            let is_supported = model_supported_by(config, &model);
-            if !is_supported {
-                let mapped_model =
-                    map_model_for_provider(provider.name(), &model, &config.allowed_models);
-                info!(
-                    provider = provider.name(),
-                    original_model = %model,
-                    mapped_model = %mapped_model,
-                    trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
-                    "[Path] Model '{}' not supported natively by '{}', mapped to '{}' for fallback",
-                    model, provider.name(), mapped_model
-                );
-                req_to_send.set_model(mapped_model);
+            if let Some(forced_m) = &ctx.force_model {
+                req_to_send.set_model(forced_m.clone());
+            } else {
+                let is_supported = model_supported_by(config, &model);
+                if !is_supported {
+                    let mapped_model =
+                        map_model_for_provider(provider.name(), &model, &config.allowed_models);
+                    info!(
+                        provider = provider.name(),
+                        original_model = %model,
+                        mapped_model = %mapped_model,
+                        trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
+                        "[Path] Model '{}' not supported natively by '{}', mapped to '{}' for fallback",
+                        model, provider.name(), mapped_model
+                    );
+                    req_to_send.set_model(mapped_model);
+                }
             }
 
             info!(
@@ -550,7 +571,11 @@ impl InferenceOrchestrator {
         let providers = self.providers.read().await;
         let mut last_error: Option<PylosError> = None;
 
-        let stream_model = request.model().to_string();
+        let stream_model = if let Some(forced_m) = &ctx.force_model {
+            forced_m.clone()
+        } else {
+            request.model().to_string()
+        };
         let ordered_stream = self.select_and_order_providers(&providers, &stream_model, &ctx);
 
         for (provider, config) in &ordered_stream {
@@ -560,19 +585,23 @@ impl InferenceOrchestrator {
             ctx.tried_providers.push(provider.name().to_string());
 
             let mut req_to_send = request.clone();
-            let is_supported = model_supported_by(config, &stream_model);
-            if !is_supported {
-                let mapped_model =
-                    map_model_for_provider(provider.name(), &stream_model, &config.allowed_models);
-                info!(
-                    provider = provider.name(),
-                    original_model = %stream_model,
-                    mapped_model = %mapped_model,
-                    trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
-                    "[Path] Stream: Model '{}' not supported natively by '{}', mapped to '{}'",
-                    stream_model, provider.name(), mapped_model
-                );
-                req_to_send.set_model(mapped_model);
+            if let Some(forced_m) = &ctx.force_model {
+                req_to_send.set_model(forced_m.clone());
+            } else {
+                let is_supported = model_supported_by(config, &stream_model);
+                if !is_supported {
+                    let mapped_model =
+                        map_model_for_provider(provider.name(), &stream_model, &config.allowed_models);
+                    info!(
+                        provider = provider.name(),
+                        original_model = %stream_model,
+                        mapped_model = %mapped_model,
+                        trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
+                        "[Path] Stream: Model '{}' not supported natively by '{}', mapped to '{}'",
+                        stream_model, provider.name(), mapped_model
+                    );
+                    req_to_send.set_model(mapped_model);
+                }
             }
 
             info!(
