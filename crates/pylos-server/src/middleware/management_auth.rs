@@ -23,11 +23,15 @@ use crate::state::AppState;
 
 pub async fn management_auth_middleware(
     State(state): State<AppState>,
-    request: Request<Body>,
+    mut request: Request<Body>,
     next: Next,
 ) -> Response {
+    // Insert default extensions to avoid missing extension errors in downstream handlers
+    request.extensions_mut().insert(None::<pylos_core::domain::organization::InternalUser>);
+    request.extensions_mut().insert(None::<crate::middleware::virtual_key::VirtualKeyInfo>);
+
     // Extrait la clé depuis Authorization: Bearer ou X-Admin-Key
-    let provided = extract_admin_key(request.headers());
+    let provided = extract_admin_key(request.headers()).map(|s| s.to_string());
 
     let Some(provided_key) = provided else {
         // Si pas de clé admin configurée globale → laisse passer (compatibilité)
@@ -51,17 +55,15 @@ pub async fn management_auth_middleware(
     let validation = jsonwebtoken::Validation::default();
     let decoding_key = jsonwebtoken::DecodingKey::from_secret(state.jwt_secret.as_bytes());
     if let Ok(token_data) = jsonwebtoken::decode::<crate::interfaces::http::auth::PylosSessionClaims>(
-        provided_key,
+        &provided_key,
         &decoding_key,
         &validation,
     ) {
         let email = token_data.claims.sub.to_lowercase();
         // Vérifie si l'utilisateur est toujours actif dans le store
         if let Ok(users) = state.org_store.list_users().await {
-            if users
-                .iter()
-                .any(|u| u.email.to_lowercase() == email && u.is_active)
-            {
+            if let Some(user) = users.iter().find(|u| u.email.to_lowercase() == email && u.is_active) {
+                request.extensions_mut().insert(Some(user.clone()));
                 return next.run(request).await;
             }
         }
@@ -75,6 +77,20 @@ pub async fn management_auth_middleware(
     } else {
         // Si pas de clé d'administration configurée
         return next.run(request).await;
+    }
+
+    // 3. Fallback sur la validation de la Virtual Key si c'est un sk-pylos-*
+    if provided_key.starts_with(pylos_core::domain::virtual_key::VIRTUAL_KEY_PREFIX) {
+        if let Ok(Some(vk_cfg)) = state.vk_store.get_key_by_value(&provided_key).await {
+            if vk_cfg.is_active {
+                request.extensions_mut().insert(Some(crate::middleware::virtual_key::VirtualKeyInfo {
+                    name: vk_cfg.name.clone(),
+                    key: provided_key.to_string(),
+                    provider_configs: vk_cfg.provider_configs.clone(),
+                }));
+                return next.run(request).await;
+            }
+        }
     }
 
     (

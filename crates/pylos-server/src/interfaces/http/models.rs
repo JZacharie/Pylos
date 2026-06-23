@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -25,17 +25,86 @@ pub struct ModelsQuery {
 /// GET /v1/models — liste tous les modèles disponibles
 /// Si ?provider=X est donné, retourne tous les modèles du catalog pour ce provider.
 /// Sinon, retourne uniquement les modèles des providers configurés.
+fn matches_pattern(pattern: &str, provider: &str, model_id: &str) -> bool {
+    if pattern == "*" || pattern == "*::*" || pattern == "*/*" {
+        return true;
+    }
+    let parts = if let Some((p, m)) = pattern.split_once("::") {
+        Some((p, m))
+    } else {
+        pattern.split_once('/')
+    };
+    if let Some((pat_prov, pat_mod)) = parts {
+        let prov_match = pat_prov == "*" || pat_prov == provider;
+        let mod_match = pat_mod == "*" || pat_mod == model_id || (pat_mod.contains('*') && {
+            let prefix = pat_mod.trim_end_matches('*');
+            model_id.starts_with(prefix)
+        });
+        prov_match && mod_match
+    } else {
+        pattern == model_id || (pattern.contains('*') && {
+            let prefix = pattern.trim_end_matches('*');
+            model_id.starts_with(prefix)
+        })
+    }
+}
+
+/// GET /v1/models — liste tous les modèles disponibles
+/// Si ?provider=X est donné, retourne tous les modèles du catalog pour ce provider.
+/// Sinon, retourne uniquement les modèles des providers configurés.
 pub async fn list_models(
     State(state): State<AppState>,
+    Extension(vk_info): Extension<Option<crate::middleware::virtual_key::VirtualKeyInfo>>,
+    Extension(user): Extension<Option<pylos_core::domain::organization::InternalUser>>,
     Query(query): Query<ModelsQuery>,
 ) -> impl IntoResponse {
+    // Extrait les patterns de modèles autorisés
+    let mut allowed_model_patterns = None;
+
+    if let Some(vk) = &vk_info {
+        let mut patterns = Vec::new();
+        for pc in &vk.provider_configs {
+            for m in &pc.allowed_models {
+                patterns.push(format!("{}::{}", pc.provider, m));
+            }
+        }
+        allowed_model_patterns = Some(patterns);
+    } else if let Some(u) = &user {
+        if u.role != "admin" {
+            let mut patterns = Vec::new();
+            if let Ok(groups) = state.org_store.list_access_groups(None).await {
+                for ag in groups {
+                    if ag.is_active {
+                        let user_match = ag.user_ids.contains(&u.id);
+                        let team_match = ag.team_ids.iter().any(|t_id| u.team_ids.contains(t_id));
+                        if user_match || team_match {
+                            for m in &ag.model_ids {
+                                patterns.push(m.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            if !patterns.is_empty() {
+                allowed_model_patterns = Some(patterns);
+            }
+        }
+    }
+
     // Filtre par provider direct depuis le catalog
     if let Some(ref prov) = query.provider {
         let catalog_models = state
             .model_catalog
             .list_models(Some(prov), query.include_deprecated)
             .await;
-        let data: Vec<_> = catalog_models.iter().map(model_info_to_entry).collect();
+        let mut data: Vec<_> = catalog_models.iter().map(model_info_to_entry).collect();
+        if let Some(patterns) = &allowed_model_patterns {
+            data.retain(|m| {
+                let provider = m["provider"].as_str().unwrap_or("");
+                let model_id = m["id"].as_str().unwrap_or("");
+                patterns.iter().any(|pat| matches_pattern(pat, provider, model_id))
+            });
+        }
         return Json(json!({ "object": "list", "data": data }));
     }
 
@@ -206,6 +275,14 @@ pub async fn list_models(
                 models.push(entry);
             }
         }
+    }
+
+    if let Some(patterns) = &allowed_model_patterns {
+        models.retain(|m| {
+            let provider = m["provider"].as_str().unwrap_or("");
+            let model_id = m["id"].as_str().unwrap_or("");
+            patterns.iter().any(|pat| matches_pattern(pat, provider, model_id))
+        });
     }
 
     models.sort_by(|a, b| {
