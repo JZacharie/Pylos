@@ -296,10 +296,25 @@ impl InferenceOrchestrator {
         let ordered = self.select_and_order_providers(&providers, &model, &ctx);
 
         for (provider, config) in ordered {
-            match provider.embed(&request, &config).await {
+            let mut req_to_send = request.clone();
+            let is_supported = model_supported_by(&config, &model);
+            if !is_supported {
+                let mapped_model =
+                    map_model_for_provider(provider.name(), &model, &config.allowed_models);
+                info!(
+                    provider = provider.name(),
+                    original_model = %model,
+                    mapped_model = %mapped_model,
+                    "[Path] Embedding model '{}' mapped to '{}' for provider '{}'",
+                    model, mapped_model, provider.name()
+                );
+                req_to_send.model = mapped_model;
+            }
+
+            match provider.embed(&req_to_send, &config).await {
                 Ok(resp) => {
                     self.record_success(provider.name());
-                    info!(provider = provider.name(), model = %model, "Embedding successful");
+                    info!(provider = provider.name(), model = %req_to_send.model, "Embedding successful");
                     return Ok(resp);
                 }
                 Err(PylosError::Unsupported(_)) => {
@@ -766,6 +781,20 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
                 "grok-3".to_string()
             } else {
                 "grok-3-mini".to_string()
+            }
+        }
+        "lemonade-optimus" => {
+            if model == "nomic-embed-text" {
+                "nomic-embed-text-v2-moe-GGUF".to_string()
+            } else {
+                model.to_string()
+            }
+        }
+        "ollama-optimus" => {
+            if model == "nomic-embed-text" {
+                "nomic-embed-text:latest".to_string()
+            } else {
+                model.to_string()
             }
         }
         _ => model.to_string(),
