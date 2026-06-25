@@ -30,3 +30,7 @@ docker/prometheus/data/
 pylos.json
 pylos.*.json
 !pylos.json.example
+
+# Project Survey
+Final_project_Survey.xlsx
+

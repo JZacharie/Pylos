@@ -53,7 +53,7 @@ impl RagModelRoute {
                     .is_some_and(|s| !s.is_empty());
                 if has_parent {
                     if let Some(parent) = payload.get("parent_content").and_then(|v| v.as_str()) {
-                        context.push_str(&format!("Contenu: {parent}\n"));
+                        context.push_str(&format!("Content: {parent}\n"));
                     }
                 } else {
                     for field in &self.payload_fields {
@@ -66,11 +66,11 @@ impl RagModelRoute {
                             })
                         {
                             let label = match field.as_str() {
-                                "sender" => "De",
-                                "subject" => "Objet",
-                                "file_name" => "Fichier",
-                                "source_path" => "Chemin",
-                                "content" => "Contenu",
+                                "sender" => "From",
+                                "subject" => "Subject",
+                                "file_name" => "File",
+                                "source_path" => "Path",
+                                "content" => "Content",
                                 _ => field,
                             };
                             context.push_str(&format!("{label}: {value}\n"));
@@ -183,7 +183,7 @@ impl Default for RagConfig {
                     model_pattern: "graphon-rag".to_string(),
                     collection_name: std::env::var("QDRANT_COLLECTION")
                         .unwrap_or_else(|_| "emails".to_string()),
-                    system_prompt_template: "Utilise les documents pertinents suivants pour répondre à l'utilisateur de manière précise, concise:\n\n{context}".to_string(),
+                    system_prompt_template: "Use the following relevant documents to answer the user accurately and concisely:\n\n{context}".to_string(),
                     result_type_label: "DOCUMENT".to_string(),
                     payload_fields: vec!["sender".to_string(), "subject".to_string(), "content".to_string()],
                 },
@@ -191,7 +191,7 @@ impl Default for RagConfig {
                     model_pattern: "graphon-rag-files".to_string(),
                     collection_name: std::env::var("QDRANT_FILES_COLLECTION")
                         .unwrap_or_else(|_| "mnemosyne_docs".to_string()),
-                    system_prompt_template: "Utilise les documents pertinents suivants pour répondre à l'utilisateur de manière précise, concise:\n\n{context}".to_string(),
+                    system_prompt_template: "Use the following relevant documents to answer the user accurately and concisely:\n\n{context}".to_string(),
                     result_type_label: "DOCUMENT".to_string(),
                     payload_fields: vec!["file_name".to_string(), "source_path".to_string(), "content".to_string()],
                 },
@@ -199,7 +199,7 @@ impl Default for RagConfig {
                     model_pattern: "mnemosyne-search".to_string(),
                     collection_name: std::env::var("QDRANT_FILES_COLLECTION")
                         .unwrap_or_else(|_| "mnemosyne_docs".to_string()),
-                    system_prompt_template: "Utilise les documents pertinents suivants pour répondre à l'utilisateur de manière précise, concise:\n\n{context}".to_string(),
+                    system_prompt_template: "Use the following relevant documents to answer the user accurately and concisely:\n\n{context}".to_string(),
                     result_type_label: "DOCUMENT".to_string(),
                     payload_fields: vec!["file_name".to_string(), "source_path".to_string(), "content".to_string()],
                 },
@@ -311,7 +311,6 @@ impl RagPlugin {
                 {"role": "user", "content": user_prompt}
             ],
             "temperature": 0.7,
-            "stream": false
         });
 
         let mut req = client.post(&url).json(&body);
@@ -515,7 +514,7 @@ impl RagPlugin {
                 let mut text = String::new();
                 for (i, r) in data.results.iter().enumerate() {
                     text.push_str(&format!(
-                        "--- WEB RESULT #{} ---\nTitre: {}\nURL: {}\nContenu:\n{}\n\n",
+                        "--- WEB RESULT #{} ---\nTitle: {}\nURL: {}\nContent:\n{}\n\n",
                         i + 1,
                         r.title,
                         r.url,

@@ -659,8 +659,6 @@ async fn test_semantic_caching_flow() {
     let cache_plugin = Arc::new(pylos_application::SemanticCachePlugin::new(
         mock_server_url.clone(),  // qdrant_url
         "test_cache".to_string(), // collection_name
-        mock_server_url.clone(),  // pylos_base_url (for embedding mock API)
-        None,
         "text-embedding-3-small".to_string(),
         0.90, // score threshold
         3600, // ttl

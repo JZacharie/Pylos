@@ -15,8 +15,6 @@ use pylos_core::error::PylosError;
 pub struct SemanticCachePlugin {
     qdrant_url: String,
     collection_name: String,
-    pylos_base_url: String,
-    pylos_api_key: Option<String>,
     embedding_model: String,
     similarity_threshold: f64,
     ttl_secs: u64,
@@ -29,8 +27,6 @@ impl SemanticCachePlugin {
     pub fn new(
         qdrant_url: String,
         collection_name: String,
-        pylos_base_url: String,
-        pylos_api_key: Option<String>,
         embedding_model: String,
         similarity_threshold: f64,
         ttl_secs: u64,
@@ -53,8 +49,6 @@ impl SemanticCachePlugin {
         Self {
             qdrant_url,
             collection_name,
-            pylos_base_url,
-            pylos_api_key,
             embedding_model,
             similarity_threshold,
             ttl_secs,
@@ -88,65 +82,9 @@ impl SemanticCachePlugin {
                 });
         }
 
-        // Fall back to HTTP loopback
-        let embed_url = format!(
-            "{}/v1/embeddings",
-            self.pylos_base_url.trim_end_matches('/')
-        );
-        let embed_body = json!({
-            "model": self.embedding_model,
-            "input": text
-        });
-
-        let mut embed_req = self.client.post(&embed_url).json(&embed_body);
-        if let Some(ref key) = self.pylos_api_key {
-            embed_req = embed_req.header("Authorization", format!("Bearer {}", key));
-        }
-
-        let embed_resp = embed_req.send().await.map_err(|e| {
-            error!(
-                "SemanticCachePlugin: Failed to connect to Pylos for embedding: {:?}",
-                e
-            );
-            PylosError::Internal(format!("Failed to connect to Pylos for embedding: {}", e))
-        })?;
-
-        if !embed_resp.status().is_success() {
-            let err = embed_resp.text().await.unwrap_or_default();
-            error!(
-                "SemanticCachePlugin: Pylos embedding API returned error: {}",
-                err
-            );
-            return Err(PylosError::Internal(format!(
-                "Pylos embedding error: {}",
-                err
-            )));
-        }
-
-        #[derive(serde::Deserialize)]
-        struct PylosEmbeddingData {
-            embedding: Vec<f32>,
-        }
-        #[derive(serde::Deserialize)]
-        struct PylosEmbeddingResponse {
-            data: Vec<PylosEmbeddingData>,
-        }
-
-        let embed_data: PylosEmbeddingResponse = embed_resp.json().await.map_err(|e| {
-            error!(
-                "SemanticCachePlugin: Failed to parse embedding response: {:?}",
-                e
-            );
-            PylosError::Internal(format!("Failed to parse embedding response: {}", e))
-        })?;
-
-        match embed_data.data.into_iter().next() {
-            Some(d) => Ok(d.embedding),
-            None => {
-                error!("SemanticCachePlugin: Empty embedding returned from Pylos");
-                Err(PylosError::Internal("Empty embedding returned".into()))
-            }
-        }
+        Err(PylosError::Internal(
+            "SemanticCachePlugin: No embedding provider configured".into(),
+        ))
     }
 
     async fn ensure_collection(&self, vector_size: usize) {
