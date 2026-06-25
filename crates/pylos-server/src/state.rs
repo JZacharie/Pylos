@@ -451,9 +451,6 @@ impl AppState {
                         .and_then(|v| v.as_str())
                         .unwrap_or("pylos-cache")
                         .to_string();
-                    let pylos_base_url = std::env::var("PYLOS_BASE_URL")
-                        .unwrap_or_else(|_| "http://localhost:3000".to_string());
-                    let pylos_api_key = std::env::var("PYLOS_API_KEY").ok();
                     let embedding_model = plugin_cfg
                         .config
                         .get("embedding_model")
@@ -475,8 +472,6 @@ impl AppState {
                     plugins.push(Arc::new(SemanticCachePlugin::new(
                         qdrant_url,
                         collection_name,
-                        pylos_base_url,
-                        pylos_api_key,
                         embedding_model,
                         similarity_threshold,
                         ttl_secs,

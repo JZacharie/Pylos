@@ -1,257 +1,191 @@
-# Rapport d'Audit Pylos : Fonctionnalités Incomplètes et Issues Proposées
+# Rapport d'Audit Pylos — Revalidation Code (Juin 2026)
 
-Ce rapport récapitule les fonctionnalités incomplètes, les comportements de type "stubs" (bouchons), les inefficacités et les failles de sécurité identifiés lors de la revue de code de la passerelle IA **Pylos**. Chaque point est accompagné d'une proposition d'issue technique pour orienter le développement.
-
----
-
-## Sommaire
-
-1. [Dynamic Batching (`BatchingPlugin`)](#1-dynamic-batching-batchingplugin)
-2. [Extraction de mémoire en mode Streaming (`MemoryPlugin`)](#2-extraction-de-mémoire-en-mode-streaming-memoryplugin)
-3. [Boucle d'auto-correction de format (`StructuredOutputPlugin`)](#3-boucle-dauto-correction-de-format-structuredoutputplugin)
-4. [Gestion du Cache de Préfixes (`PrefixCachePlugin`)](#4-gestion-du-cache-de-préfixes-prefixcacheplugin)
-5. [Généralisation et flexibilité (`RagPlugin`)](#5-généralisation-et-flexibilité-ragplugin)
-6. [Appels HTTP auto-référencés pour les Embeddings (`SemanticCache` & `RagPlugin`)](#6-appels-http-auto-référencés-pour-les-embeddings-semanticcache--ragplugin)
-7. [Bypass du Rate Limit MCP dans le Proxy (`mcp_proxy_handler`)](#7-bypass-du-rate-limit-mcp-dans-le-proxy-mcp_proxy_handler)
-8. [Contrôle d'accès défaillant (ACL) sur les serveurs MCP (`mcp_proxy_handler`)](#8-contrôle-daccès-défaillant-acl-sur-les-serveurs-mcp-mcp_proxy_handler)
-9. [Transformation de Requête / Query Expansion & HyDE (`RagPlugin`)](#9-transformation-de-requête--query-expansion--hyde-ragplugin)
-10. [Découpage Intelligent / Parent-Child Chunking (`vector_stores.rs`)](#10-découpage-intelligent--parent-child-chunking-vector_storesrs)
-11. [Corrective RAG / CRAG (`RagPlugin`)](#11-corrective-rag--crag-ragplugin)
+Ce rapport remplace `pylos_incomplete_features_report.md` qui datait d'une version antérieure du code.
+Sur les 11 points listés, 7 sont déjà implémentés et 4 nécessitent encore du travail.
 
 ---
 
 ## 1. Dynamic Batching (`BatchingPlugin`)
+**Fichier :** `crates/pylos-application/src/batching.rs`
+**Statut : ✅ IMPLÉMENTÉ**
 
-*   **Fichier concerné :** [batching.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/batching.rs)
-*   **Problème :** Le plugin applique un délai configuré pour accumuler les requêtes concourantes, mais il ne réalise aucun regroupement réel au niveau du transport vers le fournisseur de modèle (comme l'utilisation de l'API Batch d'OpenAI ou le regroupement des requêtes). Il affiche un avertissement expliquant que la fonctionnalité n'est pas encore complètement implémentée.
+Le code contient un vrai coalescing via `tokio::select!` (lignes 145-183) accumulant les requêtes
+avec un `delay_ms` et `max_batch_size`. Une boucle background `coalescing_loop` attend la première
+requête, démarre un timer, accumule jusqu'à `max_batch_size` ou expiration du délai, puis envoie
+tout le batch via `oneshot::Sender`.
 
-### Issue Proposée
+De plus, un mode **OpenAI Batch API** complet est implémenté (lignes 398-781) : construction JSONL,
+upload multipart, création de batch, polling jusqu'à 24h, téléchargement et parsing des résultats.
 
-```markdown
-Title: [Feature] Implement real Request Coalescing / OpenAI Batch API in BatchingPlugin
-
-Description:
-Currently, `BatchingPlugin` only introduces a delay using `tokio::time::sleep` and a mutex to simulate request pooling, but it sends requests individually to downstream providers.
-
-Tasks:
-- Implement a request queue (coalescing window) that groups concurrent requests for the same model.
-- Add integration with the OpenAI Batch API (`/v1/batch`) for asynchronous, cheaper off-peak processing.
-- Provide configuration options to select between real-time batching (coalescing) and asynchronous batching.
-```
+Le commentaire "legacy (stub) mode" ligne 204 est **trompeur** — l'implémentation est réelle.
 
 ---
 
-## 2. Extraction de mémoire en mode Streaming (`MemoryPlugin`)
+## 2. Extraction mémoire en Streaming (`MemoryPlugin`)
+**Fichier :** `crates/pylos-application/src/memory_plugin.rs`
+**Statut : ✅ IMPLÉMENTÉ**
 
-*   **Fichier concerné :** [memory_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/memory_plugin.rs)
-*   **Problème :** L'extraction des relations `<memory>...</memory>` à injecter dans Memgraph est explicitement désactivée lorsque la requête utilise le streaming (`chat_req.stream = true`). Par conséquent, l'assistant n'apprend aucune information sur l'utilisateur lorsque ce dernier utilise le mode streaming, ce qui brise l'expérience utilisateur globale.
+L'extraction `<memory>` n'est PAS désactivée en streaming. Les lignes 73-77 montrent deux branches :
+- Non-streaming (ligne 74) : "you MUST output ... <memory></memory> tags at the very end"
+- Streaming (ligne 76) : "After streaming completes, ... <memory></memory> tags at the very end"
 
-### Issue Proposée
-
-```markdown
-Title: [Feature] Support Memory extraction in Streaming mode for MemoryPlugin
-
-Description:
-The `MemoryPlugin` only injects memory extraction instructions and parses the `<memory>` tags from the assistant response when `stream` is false. We need to support this for streaming completions as well.
-
-Tasks:
-- Implement a streaming buffer hook in `post_hook` (or via stream interception) that collects the streamed tokens.
-- Parse the final compiled response to extract `<memory>` tags and upsert them to Memgraph (neo4rs) after the stream completes.
-```
+Le `post_hook` (lignes 99-167) parse les balises et upsert dans Memgraph **dans les deux cas**.
 
 ---
 
-## 3. Boucle d'auto-correction de format (`StructuredOutputPlugin`)
+## 3. Auto-correction StructuredOutput (`StructuredOutputPlugin`)
+**Fichier :** `crates/pylos-application/src/structured_output.rs`
+**Statut : ✅ IMPLÉMENTÉ**
 
-*   **Fichier concerné :** [structured_output.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/structured_output.rs)
-*   **Problème :** La documentation (par exemple `notebooklm.md`) indique que le plugin StructuredOutput fournit une "validation et correction automatique des réponses JSON". En réalité, le code se contente de rejeter la requête avec une erreur `PylosError::InvalidRequest` si le JSON est mal formé ou invalide par rapport au schéma. Il n'y a aucune boucle de correction automatique ou de second appel à l'LLM pour corriger l'erreur de formatage.
+Boucle de correction complète :
+- `attempt_correction()` (lignes 112-180) : envoie la réponse invalide + erreur à un LLM correcteur
+- Correction loop (lignes 227-293) : itère jusqu'à `max_retries`, valide après chaque tentative
+- Configurable via `with_correction()` (lignes 29-47)
 
-### Issue Proposée
-
-```markdown
-Title: [Feature] Implement automatic correction loop for StructuredOutputPlugin
-
-Description:
-If the response fails JSON or JSON Schema validation, the plugin currently returns an immediate error to the client. We want to implement an automatic correction loop using a secondary fast LLM call (or self-correction prompt).
-
-Tasks:
-- If validation fails, intercept the response.
-- Send a correction prompt to a fast model (e.g., GPT-4o-mini / Gemini Flash) including the invalid JSON and the validation error message.
-- Return the corrected JSON to the client. Ensure a maximum retry limit (e.g., 1 or 2 retries) to prevent infinite loops.
-```
+Par défaut `max_retries: 0` et `correction_model: None` → pas de correction.
+Quand configuré, la correction est active.
 
 ---
 
-## 4. Gestion du Cache de Préfixes (`PrefixCachePlugin`)
+## 4. Cache de Préfixes (`PrefixCachePlugin`)
+**Fichier :** `crates/pylos-application/src/prefix_cache.rs`
+**Statut : ✅ IMPLÉMENTÉ (vrai prefix cache)**
 
-*   **Fichier concerné :** [prefix_cache.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/prefix_cache.rs)
-*   **Problème :** Bien qu'il s'appelle `prefix_cache`, la clé est générée à partir de la concaténation de la totalité des messages du chat. Ce n'est donc pas un cache de préfixe (comme le propose le KV cache partagé des LLM), mais un simple cache d'invite exacte (exact prompt cache).
+`compute_prefix_keys()` (lignes 30-51) génère des **rolling keys** : pour chaque longueur de
+conversation >= `min_prefix_len`, une clé est créée (model + messages 0..n). Les clés sont :
+`model|System:...|User:Hello|`, `model|System:...|User:Hello|Assistant:Hi!|`, etc.
 
-### Issue Proposée
+`pre_hook` (lignes 78-107) cherche en **reverse** (plus long prefix d'abord) :
+- Match exact → retourne la réponse cachée
+- Match partiel → définit un header `x-prefix-cache-prefix` et **continue** (ne retourne PAS la réponse)
 
-```markdown
-Title: [Refactor] Implement true Prefix/Sub-prompt matching in PrefixCachePlugin
-
-Description:
-Currently, `PrefixCachePlugin` hashes the entire message history, meaning any change in the last message results in a cache miss. A true prefix cache should identify common prefixes (like system instructions or early conversation turns).
-
-Tasks:
-- Modify the key generation to check for common prefixes (e.g., matching the first N messages, or system prompts).
-- Allow returning partial cached states or caching specific sub-trees of conversation history.
-- Rename the plugin or adjust the documentation if it is meant to remain a simple exact prompt cache.
-```
+Le cache est donc un vrai cache de préfixe, pas un cache d'invite exacte.
 
 ---
 
-## 5. Généralisation et flexibilité (`RagPlugin`)
+## 5. RagPlugin — Généralisation et flexibilité
+**Fichier :** `crates/pylos-application/src/rag_plugin.rs`
+**Statut : ❌ CONFIRMÉ (hardcodé)**
 
-*   **Fichier concerné :** [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
-*   **Problème :** Le plugin RAG contient de nombreuses chaînes de caractères codées en dur : les modèles ciblés (`graphon-rag`, `mnemosyne-search`), les prompts de système en français, et il force la complétion sous-jacente à être non-streaming (`"stream": false`), ignorant l'option demandée par l'utilisateur.
+Trois problèmes confirmés :
+1. **Modèles par défaut hardcodés** (lignes 177-180) :
+   - Embedding : `"nomic-embed-text-v2-moe-GGUF"` (surrideable via `PYLOS_EMBEDDING_MODEL`)
+   - LLM : `"deepseek-coder-v2:16b"` (surrideable via `PYLOS_MODEL`)
+2. **Prompts en français** (lignes 186, 194, 202) :
+   `"Utilise les documents pertinents suivants pour répondre à l'utilisateur de manière précise, concise:"`
+   — pas de template multi-langue, pas de configuration externe
+3. **`stream: false` forcé** (ligne 314) : les appels LLM internes pour query transformation sont
+   systématiquement non-streaming. Non configurable.
 
-### Issue Proposée
-
-```markdown
-Title: [Enhancement] Generalize RagPlugin config (Dynamic prompts, Model configurations, and Streaming support)
-
-Description:
-The RAG plugin is currently coupled to specific French prompts, hardcoded model IDs, and completely disables streaming responses.
-
-Tasks:
-- Move targeted models, Qdrant collections, and prompt templates to the configuration file (`pylos.json`).
-- Add multi-language support or templating for RAG prompts.
-- Implement streaming support by reconstructing the SSE stream with augmented context instead of forcing `stream: false`.
-```
-
----
-
-## 6. Appels HTTP auto-référencés pour les Embeddings (`SemanticCache` & `RagPlugin`)
-
-*   **Fichiers concernés :** [semantic_cache.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/semantic_cache.rs#L58-L117) et [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs#L98-L150)
-*   **Problème :** Pour obtenir l'embedding d'une requête utilisateur, ces deux plugins envoient une nouvelle requête HTTP sur le réseau à Pylos lui-même via `pylos_base_url/v1/embeddings`. Cela engendre une surconsommation réseau, de la sérialisation/désérialisation inutile, et présente un risque de blocage (deadlock) si le pool de connexions HTTP local vient à saturation.
-
-### Issue Proposée
-
-```markdown
-Title: [Performance] Call InferenceOrchestrator directly for embeddings in Plugins
-
-Description:
-`SemanticCachePlugin` and `RagPlugin` fetch embeddings by making a full loopback HTTP request to `pylos_base_url/v1/embeddings`. We should bypass the HTTP stack and call the rust orchestration layer directly.
-
-Tasks:
-- Inject the `InferenceOrchestrator` (or the internal embedding service) into the plugins during initialization.
-- Replace HTTP calls to `/v1/embeddings` with direct Rust function calls (`orchestrator.embed(...)`).
-```
+**Correction proposée :**
+- Déplacer les modèles cibles, les templates de prompt et le comportement streaming dans `pylos.json`
+- Ajouter un support multi-langue ou templating
+- Supprimer le `stream: false` forcé ou le rendre optionnel
 
 ---
 
-## 7. Bypass du Rate Limit MCP dans le Proxy (`mcp_proxy_handler`)
+## 6. Appels HTTP pour Embeddings
+**Fichiers :** `semantic_cache.rs`, `rag_plugin.rs`
+**Statut : ⚠️ PARTIELLEMENT CORRIGÉ**
 
-*   **Fichier concerné :** [mcp_proxy.rs](file:///home/joseph/git/Pylos/crates/pylos-server/src/mcp_proxy.rs#L28-L38)
-*   **Problème :** Dans le handler `mcp_proxy_handler`, la ligne `let _ = state.vk_registry.check_and_increment(t).await;` appelle bien la vérification du rate limit sur la Virtual Key, mais elle ignore complètement le résultat (la valeur de retour `Result` est ignorée via `let _ = ...`). Si la clé virtuelle dépasse ses quotas RPM (requêtes par minute), l'accès aux serveurs MCP restera quand même autorisé.
+- **`semantic_cache.rs`** (lignes 66-150) : essaie d'abord le provider direct, **fallback** HTTP
+  loopback si pas de provider configuré. Le fallback existe toujours.
+- **`rag_plugin.rs`** (lignes 264-291) : utilise uniquement le provider direct. Retourne une erreur
+  si pas d'embedding provider. **Pas de HTTP loopback.**
 
-### Issue Proposée
+Le vrai problème est dans `semantic_cache.rs` où le fallback HTTP existe encore.
 
-```markdown
-Title: [Bug] MCP Proxy bypasses Virtual Key Rate Limiting
-
-Description:
-In `mcp_proxy_handler`, the check to the virtual key registry rate limit is called, but the result is discarded with `let _ = ...`. Consequently, requests to MCP tools are not rate-limited and will succeed even if the key is rate-limited.
-
-Tasks:
-- Capture the result of `state.vk_registry.check_and_increment(t).await`.
-- If it returns an `Err(reason)`, return a `429 Too Many Requests` or `401 Unauthorized` response to the client, matching the behavior of `virtual_key_middleware.rs`.
-```
+**Correction proposée :**
+- Supprimer le fallback HTTP loopback dans `semantic_cache.rs`
+- Injection directe de l'`InferenceOrchestrator` dans les plugins
 
 ---
 
-## 8. Contrôle d'accès défaillant (ACL) sur les serveurs MCP (`mcp_proxy_handler`)
+## 7. Rate Limit MCP Proxy (`mcp_proxy.rs`)
+**Fichier :** `crates/pylos-server/src/mcp_proxy.rs`
+**Statut : ✅ IMPLÉMENTÉ (bug déjà corrigé)**
 
-*   **Fichier concerné :** [mcp_proxy.rs](file:///home/joseph/git/Pylos/crates/pylos-server/src/mcp_proxy.rs#L50-L55)
-*   **Problème :** Lors du filtrage du serveur MCP actif correspondant :
-    ```rust
-    && (match (&s.virtual_key_id, &s.team_id) {
-        (Some(vk_id), _) => virtual_key_id.as_ref() == Some(vk_id),
-        (_, Some(t_id)) => team_id.as_ref() == Some(t_id),
-        (None, None) => false,
-    })
-    ```
-    Si un serveur MCP possède à la fois un `virtual_key_id` et un `team_id`, le premier bras du match `(Some(vk_id), _)` est sélectionné, ignorant totalement la vérification du `team_id`. De plus, si les deux sont définis mais que seul l'un d'eux correspond, la requête passe alors qu'une politique stricte exigerait la validation des deux critères (ou au moins une logique explicite AND/OR).
-
-### Issue Proposée
-
-```markdown
-Title: [Bug] Incomplete Access Control checks for MCP Servers in Proxy
-
-Description:
-The pattern matching for checking permissions on MCP servers (`virtual_key_id` and `team_id`) currently short-circuits. If both are set, it only checks the virtual key, ignoring the team verification.
-
-Tasks:
-- Redesign the ACL verification logic to handle cases where both `virtual_key_id` and `team_id` are set (either applying AND or OR based on the security policy).
-- Ensure clear separation of checks, returning 403 Forbidden if the verification fails.
+Le résultat de `check_and_increment` est correctement traité (lignes 30-33) :
+```rust
+if let Err(msg) = state.vk_registry.check_and_increment(t).await {
+    tracing::warn!(...);
+    return (StatusCode::TOO_MANY_REQUESTS, ...).into_response();
+}
 ```
+Retourne 429 si le rate limit est dépassé. Pas de `let _ =`.
 
 ---
 
-## 9. Transformation de Requête / Query Expansion & HyDE (`RagPlugin`)
+## 8. Contrôle d'accès MCP (ACL)
+**Fichier :** `crates/pylos-server/src/mcp_proxy.rs`
+**Statut : ⚠️ LOGIQUE OK MAIS PAS DE FALLBACK**
 
-*   **Fichier concerné :** [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
-*   **Problème :** Les questions des utilisateurs sont actuellement envoyées directement pour l'embedding et la recherche vectorielle, sans transformation préalable. Cela limite la précision de la recherche pour les questions ambiguës, complexes ou mal formulées.
+Lignes 50-61 : le match traite correctement les 4 cas (both Some, VK only, Team only, both None).
+Quand les deux sont définis, les DEUX doivent matcher.
 
-### Issue Proposée
-
-```markdown
-Title: [Feature] Implement Query Rewriting, Expansion, and HyDE in RagPlugin
-
-Description:
-To improve RAG precision, we should support Query Transformation (Query Expansion/Rewriting and Hypothetical Document Embeddings) before searching Qdrant.
-
-Tasks:
-- Introduce `QueryTransformConfig` in the Pylos configuration (`pylos.json`).
-- Implement Query Expansion by asking a fast model (e.g., Gemini Flash / GPT-4o-mini) to generate 3 variants of the user query.
-- Implement HyDE by generating a hypothetical ideal document/answer via a fast LLM call.
-- Run Qdrant searches in parallel for the transformed queries using `futures::future::join_all` and deduplicate/merge points.
-```
+Le comportement est correct et explicite. Pas de contournement.
 
 ---
 
-## 10. Découpage Intelligent / Parent-Child Chunking (`vector_stores.rs`)
+## 9. Query Expansion & HyDE
+**Fichier :** `crates/pylos-application/src/rag_plugin.rs`
+**Statut : ✅ IMPLÉMENTÉ**
 
-*   **Fichiers concernés :** [vector_stores.rs](file:///home/joseph/git/Pylos/crates/pylos-server/src/interfaces/http/vector_stores.rs) et [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
-*   **Problème :** L'endpoint d'ingestion `/api/vector-stores/collections/:name/points` n'implémente aucun découpage (chunking) intelligent. De plus, il n'y a pas de support pour découpler la recherche précise (petits chunks enfants) de la complétion riche (grands chunks parents).
+- **Query Expansion** (lignes 361-389, 619-635) : génère des reformulations via LLM, utilise
+  `num_variants` variantes pour la recherche Qdrant parallèle
+- **HyDE** (lignes 392-400, 638-649) : génère un document hypothétique idéal, l'embedding et
+  l'utilise comme vecteur de recherche additionnel
 
-### Issue Proposée
-
-```markdown
-Title: [Feature] Implement Parent-Child and Semantic Chunking for Vector Ingestion
-
-Description:
-Implement dynamic text splitting strategies and retrieval of parent contexts based on child search matches to improve retrieval accuracy without bloating the LLM prompt with fragmented text.
-
-Tasks:
-- Update the `AddDocumentRequest` payload to accept `chunking_strategy` (`None`, `ParentChild`).
-- Implement a logical parser to divide documents into parent blocks (~1000 tokens) and overlapping child blocks (~150 tokens).
-- Store child vector embeddings in Qdrant with the full parent text embedded inside the child's payload.
-- Update `RagPlugin` to retrieve and inject the parent content instead of the child content when compiling the system prompt.
-```
+Les deux sont désactivés par défaut (`expansion_enabled: false`, `hyde_enabled: false`).
 
 ---
 
-## 11. Corrective RAG / CRAG (`RagPlugin`)
+## 10. Parent-Child Chunking
+**Fichier :** `crates/pylos-server/src/interfaces/http/vector_stores.rs`
+**Statut : ✅ IMPLÉMENTÉ**
 
-*   **Fichier concerné :** [rag_plugin.rs](file:///home/joseph/git/Pylos/crates/pylos-application/src/rag_plugin.rs)
-*   **Problème :** Si les résultats de la recherche vectorielle interne de Pylos ont des scores de similarité médiocres, le système injecte tout de même ces données peu pertinentes ou laisse le LLM répondre à l'aveugle, ce qui conduit à des hallucinations.
+`parent_child_chunk()` (lignes 48-84) : découpage avec blocs parents (~1000 chars), blocs enfants
+(~150 chars), overlap de 20% (parent) et 25% (enfant).
 
-### Issue Proposée
+`add_document()` (lignes 336-400) : supporte `chunking_strategy: "parent_child"` dans la requête.
+Stocke `content` (enfant) et `parent_content` (parent) dans le payload Qdrant.
 
-```markdown
-Title: [Feature] Implement Corrective RAG (CRAG) using Web Search API fallback
+`RagPlugin.format_context()` (lignes 50-57) utilise `parent_content` prioritairement.
 
-Description:
-Implement a confidence threshold evaluator on search results. If the similarity score is below a certain threshold, trigger an external web search to fetch fresh, reliable context.
+---
 
-Tasks:
-- Add `crag_threshold` and API configurations (e.g., Tavily, SearxNG, or Google Search) to `pylos.json`.
-- In `RagPlugin::pre_hook`, check the maximum similarity score of points returned by Qdrant.
-- If the score is below the threshold, invoke the Web Search API client.
-- Format the external web search results and inject them as the system context.
-```
+## 11. Corrective RAG (CRAG)
+**Fichier :** `crates/pylos-application/src/rag_plugin.rs`
+**Statut : ✅ IMPLÉMENTÉ**
+
+- Configuration (lignes 128-155) : `CragConfig` avec `threshold` (défaut 0.75), provider "tavily",
+  `max_results` (défaut 3)
+- `web_search()` (lignes 475-535) : intégration Tavily complète
+- Décision CRAG (lignes 682-720) :
+  - Si `max_score < threshold` → web search
+  - Si web search échoue → fallback gracieux sur les résultats Qdrant
+  - Si `max_score >= threshold` → utilise Qdrant normalement
+
+---
+
+## Synthèse
+
+| # | Fonctionnalité | Statut dans l'audit | Réalité |
+|---|---------------|-------------------|---------|
+| 1 | Dynamic Batching | ❌ Stub | ✅ Réel (coalescing + OpenAI Batch) |
+| 2 | Memory streaming | ❌ Désactivé | ✅ Actif (prompt wording only) |
+| 3 | StructuredOutput | ❌ InvalidRequest only | ✅ Boucle de correction complète |
+| 4 | PrefixCache | ❌ Exact cache | ✅ Vrai prefix cache (rolling keys) |
+| 5 | RagPlugin hardcodé | ❌ Hardcodé | ❌ Hardcodé (à corriger) |
+| 6 | HTTP loopback embeddings | ❌ Loopback | ⚠️ semantic_cache: oui, rag_plugin: non |
+| 7 | MCP rate limit | ❌ Bypass | ✅ Déjà corrigé (429 retourné) |
+| 8 | MCP ACL | ❌ Short-circuit | ✅ Logique correcte |
+| 9 | Query Expansion / HyDE | ❌ Manquant | ✅ Implémenté |
+| 10 | Parent-Child chunking | ❌ Manquant | ✅ Implémenté |
+| 11 | CRAG | ❌ Manquant | ✅ Implémenté |
+
+**Il reste 3 vrais problèmes à corriger :**
+1. **RagPlugin** : modèles hardcodés, prompts français, `stream: false` forcé
+2. **SemanticCache** : fallback HTTP loopback pour les embeddings
+3. **Aucun bug dans le code review précédent** (commit `b2f507f`) : les 3 corrections
+   (empty allowed_models guard, matches_pattern globs, rate limiting VK management) sont valides
