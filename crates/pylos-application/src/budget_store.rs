@@ -87,7 +87,7 @@ impl BudgetStore {
                      VALUES ($1, $2, $3, 0.0, $4) \
                      ON CONFLICT(virtual_key_id, period) DO UPDATE SET \
                      max_usd = excluded.max_usd, \
-                     reset_at = CASE WHEN reset_at < $5 THEN excluded.reset_at ELSE reset_at END",
+                     reset_at = CASE WHEN vk_budgets.reset_at < $5 THEN excluded.reset_at ELSE vk_budgets.reset_at END",
                 )
                 .bind(vk_id)
                 .bind(&period)
