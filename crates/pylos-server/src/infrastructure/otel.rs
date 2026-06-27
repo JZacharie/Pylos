@@ -20,10 +20,9 @@ pub fn setup_otel() -> Option<TracerProvider> {
         .filter(|s| !s.is_empty())?;
     let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "pylos".to_string());
 
-    tracing::info!(
-        endpoint = %endpoint,
-        service = %service_name,
-        "OpenTelemetry — initialisation de l'export OTLP"
+    eprintln!(
+        "[pylos] OpenTelemetry — initialisation de l'export OTLP (endpoint: {}, service: {})",
+        endpoint, service_name
     );
 
     let exporter = opentelemetry_otlp::new_exporter()
@@ -39,6 +38,6 @@ pub fn setup_otel() -> Option<TracerProvider> {
     let _tracer = provider.tracer(service_name);
     opentelemetry::global::set_tracer_provider(provider.clone());
 
-    tracing::info!("OpenTelemetry — export OTLP activé");
+    eprintln!("[pylos] OpenTelemetry — export OTLP activé");
     Some(provider)
 }
