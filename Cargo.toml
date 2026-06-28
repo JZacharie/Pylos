@@ -14,7 +14,7 @@ tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.5", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.11", default-features = false, features = ["json", "stream", "multipart", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "multipart", "rustls-tls"] }
 anyhow = "1.0"
 thiserror = "1.0"
 async-trait = "0.1"
@@ -23,7 +23,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 kube = { version = "0.87", features = ["runtime", "derive"] }
 k8s-openapi = { version = "0.20", features = ["latest"] }
-prometheus = "0.13"
+prometheus = "0.14"
 opentelemetry = { version = "0.21", features = ["trace"] }
 opentelemetry_sdk = { version = "0.21", features = ["trace", "rt-tokio"] }
 opentelemetry-otlp = { version = "0.14", features = ["trace", "http-proto"] }
