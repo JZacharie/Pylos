@@ -29,6 +29,10 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Pre-build dependencies and resolve targets
+        run: |
+          cargo check --all-targets --all-features --workspace
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -37,7 +41,7 @@ jobs:
 
       - name: Build Code
         run: |
-          cargo build --all-targets --workspace
+          cargo build --all-targets --all-features --workspace
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
