@@ -8,13 +8,13 @@
 
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 
 /// Initialise le SDK OpenTelemetry avec export OTLP via HTTP.
 ///
-/// Retourne un `TracerProvider` à conserver pour la durée de vie du processus.
+/// Retourne un `SdkTracerProvider` à conserver pour la durée de vie du processus.
 /// Si `OTEL_ENDPOINT` n'est pas configuré, retourne `None` et l'OTel reste inactif.
-pub fn setup_otel() -> Option<TracerProvider> {
+pub fn setup_otel() -> Option<SdkTracerProvider> {
     let endpoint = std::env::var("OTEL_ENDPOINT")
         .ok()
         .filter(|s| !s.is_empty())?;
@@ -25,14 +25,14 @@ pub fn setup_otel() -> Option<TracerProvider> {
         endpoint, service_name
     );
 
-    let exporter = opentelemetry_otlp::new_exporter()
-        .http()
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_http()
         .with_endpoint(endpoint)
-        .build_span_exporter()
+        .build()
         .expect("Échec de la construction de l'exporteur OTLP SpanExporter");
 
-    let provider = TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
         .build();
 
     let _tracer = provider.tracer(service_name);
