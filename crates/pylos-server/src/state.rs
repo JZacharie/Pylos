@@ -128,7 +128,8 @@ pub struct AppState {
     pub org_store: Arc<OrganizationStore>,
     pub search_tool_store: Arc<SearchToolStore>,
     pub mcp_server_store: Arc<McpServerStore>,
-    pub admin_key: Option<String>,
+    pub admin_key_hash: Arc<tokio::sync::RwLock<Option<String>>>,
+    pub setup_required: Arc<tokio::sync::RwLock<bool>>,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
     pub google_redirect_uri: Option<String>,
@@ -742,6 +743,26 @@ impl AppState {
         let queue_timeout_ms = cfg.server.queuing.queue_timeout_ms;
         let inference_semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrency));
 
+        let env_key = std::env::var("PYLOS_ADMIN_KEY").ok();
+        let (resolved_hash, resolved_setup) = if let Some(key) = env_key {
+            if !key.trim().is_empty() {
+                (Some(hash_sha256(&key)), false)
+            } else {
+                match config_store.get_admin_key_hash().await.unwrap_or(None) {
+                    Some(hash) => (Some(hash), false),
+                    None => (None, true),
+                }
+            }
+        } else {
+            match config_store.get_admin_key_hash().await.unwrap_or(None) {
+                Some(hash) => (Some(hash), false),
+                None => (None, true),
+            }
+        };
+
+        let admin_key_hash = Arc::new(tokio::sync::RwLock::new(resolved_hash));
+        let setup_required = Arc::new(tokio::sync::RwLock::new(resolved_setup));
+
         Ok(Self {
             orchestrator,
             config_store,
@@ -756,7 +777,8 @@ impl AppState {
             org_store,
             search_tool_store,
             mcp_server_store,
-            admin_key: std::env::var("PYLOS_ADMIN_KEY").ok(),
+            admin_key_hash,
+            setup_required,
             google_client_id: std::env::var("GOOGLE_CLIENT_ID").ok(),
             google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").ok(),
             google_redirect_uri: std::env::var("GOOGLE_REDIRECT_URI").ok(),
@@ -775,4 +797,11 @@ impl AppState {
             queue_timeout_ms,
         })
     }
+}
+
+pub fn hash_sha256(input: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    format!("{:x}", hasher.finalize())
 }

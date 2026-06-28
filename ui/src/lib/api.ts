@@ -600,3 +600,10 @@ export const mcpServersApi = {
   deactivate: (id: string) =>
     api.post<McpServer>(`/api/mcp-servers/${id}/deactivate`).then(r => r.data),
 }
+
+export const setupApi = {
+  getStatus: () =>
+    api.get<{ setup_required: boolean }>('/api/setup/status').then(r => r.data),
+  setup: (password: string, confirmPassword: string) =>
+    api.post<{ status: string; message: string }>('/api/setup', { password, confirm_password: confirmPassword }).then(r => r.data),
+}

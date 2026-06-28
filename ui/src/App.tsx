@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, NavLink, Outlet } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Component, useState, type ReactNode } from 'react'
+import { Component, useState, useEffect, type ReactNode } from 'react'
 import { Sidebar } from './components/Sidebar'
 import Dashboard from './pages/Dashboard'
 import Playground from './pages/Playground'
@@ -38,6 +38,8 @@ import OldUsage from './pages/OldUsage'
 import Login from './pages/Login'
 import Callback from './pages/Callback'
 import UiTheme from './pages/UiTheme'
+import Setup from './pages/Setup'
+import { setupApi } from './lib/api'
 import {
   Menu,
   LayoutDashboard,
@@ -114,6 +116,28 @@ interface AdminLayoutProps {
 }
 
 function AdminLayout({ isMobileMenuOpen, setIsMobileMenuOpen }: AdminLayoutProps) {
+  const [setupRequired, setSetupRequired] = useState(false)
+  const [checkingSetup, setCheckingSetup] = useState(true)
+
+  useEffect(() => {
+    setupApi.getStatus()
+      .then(res => {
+        setSetupRequired(res.setup_required)
+        setCheckingSetup(false)
+      })
+      .catch(() => {
+        setCheckingSetup(false)
+      })
+  }, [])
+
+  if (checkingSetup) {
+    return <div className="h-screen w-screen flex items-center justify-center bg-zinc-950 text-zinc-400">Loading...</div>
+  }
+
+  if (setupRequired) {
+    return <Navigate to="/setup" replace />
+  }
+
   const hasKey = localStorage.getItem('pylos_admin_key')
   if (!hasKey) {
     return <Navigate to="/login" replace />
@@ -178,6 +202,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/callback" element={<Callback />} />
+          <Route path="/setup" element={<Setup />} />
           
           <Route element={<AdminLayout isMobileMenuOpen={isMobileMenuOpen} setIsMobileMenuOpen={setIsMobileMenuOpen} />}>
             <Route path="/" element={<Navigate to="/keys" replace />} />

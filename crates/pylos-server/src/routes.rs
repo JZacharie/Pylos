@@ -9,6 +9,8 @@ use crate::middleware::{
     queuing_middleware, request_id_middleware, virtual_key_middleware,
 };
 use crate::state::AppState;
+
+pub mod setup;
 use axum::{
     extract::DefaultBodyLimit,
     http::Method,
@@ -264,6 +266,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(management_routes)
         .merge(guardrails_admin_routes)
         .merge(mcp_proxy_routes)
+        .merge(setup::setup_router())
         // Middleware global
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn(request_id_middleware))

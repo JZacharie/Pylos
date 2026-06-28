@@ -27,6 +27,7 @@ opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 jsonwebtoken = { workspace = true }
 dotenvy = { workspace = true }
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3.10"
