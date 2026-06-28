@@ -26,6 +26,21 @@ pub async fn management_auth_middleware(
     mut request: Request<Body>,
     next: Next,
 ) -> Response {
+    // Block access if setup is required
+    if *state.setup_required.read().await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({
+                "error": {
+                    "message": "Pylos setup is required. Please set up the administrator password.",
+                    "type": "setup_required",
+                    "code": 403
+                }
+            })),
+        )
+            .into_response();
+    }
+
     // Insert default extensions to avoid missing extension errors in downstream handlers
     request
         .extensions_mut()
@@ -37,9 +52,11 @@ pub async fn management_auth_middleware(
     // Extrait la clé depuis Authorization: Bearer ou X-Admin-Key
     let provided = extract_admin_key(request.headers()).map(|s| s.to_string());
 
+    let admin_key_hash_opt = state.admin_key_hash.read().await.clone();
+
     let Some(provided_key) = provided else {
         // Si pas de clé admin configurée globale → laisse passer (compatibilité)
-        if state.admin_key.is_none() {
+        if admin_key_hash_opt.is_none() {
             return next.run(request).await;
         }
         return (
@@ -77,8 +94,9 @@ pub async fn management_auth_middleware(
     }
 
     // 2. Fallback sur la clé d'administration statique globale
-    if let Some(expected) = &state.admin_key {
-        if constant_time_eq(provided_key.as_bytes(), expected.as_bytes()) {
+    if let Some(expected_hash) = &admin_key_hash_opt {
+        let provided_hash = crate::state::hash_sha256(&provided_key);
+        if constant_time_eq(provided_hash.as_bytes(), expected_hash.as_bytes()) {
             return next.run(request).await;
         }
     }
@@ -130,7 +148,7 @@ pub async fn management_auth_middleware(
     }
 
     // 4. Mode legacy : si PYLOS_ADMIN_KEY n'est pas défini, endpoints ouverts
-    if state.admin_key.is_none() {
+    if admin_key_hash_opt.is_none() {
         return next.run(request).await;
     }
 

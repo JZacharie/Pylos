@@ -87,12 +87,17 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::from_config(config_path).await?;
 
     // Warning si l'API management n'est pas protégée
-    if state.admin_key.is_none() {
+    let admin_key_set = state.admin_key_hash.read().await.is_some();
+    let setup_needed = *state.setup_required.read().await;
+
+    if setup_needed {
+        tracing::warn!("🔒 Setup Required: Go to http://localhost:8080/setup to configure your admin password.");
+    } else if !admin_key_set {
         tracing::warn!(
             "PYLOS_ADMIN_KEY is not set — management API (/providers, /virtual-keys, /config) is unprotected"
         );
     } else {
-        tracing::info!("Management API protected with PYLOS_ADMIN_KEY");
+        tracing::info!("Management API protected with admin key hash");
     }
 
     // Port depuis la config ou PORT env var (env var prioritaire pour docker/k8s)

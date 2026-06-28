@@ -15,16 +15,15 @@ pub async fn playgroup_check_middleware(
     next: Next,
 ) -> impl IntoResponse {
     let headers = request.headers();
-    let is_management = headers
-        .get("x-admin-key")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| {
-            state
-                .admin_key
-                .as_ref()
-                .is_some_and(|admin| constant_time_eq(v, admin))
-        })
-        .unwrap_or(false);
+    let provided_key = headers.get("x-admin-key").and_then(|v| v.to_str().ok());
+
+    let mut is_management = false;
+    if let Some(v) = provided_key {
+        if let Some(expected_hash) = &*state.admin_key_hash.read().await {
+            let provided_hash = crate::state::hash_sha256(v);
+            is_management = provided_hash == *expected_hash;
+        }
+    }
 
     if is_management {
         return next.run(request).await;
@@ -58,14 +57,4 @@ pub async fn playgroup_check_middleware(
     }
 
     next.run(request).await
-}
-
-fn constant_time_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.bytes()
-        .zip(b.bytes())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
 }

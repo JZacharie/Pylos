@@ -444,6 +444,110 @@ impl ConfigStore {
         Ok(())
     }
 
+    /// Récupère le hash du mot de passe admin stocké en base de données.
+    pub async fn get_admin_key_hash(&self) -> Result<Option<String>, PylosError> {
+        let pool = {
+            let state = self.state.read().await;
+            state.db_pool.clone()
+        };
+
+        let pool = match pool {
+            Some(p) => p,
+            None => return Ok(None),
+        };
+
+        // Create table server_secrets if it does not exist
+        match &pool {
+            Pool::Sqlite(p) => {
+                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                    .execute(p)
+                    .await
+                    .ok();
+            }
+            Pool::Postgres(p) => {
+                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                    .execute(p)
+                    .await
+                    .ok();
+            }
+        }
+
+        // Check if admin_key_hash exists
+        let existing: Option<String> = match &pool {
+            Pool::Sqlite(p) => {
+                let row =
+                    sqlx::query("SELECT value FROM server_secrets WHERE key = 'admin_key_hash'")
+                        .fetch_optional(p)
+                        .await
+                        .unwrap_or(None);
+                row.map(|r| r.get::<String, _>(0))
+            }
+            Pool::Postgres(p) => {
+                let row =
+                    sqlx::query("SELECT value FROM server_secrets WHERE key = 'admin_key_hash'")
+                        .fetch_optional(p)
+                        .await
+                        .unwrap_or(None);
+                row.map(|r| r.get::<String, _>(0))
+            }
+        };
+
+        Ok(existing)
+    }
+
+    /// Enregistre le hash du mot de passe admin en base de données.
+    pub async fn save_admin_key_hash(&self, hash: &str) -> Result<(), PylosError> {
+        let pool = {
+            let state = self.state.read().await;
+            state.db_pool.clone()
+        };
+
+        let pool = match pool {
+            Some(p) => p,
+            None => {
+                return Err(PylosError::Internal(
+                    "No database connection pool configured".into(),
+                ))
+            }
+        };
+
+        // Create table server_secrets if it does not exist
+        match &pool {
+            Pool::Sqlite(p) => {
+                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                    .execute(p)
+                    .await
+                    .ok();
+            }
+            Pool::Postgres(p) => {
+                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                    .execute(p)
+                    .await
+                    .ok();
+            }
+        }
+
+        // Insert or update hash
+        match &pool {
+            Pool::Sqlite(p) => {
+                sqlx::query("INSERT INTO server_secrets (key, value) VALUES ('admin_key_hash', $1) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+                    .bind(hash)
+                    .execute(p)
+                    .await
+                    .map_err(|e| PylosError::Internal(format!("Failed to save admin key hash: {}", e)))?;
+            }
+            Pool::Postgres(p) => {
+                sqlx::query("INSERT INTO server_secrets (key, value) VALUES ('admin_key_hash', $1) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+                    .bind(hash)
+                    .execute(p)
+                    .await
+                    .map_err(|e| PylosError::Internal(format!("Failed to save admin key hash: {}", e)))?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Met à jour un provider en mémoire et persiste sur disque
     pub async fn upsert_provider(
         &self,

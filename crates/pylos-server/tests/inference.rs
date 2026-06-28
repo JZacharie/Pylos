@@ -172,7 +172,8 @@ async fn test_chat_completions_unary() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,
@@ -258,7 +259,8 @@ async fn test_chat_completions_stream() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,
@@ -352,7 +354,8 @@ async fn test_image_generations() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,
@@ -512,7 +515,8 @@ async fn test_a2a_allowed_models_routing() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,
@@ -709,7 +713,8 @@ async fn test_semantic_caching_flow() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,
@@ -863,7 +868,8 @@ async fn test_structured_outputs_validation() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,
@@ -993,7 +999,8 @@ async fn test_inference_queuing_and_timeout() {
                 .await
                 .unwrap(),
         ),
-        admin_key: None,
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
         google_client_secret: None,
         google_redirect_uri: None,

@@ -16,7 +16,10 @@ async fn test_management_api_auth() {
         .unwrap();
     // On force une clé admin pour le test
     let mut state_with_key = state.clone();
-    state_with_key.admin_key = Some("test-admin-key".into());
+    state_with_key.admin_key_hash = std::sync::Arc::new(tokio::sync::RwLock::new(Some(
+        pylos_server::state::hash_sha256("test-admin-key"),
+    )));
+    state_with_key.setup_required = std::sync::Arc::new(tokio::sync::RwLock::new(false));
 
     let app = pylos_server::routes::create_router(state_with_key);
 
@@ -55,7 +58,10 @@ async fn test_provider_management() {
         .await
         .unwrap();
     let mut state_with_key = state.clone();
-    state_with_key.admin_key = Some("test-admin-key".into());
+    state_with_key.admin_key_hash = std::sync::Arc::new(tokio::sync::RwLock::new(Some(
+        pylos_server::state::hash_sha256("test-admin-key"),
+    )));
+    state_with_key.setup_required = std::sync::Arc::new(tokio::sync::RwLock::new(false));
     let app = pylos_server::routes::create_router(state_with_key);
 
     // 1. Liste initiale

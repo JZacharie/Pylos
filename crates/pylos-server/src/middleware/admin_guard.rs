@@ -16,16 +16,15 @@ pub async fn admin_guard_middleware(
 ) -> impl IntoResponse {
     let headers = request.headers();
 
-    let is_admin = headers
-        .get("x-admin-key")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| {
-            state
-                .admin_key
-                .as_ref()
-                .is_some_and(|admin| verify_slices_are_equal(v.as_bytes(), admin.as_bytes()))
-        })
-        .unwrap_or(false);
+    let provided_key = headers.get("x-admin-key").and_then(|v| v.to_str().ok());
+
+    let mut is_admin = false;
+    if let Some(v) = provided_key {
+        if let Some(expected_hash) = &*state.admin_key_hash.read().await {
+            let provided_hash = crate::state::hash_sha256(v);
+            is_admin = provided_hash == *expected_hash;
+        }
+    }
 
     if is_admin {
         return next.run(request).await;
@@ -57,14 +56,4 @@ pub async fn admin_guard_middleware(
         })),
     )
         .into_response()
-}
-
-fn verify_slices_are_equal(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b.iter())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
 }

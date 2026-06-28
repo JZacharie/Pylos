@@ -146,10 +146,41 @@ services:
     networks:
       - pylos-net
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Ollama Local LLM (Activé via profile 'ollama')
+  # ───────────────────────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: pylos-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    profiles:
+      - ollama
+    networks:
+      - pylos-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Ollama Pull — Téléchargement automatique de gemma:2b (Activé via profile 'ollama')
+  # ───────────────────────────────────────────────────────────────────────────
+  ollama-pull:
+    image: curlimages/curl:latest
+    container_name: pylos-ollama-pull
+    depends_on:
+      - ollama
+    entrypoint: ["sh", "-c", "sleep 5 && curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"gemma:2b\"}'"]
+    profiles:
+      - ollama
+    networks:
+      - pylos-net
+
 volumes:
   prometheus-data:
   grafana-data:
   pylos-data:
+  ollama-data:
 
 networks:
   pylos-net:
