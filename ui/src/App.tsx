@@ -20,9 +20,24 @@ import Policies from './pages/Policies'
 import SearchTools from './pages/SearchTools'
 import VectorStores from './pages/VectorStores'
 import ToolPolicies from './pages/ToolPolicies'
+import McpServers from './pages/McpServers'
+import Agents from './pages/Agents'
+import CostTracking from './pages/CostTracking'
+import RouterSettings from './pages/RouterSettings'
+import LoggingAlerts from './pages/LoggingAlerts'
+import PromptCaching from './pages/PromptCaching'
+import AdminSettings from './pages/AdminSettings'
+import ApiReference from './pages/ApiReference'
+import AiHub from './pages/AiHub'
+import LearningResources from './pages/LearningResources'
+import PromptsManagement from './pages/PromptsManagement'
+import ApiPlayground from './pages/ApiPlayground'
+import TagManagement from './pages/TagManagement'
+import ClaudePlugins from './pages/ClaudePlugins'
+import OldUsage from './pages/OldUsage'
 import Login from './pages/Login'
 import Callback from './pages/Callback'
-import Placeholder from './pages/Placeholder'
+import UiTheme from './pages/UiTheme'
 import {
   Menu,
   LayoutDashboard,
@@ -184,25 +199,25 @@ export default function App() {
             <Route path="/tools/vector-stores" element={<VectorStores />} />
             <Route path="/tools/policies" element={<ToolPolicies />} />
             
-            <Route path="/agents" element={<Placeholder title="Agents" description="Configure, deploy, and monitor autonomous AI agents and agent groups." />} />
-            <Route path="/mcp-servers" element={<Placeholder title="MCP Servers" description="Connect and manage Model Context Protocol (MCP) servers to provide tools to your agents." />} />
+            <Route path="/agents" element={<Agents />} />
+            <Route path="/mcp-servers" element={<McpServers />} />
             <Route path="/guardrails-monitor" element={<GuardrailsMonitor />} />
-            <Route path="/api-reference" element={<Placeholder title="API Reference" description="Explore the Pylos API documentation and interactive specifications." />} />
-            <Route path="/ai-hub" element={<Placeholder title="AI Hub" description="Discover pre-built prompts, workflows, and model evaluations from the Pylos community." />} />
-            <Route path="/learning-resources" element={<Placeholder title="Learning Resources" description="Guides, tutorials, and documentation to master AI Gateway management." />} />
+            <Route path="/api-reference" element={<ApiReference />} />
+            <Route path="/ai-hub" element={<AiHub />} />
+            <Route path="/learning-resources" element={<LearningResources />} />
             
-            <Route path="/experimental/caching" element={<Placeholder title="Prompt Caching" description="Configure semantic caching and prefix caching to reduce latency and API costs." />} />
-            <Route path="/experimental/prompts" element={<Placeholder title="Prompts Management" description="Collaborative prompt engineering, version control, and A/B testing playground." />} />
-            <Route path="/experimental/api-playground" element={<Placeholder title="API Playground" description="Test Pylos API endpoints directly from your browser with built-in request builders." />} />
-            <Route path="/experimental/tag-management" element={<Placeholder title="Tag Management" description="Create and manage tags to organize, query, and filter your virtual keys and logs." />} />
-            <Route path="/experimental/claude-plugins" element={<Placeholder title="Claude Code Plugins" description="Configure and manage plugins for Claude Code integration." />} />
-            <Route path="/experimental/old-usage" element={<Placeholder title="Old Usage & Analytics" description="Legacy usage reports and historical data export interfaces." />} />
+            <Route path="/experimental/caching" element={<PromptCaching />} />
+            <Route path="/experimental/prompts" element={<PromptsManagement />} />
+            <Route path="/experimental/api-playground" element={<ApiPlayground />} />
+            <Route path="/experimental/tag-management" element={<TagManagement />} />
+            <Route path="/experimental/claude-plugins" element={<ClaudePlugins />} />
+            <Route path="/experimental/old-usage" element={<OldUsage />} />
 
-            <Route path="/settings/router" element={<Placeholder title="Router Settings" description="Configure load balancing, failover, routing policies, and fallback providers." />} />
-            <Route path="/settings/logging-alerts" element={<Placeholder title="Logging & Alerts" description="Configure audit log destinations, webhooks, Slack alerts, and log retention policies." />} />
-            <Route path="/settings/admin" element={<Placeholder title="Admin Settings" description="Manage system configurations, license keys, and administrative access policies." />} />
-            <Route path="/settings/cost-tracking" element={<Placeholder title="Cost Tracking" description="Manage budget alerts, cost allocations, and chargebacks across teams and departments." />} />
-            <Route path="/settings/ui-theme" element={<Placeholder title="UI Theme Settings" description="Customize the appearance, font size, layout spacing, and visual themes." />} />
+            <Route path="/settings/router" element={<RouterSettings />} />
+            <Route path="/settings/logging-alerts" element={<LoggingAlerts />} />
+            <Route path="/settings/admin" element={<AdminSettings />} />
+            <Route path="/settings/cost-tracking" element={<CostTracking />} />
+            <Route path="/settings/ui-theme" element={<UiTheme />} />
           </Route>
         </Routes>
       </BrowserRouter>

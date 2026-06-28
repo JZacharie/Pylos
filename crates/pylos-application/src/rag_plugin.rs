@@ -12,7 +12,7 @@ use pylos_core::error::PylosError;
 
 /// Configuration for a single RAG model routing.
 /// Maps an incoming model name pattern to a Qdrant collection and prompt template.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RagModelRoute {
     /// Model name pattern to match (e.g. "graphon-rag", "my-rag-*")
     pub model_pattern: String,
@@ -95,7 +95,7 @@ pub struct QdrantResponse {
 }
 
 /// Configuration for query transformation (Query Expansion / HyDE).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryTransformConfig {
     /// Enable query expansion (generate variant queries)
     pub expansion_enabled: bool,
@@ -125,7 +125,7 @@ impl Default for QueryTransformConfig {
 }
 
 /// Configuration for Corrective RAG (CRAG) web search fallback.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CragConfig {
     /// Enable CRAG: if max Qdrant similarity score is below threshold, fall back to web search
     pub enabled: bool,
@@ -155,7 +155,7 @@ impl Default for CragConfig {
 }
 
 /// Configuration for the RAG plugin.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RagConfig {
     /// Embedding model to use
     pub embedding_model: String,

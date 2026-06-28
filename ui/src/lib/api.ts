@@ -567,3 +567,36 @@ export const vectorStoresApi = {
   search: (name: string, data: { query: string; embedding_model: string; limit?: number }) =>
     api.post<Array<{ id: string | number; score: number; payload: Record<string, unknown> }>>(`/api/vector-stores/collections/${name}/search`, data).then(r => r.data),
 }
+
+// ─── MCP Server Types & API ──────────────────────────────────────────────────
+
+export interface McpServer {
+  id: string
+  name: string
+  server_type: string
+  status: string
+  target_url: string | null
+  container_image: string | null
+  env_vars: Record<string, string> | null
+  virtual_key_id: string | null
+  team_id: string | null
+  created_at: number
+  updated_at: number
+}
+
+export const mcpServersApi = {
+  getAll: () =>
+    api.get<McpServer[]>('/api/mcp-servers').then(r => r.data),
+  get: (id: string) =>
+    api.get<McpServer>(`/api/mcp-servers/${id}`).then(r => r.data),
+  create: (data: { name: string; server_type: string; target_url?: string; container_image?: string; env_vars?: Record<string, string>; virtual_key_id?: string; team_id?: string }) =>
+    api.post<McpServer>('/api/mcp-servers', data).then(r => r.data),
+  update: (id: string, data: Partial<{ name: string; server_type: string; status: string; target_url: string; container_image: string; env_vars: Record<string, string>; virtual_key_id: string; team_id: string }>) =>
+    api.put<McpServer>(`/api/mcp-servers/${id}`, data).then(r => r.data),
+  remove: (id: string) =>
+    api.delete(`/api/mcp-servers/${id}`).then(r => r.data),
+  activate: (id: string) =>
+    api.post<McpServer>(`/api/mcp-servers/${id}/activate`).then(r => r.data),
+  deactivate: (id: string) =>
+    api.post<McpServer>(`/api/mcp-servers/${id}/deactivate`).then(r => r.data),
+}
