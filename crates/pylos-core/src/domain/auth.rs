@@ -71,6 +71,7 @@ mod tests {
 
     #[test]
     fn test_valid_token_validation() {
+        let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
         let key = b"secret-mock-validation-key";
         let claims = OidcClaims {
             sub: "user-123".into(),
