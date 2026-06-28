@@ -37,9 +37,9 @@ aws-sdk-sts = { version = "1.60", default-features = false, features = ["default
 aws-credential-types = "1.2"
 aws-smithy-types = "1.4"
 async-stream = "0.3"
-sqlx = { version = "0.8.3", features = ["runtime-tokio", "sqlite", "postgres", "chrono", "migrate"] }
+sqlx = { version = "0.8.3", default-features = false, features = ["runtime-tokio", "sqlite", "postgres", "chrono", "migrate", "macros"] }
 fastrand = "2"
-jsonwebtoken = { version = "10.0", default-features = false, features = ["use_pem", "rust_crypto"] }
+jsonwebtoken = { version = "10.0", default-features = false, features = ["use_pem", "aws_lc_rs", "hmac", "sha2"] }
 moka = { version = "0.12", features = ["future"] }
 ring = "0.17"
 dotenvy = "0.15"
