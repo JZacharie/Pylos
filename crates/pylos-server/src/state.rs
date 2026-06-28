@@ -370,21 +370,6 @@ impl AppState {
         let mut plugins: Vec<Arc<dyn LlmPlugin>> = Vec::new();
         plugins.push(Arc::new(pylos_application::CacheAlignerPlugin::new()));
 
-        let qdrant_url =
-            std::env::var("QDRANT_URL").unwrap_or_else(|_| "http://qdrant:6333".to_string());
-        let rag_embed_provider = Self::find_provider_for_embedding(
-            providers,
-            &std::env::var("PYLOS_EMBEDDING_MODEL")
-                .unwrap_or_else(|_| "nomic-embed-text-v2-moe-GGUF".to_string()),
-        );
-        let rag_config = pylos_application::RagConfig::default();
-        plugins.push(Arc::new(pylos_application::RagPlugin::new(
-            qdrant_url,
-            rag_config,
-            rag_embed_provider.clone(),
-        )));
-        tracing::info!("RagPlugin registered");
-
         plugins.push(Arc::new(BudgetPlugin::new(Arc::clone(budget_store))));
         tracing::info!("Budget plugin enabled");
 
@@ -437,6 +422,32 @@ impl AppState {
                 continue;
             }
             match plugin_cfg.name.as_str() {
+                "rag" => {
+                    let qdrant_url = std::env::var("QDRANT_URL")
+                        .unwrap_or_else(|_| "http://qdrant:6333".to_string());
+
+                    // Build RagConfig from plugin config, falling back to defaults
+                    let mut rag_config: pylos_application::RagConfig =
+                        serde_json::from_value(plugin_cfg.config.clone()).unwrap_or_default();
+
+                    // Allow env var overrides for backward compatibility
+                    if let Ok(model) = std::env::var("PYLOS_EMBEDDING_MODEL") {
+                        rag_config.embedding_model = model;
+                    }
+                    if let Ok(model) = std::env::var("PYLOS_MODEL") {
+                        rag_config.pylos_model = model;
+                    }
+
+                    let rag_embed_provider =
+                        Self::find_provider_for_embedding(providers, &rag_config.embedding_model);
+
+                    plugins.push(Arc::new(pylos_application::RagPlugin::new(
+                        qdrant_url,
+                        rag_config,
+                        rag_embed_provider,
+                    )));
+                    tracing::info!(name = "rag", "RAG plugin enabled");
+                }
                 "otel" => {
                     let otel_cfg = OtelConfig::from_plugin_config(&plugin_cfg.config);
                     plugins.push(Arc::new(otel_cfg.build_plugin()));
