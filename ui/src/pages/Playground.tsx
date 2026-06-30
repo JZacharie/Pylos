@@ -240,7 +240,7 @@ export default function Playground() {
   })
   const [maxTokens, setMaxTokens] = useState(() => {
     const saved = localStorage.getItem('pylos-playground-max-tokens')
-    return saved !== null ? parseInt(saved) : 512
+    return saved !== null ? parseInt(saved, 10) : 512
   })
   const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan'>(() => {
     return (localStorage.getItem('pylos-playground-caveman-mode') as any) || 'off'
@@ -278,15 +278,15 @@ export default function Playground() {
   }, [systemPrompt])
 
   useEffect(() => {
-    localStorage.setItem('pylos-playground-streaming', streaming.toString())
+    localStorage.setItem('pylos-playground-streaming', String(streaming))
   }, [streaming])
 
   useEffect(() => {
-    localStorage.setItem('pylos-playground-temperature', temperature.toString())
+    localStorage.setItem('pylos-playground-temperature', String(temperature))
   }, [temperature])
 
   useEffect(() => {
-    localStorage.setItem('pylos-playground-max-tokens', maxTokens.toString())
+    localStorage.setItem('pylos-playground-max-tokens', String(maxTokens))
   }, [maxTokens])
 
   useEffect(() => {
@@ -294,14 +294,12 @@ export default function Playground() {
   }, [cavemanMode])
 
   useEffect(() => {
-    localStorage.setItem('pylos-playground-caveman-compress', cavemanCompress.toString())
+    localStorage.setItem('pylos-playground-caveman-compress', String(cavemanCompress))
   }, [cavemanCompress])
 
   useEffect(() => {
-    localStorage.setItem('pylos-playground-force-provider-model', forceProviderModel.toString())
+    localStorage.setItem('pylos-playground-force-provider-model', String(forceProviderModel))
   }, [forceProviderModel])
-
-
   const toggleFavorite = (modelStr: string) => {
     setFavorites(prev =>
       prev.includes(modelStr)

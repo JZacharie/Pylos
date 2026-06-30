@@ -58,6 +58,10 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/v1/models/catalog", post(models::upsert_catalog_model))
         .route(
+            "/v1/models/catalog/{provider}",
+            delete(models::delete_provider_models),
+        )
+        .route(
             "/v1/models/catalog/{provider}/{model_id}",
             delete(models::delete_catalog_model),
         )

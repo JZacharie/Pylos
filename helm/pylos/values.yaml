@@ -13,76 +13,7 @@ config: |
       "disable_content_logging": false,
       "database_url": "env.DATABASE_URL"
     },
-    "providers": {
-      "ollama-jo3": {
-        "keys": [
-          {
-            "name": "local",
-            "value": "ollama",
-            "models": [
-              "gemma4:e2b",
-              "gemma4:12b",
-              "deepseek-coder-v2:16b",
-              "minimax-m2.5:cloud",
-              "karanchopda333/whisper:latest",
-              "llava:latest",
-              "qwen2.5-coder:3b",
-              "deepseek-v3.2:cloud",
-              "qwen3.5:cloud",
-              "qwen3-coder-next:cloud",
-              "gpt-oss:120b-cloud"
-            ],
-            "weight": 1.0
-          }
-        ],
-        "network": {
-          "base_url": "http://192.168.0.58:11434/v1",
-          "timeout_secs": 120,
-          "max_retries": 2,
-          "retry_backoff_initial_ms": 500,
-          "retry_backoff_max_ms": 5000
-        }
-      },
-      "lemonade-jo3": {
-        "keys": [
-          {
-            "name": "default",
-            "value": "env.LEMONADE_API_KEY",
-            "models": ["*"],
-            "weight": 1.0
-          }
-        ],
-        "network": {
-          "base_url": "http://lemonade.lemonade.svc.cluster.local:13305/v1",
-          "timeout_secs": 120,
-          "max_retries": 2
-        }
-      },
-      "lemonade-optimus": {
-        "keys": [
-          {
-            "name": "default",
-            "value": "env.LEMONADE_API_KEY",
-            "models": [
-              "DeepSeek-Qwen3-8B-GGUF",
-              "Gemma-4-E4B-it-GGUF",
-              "Qwen3-8B-GGUF",
-              "Qwen3-Coder-30B-A3B-Instruct-GGUF",
-              "Qwen3.5-9B-GGUF",
-              "Qwen3.6-27B-MTP-GGUF",
-              "Qwen3.6-35B-A3B-GGUF",
-              "nomic-embed-text-v2-moe-GGUF"
-            ],
-            "weight": 1.0
-          }
-        ],
-        "network": {
-          "base_url": "http://192.168.0.58:13305/v1",
-          "timeout_secs": 120,
-          "max_retries": 2
-        }
-      }
-    },
+    "providers": {},
     "governance": {
       "virtual_keys": []
     }

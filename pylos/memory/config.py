@@ -47,6 +47,15 @@ class Mem0Settings(BaseSettings):
     sidecar_host: str = Field(
         default="0.0.0.0", description="Sidecar bind address"
     )
+    graph_store_url: str | None = Field(
+        default=None, description="Neo4j graph store connection URL"
+    )
+    graph_store_username: str | None = Field(
+        default=None, description="Neo4j graph store username"
+    )
+    graph_store_password: str | None = Field(
+        default=None, description="Neo4j graph store password"
+    )
     log_level: str = Field(default="INFO", description="Logging level")
 
     @property
@@ -98,7 +107,15 @@ class Mem0Settings(BaseSettings):
             }
 
         config["version"] = "v1.0"
-        config["graph_store"] = {"provider": "neo4j", "config": {"url": "", "username": "", "password": ""}}
+        if self.graph_store_url:
+            config["graph_store"] = {
+                "provider": "neo4j",
+                "config": {
+                    "url": self.graph_store_url,
+                    "username": self.graph_store_username or "",
+                    "password": self.graph_store_password or "",
+                },
+            }
 
         return config
 

@@ -53,6 +53,13 @@ export default function Dashboard() {
     refetchInterval: 30_000,
   })
 
+  const configQ = useQuery({
+    queryKey: ['config'],
+    queryFn: configApi.get,
+    refetchInterval: 60_000,
+  })
+
+  const isDev = configQ.data?.environment === 'dev'
   const s = statsQ.data
 
   return (
@@ -80,18 +87,20 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <button
-            onClick={handlePromote}
-            disabled={isPromoting}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200
-              ${isPromoting
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-indigo-500 hover:border-indigo-400 text-white shadow-lg hover:shadow-indigo-500/20 active:scale-95'
-              }`}
-          >
-            <Rocket size={14} className={isPromoting ? 'animate-bounce' : ''} />
-            {isPromoting ? 'Promoting...' : 'Promote to Prod'}
-          </button>
+          {isDev && (
+            <button
+              onClick={handlePromote}
+              disabled={isPromoting}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200
+                ${isPromoting
+                  ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-indigo-500 hover:border-indigo-400 text-white shadow-lg hover:shadow-indigo-500/20 active:scale-95'
+                }`}
+            >
+              <Rocket size={14} className={isPromoting ? 'animate-bounce' : ''} />
+              {isPromoting ? 'Promoting...' : 'Promote to Prod'}
+            </button>
+          )}
           <div className="flex items-center gap-2 text-xs text-zinc-500">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Live

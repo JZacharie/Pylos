@@ -309,7 +309,6 @@ async fn complete_response(
     }
 }
 
-/// Accumulateur partagé entre les closures du stream SSE
 #[derive(Default)]
 struct StreamAccumulator {
     output_parts: Vec<String>,
@@ -325,7 +324,6 @@ impl StreamAccumulator {
                 if self.first_token_time.is_none() {
                     self.first_token_time = Some(Instant::now());
                 }
-                // ~4 chars ≈ 1 token (approximation standard tiktoken)
                 self.completion_tokens += (content.len() / 4).max(1);
                 self.output_parts.push(content.clone());
             }
@@ -368,11 +366,9 @@ async fn stream_response(
                 actual_provider,
             );
 
-            // Accumulateur partagé entre le stream et le done_event.
             let accumulator = Arc::new(std::sync::Mutex::new(StreamAccumulator::default()));
             let acc_stream = Arc::clone(&accumulator);
 
-            // Canal pour déclencher le logging après [DONE]
             let (log_tx, mut log_rx) = mpsc::channel::<()>(1);
             let log_tx = Arc::new(log_tx);
             let log_tx_done = Arc::clone(&log_tx);
@@ -383,8 +379,6 @@ async fn stream_response(
             let sse_stream = chunk_stream.map(move |result| {
                 match &result {
                     Ok(chunk) => {
-                        // lock() ne peut jamais paniquer ici : pas de poison possible
-                        // dans ce contexte single-producer
                         if let Ok(mut acc) = acc_stream.lock() {
                             acc.collect(chunk);
                         }
@@ -424,7 +418,7 @@ async fn stream_response(
                     let elapsed_total = start.elapsed().as_secs_f64();
                     let latency = elapsed_total * 1000.0;
                     let (completion_tokens, output_preview, finish, first_token_time) = {
-                        let acc = acc_log.lock().expect("accumulator lock");
+                        let acc = acc_log.lock().unwrap_or_else(|e| e.into_inner());
                         let tokens = acc.completion_tokens as i32;
                         let preview = if acc.output_parts.is_empty() {
                             None

@@ -6,55 +6,43 @@ import App from './App.tsx'
 import { openobserveRum } from '@openobserve/browser-rum';
 import { openobserveLogs } from '@openobserve/browser-logs';
 
-const options = {
-  clientToken: 'rumJHwgt82ZCKIFNQk3',
-  applicationId: 'web-application-id',
-  site: 'o2-openobserve.p.zacharie.org',
-  service: 'my-web-application',
-  env: 'production',
-  version: '0.0.1',
-  organizationIdentifier: 'default',
-  insecureHTTP: false,
-  apiVersion: 'v1',
-};
+const clientToken = import.meta.env.VITE_OPENOBSERVE_CLIENT_TOKEN;
+const applicationId = import.meta.env.VITE_OPENOBSERVE_APPLICATION_ID;
+const site = import.meta.env.VITE_OPENOBSERVE_SITE || 'o2-openobserve.p.zacharie.org';
 
-openobserveRum.init({
-  applicationId: options.applicationId,
-  clientToken: options.clientToken,
-  site: options.site,
-  organizationIdentifier: options.organizationIdentifier,
-  service: options.service,
-  env: options.env,
-  version: options.version,
-  trackResources: true,
-  trackLongTasks: true,
-  trackUserInteractions: true,
-  apiVersion: options.apiVersion,
-  insecureHTTP: options.insecureHTTP,
-  defaultPrivacyLevel: 'allow',
-  sessionSampleRate: 100,
-  sessionReplaySampleRate: 50,
-});
+if (clientToken && applicationId) {
+  openobserveRum.init({
+    applicationId,
+    clientToken,
+    site,
+    organizationIdentifier: import.meta.env.VITE_OPENOBSERVE_ORG_ID || 'default',
+    service: import.meta.env.VITE_OPENOBSERVE_SERVICE || 'pylos-ui',
+    env: import.meta.env.VITE_OPENOBSERVE_ENV || 'production',
+    version: import.meta.env.VITE_OPENOBSERVE_VERSION || '0.1.0',
+    trackResources: true,
+    trackLongTasks: true,
+    trackUserInteractions: true,
+    apiVersion: 'v1',
+    insecureHTTP: false,
+    defaultPrivacyLevel: 'allow',
+    sessionSampleRate: 100,
+    sessionReplaySampleRate: 50,
+  });
 
-openobserveLogs.init({
-  clientToken: options.clientToken,
-  site: options.site,
-  organizationIdentifier: options.organizationIdentifier,
-  service: options.service,
-  env: options.env,
-  version: options.version,
-  forwardErrorsToLogs: true,
-  insecureHTTP: options.insecureHTTP,
-  apiVersion: options.apiVersion,
-});
+  openobserveLogs.init({
+    clientToken,
+    site,
+    organizationIdentifier: import.meta.env.VITE_OPENOBSERVE_ORG_ID || 'default',
+    service: import.meta.env.VITE_OPENOBSERVE_SERVICE || 'pylos-ui',
+    env: import.meta.env.VITE_OPENOBSERVE_ENV || 'production',
+    version: import.meta.env.VITE_OPENOBSERVE_VERSION || '0.1.0',
+    forwardErrorsToLogs: true,
+    insecureHTTP: false,
+    apiVersion: 'v1',
+  });
 
-openobserveRum.setUser({
-  id: "1",
-  name: "Captain Hook",
-  email: "captainhook@example.com",
-});
-
-openobserveRum.startSessionReplayRecording();
+  openobserveRum.startSessionReplayRecording();
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

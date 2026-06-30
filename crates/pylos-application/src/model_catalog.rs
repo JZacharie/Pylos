@@ -444,6 +444,24 @@ impl ModelCatalog {
         Ok(rows_affected > 0)
     }
 
+    pub async fn delete_models_by_provider(&self, provider: &str) -> Result<u64, sqlx::Error> {
+        let rows_affected = match &self.pool {
+            Pool::Sqlite(pool) => sqlx::query("DELETE FROM model_catalog WHERE provider = $1")
+                .bind(provider)
+                .execute(pool)
+                .await?
+                .rows_affected(),
+            Pool::Postgres(pool) => {
+                sqlx::query::<sqlx::Postgres>("DELETE FROM model_catalog WHERE provider = $1")
+                    .bind(provider)
+                    .execute(pool)
+                    .await?
+                    .rows_affected()
+            }
+        };
+        Ok(rows_affected)
+    }
+
     pub async fn get_pricing_status(&self) -> Result<PricingReloadStatus, sqlx::Error> {
         match &self.pool {
             Pool::Sqlite(pool) => {

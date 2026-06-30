@@ -42,6 +42,7 @@ interface AppConfig {
   auth: AuthConfig
   queue: QueueConfig
   system: SystemInfo
+  environment?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -287,18 +288,20 @@ export default function AdminSettings() {
           {reloadMutation.isPending ? 'Reloading...' : 'Reload Config'}
         </button>
 
-        <button
-          onClick={handlePromote}
-          disabled={isPromoting}
-          className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border font-semibold transition-all ${
-            isPromoting
-              ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-indigo-500 hover:border-indigo-400 text-white shadow-lg hover:shadow-indigo-500/20 active:scale-95'
-          }`}
-        >
-          <Rocket size={14} className={isPromoting ? 'animate-bounce' : ''} />
-          {isPromoting ? 'Promoting...' : 'Promote to Production'}
-        </button>
+        {config?.environment === 'dev' && (
+          <button
+            onClick={handlePromote}
+            disabled={isPromoting}
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg border font-semibold transition-all ${
+              isPromoting
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 border-indigo-500 hover:border-indigo-400 text-white shadow-lg hover:shadow-indigo-500/20 active:scale-95'
+            }`}
+          >
+            <Rocket size={14} className={isPromoting ? 'animate-bounce' : ''} />
+            {isPromoting ? 'Promoting...' : 'Promote to Production'}
+          </button>
+        )}
       </div>
     </div>
   )

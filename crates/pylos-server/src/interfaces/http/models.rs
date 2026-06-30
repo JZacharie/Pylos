@@ -519,6 +519,32 @@ pub async fn delete_catalog_model(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DELETE /v1/models/catalog/{provider} — supprime tous les modèles d'un provider
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub async fn delete_provider_models(
+    State(state): State<AppState>,
+    Path(provider): Path<String>,
+) -> impl IntoResponse {
+    match state
+        .model_catalog
+        .delete_models_by_provider(&provider)
+        .await
+    {
+        Ok(count) => Json(json!({
+            "message": format!("Deleted {} model(s) for provider '{}'", count, provider),
+            "deleted_count": count
+        }))
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /v1/models/pull/:provider — synchronise la liste des modèles du provider
 // ─────────────────────────────────────────────────────────────────────────────
 

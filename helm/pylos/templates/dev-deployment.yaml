@@ -38,6 +38,8 @@ spec:
           env:
             - name: PYLOS_DATA_DIR
               value: {{ .Values.dev.dataDir }}
+            - name: PYLOS_ENV
+              value: "dev"
             - name: PYLOS_CONFIG
               value: "/app/pylos.json"
             - name: QDRANT_URL

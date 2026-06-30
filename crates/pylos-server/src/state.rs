@@ -244,7 +244,7 @@ impl AppState {
             std::env::var("PYLOS_DATA_DIR")
                 .ok()
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("."))
+                .unwrap_or_else(|| PathBuf::from(".sqlite"))
         });
         std::fs::create_dir_all(&data_dir).ok();
 
@@ -358,7 +358,7 @@ impl AppState {
             .cloned()
     }
 
-    fn register_plugins(
+    async fn register_plugins(
         cfg: &pylos_core::domain::config::PylosConfig,
         budget_store: &Arc<BudgetStore>,
         rate_limit_store: &Arc<RateLimitStore>,
@@ -497,24 +497,16 @@ impl AppState {
                         let memgraph_url = std::env::var("MEMGRAPH_URL")
                             .unwrap_or_else(|_| "127.0.0.1:7687".to_string());
 
-                        // Since register_plugins is sync and MemoryPlugin::new is async, we use block_on or spawn.
-                        // Because register_plugins is called in an async context (from_config_with_dir), we can't easily await inside sync.
-                        // Let's create the runtime block here to await the connection:
-                        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                            let plugin_res = tokio::task::block_in_place(|| {
-                                handle.block_on(async {
-                                    pylos_application::MemoryPlugin::new(memgraph_url).await
-                                })
-                            });
-
-                            if let Ok(plugin) = plugin_res {
+                        match pylos_application::MemoryPlugin::new(memgraph_url).await {
+                            Ok(plugin) => {
                                 plugins.push(Arc::new(plugin));
                                 tracing::info!(
                                     name = "memory",
                                     "Cross-Agent Memory (Memgraph) plugin enabled"
                                 );
-                            } else {
-                                tracing::error!("Failed to connect to Memgraph");
+                            }
+                            Err(e) => {
+                                tracing::error!(error = %e, "Failed to connect to Memgraph");
                             }
                         }
                     }
@@ -740,7 +732,8 @@ impl AppState {
             &rate_limit_store,
             &config_store,
             &providers,
-        );
+        )
+        .await;
         let orchestrator = Arc::new(InferenceOrchestrator::new(providers, plugins));
         let metrics = Arc::new(Metrics::new());
         let vk_registry = Self::register_virtual_keys(&cfg, &vk_store).await;

@@ -34,3 +34,6 @@ pylos.*.json
 # Project Survey
 Final_project_Survey.xlsx
 
+# SQLite databases
+.sqlite/
+

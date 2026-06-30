@@ -37,7 +37,7 @@ struct RoundRobinState {
 
 impl RoundRobinState {
     fn select_and_advance(&self, model: &str, provider_count: usize) -> usize {
-        let mut counters = self.counters.lock().unwrap();
+        let mut counters = self.counters.lock().unwrap_or_else(|e| e.into_inner());
         let entry = counters.entry(model.to_string()).or_insert(0);
         let current = *entry;
         *entry = (*entry + 1) % provider_count;
@@ -339,7 +339,10 @@ impl InferenceOrchestrator {
                 }
                 Err(e) => {
                     self.record_failure(provider.name());
-                    warn!(provider = provider.name(), error = %e, "Embedding failed, trying fallback");
+                    warn!(provider = provider.name(), error = %e, "Embedding failed");
+                    if !matches!(e, PylosError::Timeout(_)) {
+                        return Err(e);
+                    }
                     last_error = Some(e);
                 }
             }
@@ -517,11 +520,13 @@ impl InferenceOrchestrator {
                         provider = provider.name(),
                         model = %model,
                         error = %e,
-                        retriable = e.is_retriable(),
                         trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
-                        "[Path] Provider '{}' FAILED for model '{}' — error: {}. Retriable: {}. Trying fallback...",
-                        provider.name(), model, e, e.is_retriable()
+                        "[Path] Provider '{}' FAILED for model '{}' — error: {}",
+                        provider.name(), model, e
                     );
+                    if !matches!(e, PylosError::Timeout(_)) {
+                        return Err(e);
+                    }
                     last_error = Some(e);
                 }
             }
@@ -642,9 +647,12 @@ impl InferenceOrchestrator {
                         model = %stream_model,
                         error = %e,
                         trace_id = %ctx.trace_id.as_deref().unwrap_or(""),
-                        "[Path] Stream: Provider '{}' FAILED for model '{}' — error: {}. Trying fallback...",
+                        "[Path] Stream: Provider '{}' FAILED for model '{}' — error: {}",
                         provider.name(), stream_model, e
                     );
+                    if !matches!(e, PylosError::Timeout(_)) {
+                        return Err(e);
+                    }
                     last_error = Some(e);
                 }
             }

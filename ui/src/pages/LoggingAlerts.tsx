@@ -172,19 +172,19 @@ export default function LoggingAlerts() {
 
             {/* Disable content logging */}
             <Card>
-              <h3 className="text-sm font-medium text-white mb-1.5">Disable Content Logging</h3>
-              <p className="text-zinc-500 text-xs mb-4">When enabled, prompt and completion text will not be stored in logs.</p>
+              <h3 className="text-sm font-medium text-white mb-1.5">Content Logging</h3>
+              <p className="text-zinc-500 text-xs mb-4">When enabled, prompt and completion text will be stored in logs. Turn off to avoid storing sensitive data.</p>
               <label className="flex items-center cursor-pointer gap-3">
                 <button
                   type="button"
                   onClick={() => setDisableContentLogging(!disableContentLogging)}
                   className="text-zinc-400"
                 >
-                  {disableContentLogging
+                  {!disableContentLogging
                     ? <ToggleRight className="w-8 h-8 text-emerald-400" />
                     : <ToggleLeft className="w-8 h-8 text-zinc-600" />}
                 </button>
-                <span className="text-zinc-300 text-sm">{disableContentLogging ? 'Content logging disabled' : 'Content logging enabled'}</span>
+                <span className="text-zinc-300 text-sm">{!disableContentLogging ? 'Content logging enabled' : 'Content logging disabled'}</span>
               </label>
             </Card>
 

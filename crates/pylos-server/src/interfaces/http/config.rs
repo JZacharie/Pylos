@@ -17,7 +17,12 @@ use crate::state::AppState;
 
 pub async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
     let cfg = state.config_store.get().await;
-    Json(redact_config(&cfg))
+    let mut val = redact_config(&cfg);
+    let env = std::env::var("PYLOS_ENV").unwrap_or_else(|_| "production".to_string());
+    if let Some(obj) = val.as_object_mut() {
+        obj.insert("environment".to_string(), serde_json::Value::String(env));
+    }
+    Json(val)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

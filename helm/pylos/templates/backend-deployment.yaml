@@ -40,6 +40,8 @@ spec:
           env:
             - name: PYLOS_DATA_DIR
               value: {{ .Values.backend.dataDir }}
+            - name: PYLOS_ENV
+              value: "production"
             - name: PYLOS_CONFIG
               value: "/app/pylos.json"
             - name: QDRANT_URL

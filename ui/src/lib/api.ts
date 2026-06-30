@@ -3,8 +3,8 @@ import axios from 'axios'
 const getBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
-    // Si l'API pointe vers localhost/127.0.0.1 mais que le frontend est chargé sur un autre domaine,
-    // on utilise des chemins relatifs pour passer par Nginx/reverse proxy.
+    // If the API points to localhost/127.0.0.1 but the frontend is loaded from a different domain,
+    // use relative paths to go through Nginx/reverse proxy.
     if (
       typeof window !== 'undefined' &&
       (envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) &&
@@ -294,7 +294,7 @@ export interface ModelListResponse {
     id: string
     object: string
     owned_by: string
-    provider: string        // champ direct sur chaque entrée
+    provider: string        // direct field on each entry
     pylos: ModelInfo
   }>
 }
@@ -369,6 +369,9 @@ export const modelsApi = {
 
   remove: (provider: string, model_id: string) =>
     api.delete(`/v1/models/catalog/${provider}/${model_id}`).then(r => r.data),
+
+  removeProviderModels: (provider: string) =>
+    api.delete<{ message: string; deleted_count: number }>(`/v1/models/catalog/${provider}`).then(r => r.data),
 
   pull: (provider: string) =>
     api.post(`/v1/models/pull/${provider}`).then(r => r.data),

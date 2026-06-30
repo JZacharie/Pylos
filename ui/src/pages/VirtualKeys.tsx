@@ -465,10 +465,11 @@ function VkModal({ initial, isEdit, onClose, onSave, isSaving, error, createdKey
   )
 }
 
+
 // ─── DeleteConfirmModal ───────────────────────────────────────────────────────
 
-function DeleteConfirmModal({ name, onClose, onConfirm, isDeleting }: {
-  name: string; onClose: () => void; onConfirm: () => void; isDeleting: boolean
+function DeleteConfirmModal({ name, onClose, onConfirm, isDeleting, error }: {
+  name: string; onClose: () => void; onConfirm: () => void; isDeleting: boolean; error: string | null
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -477,7 +478,14 @@ function DeleteConfirmModal({ name, onClose, onConfirm, isDeleting }: {
           <div className="w-9 h-9 rounded-full bg-red-500/15 flex items-center justify-center"><AlertTriangle size={16} className="text-red-400" /></div>
           <div><div className="font-semibold text-white">Delete virtual key</div><div className="text-xs text-zinc-500">This action cannot be undone</div></div>
         </div>
-        <p className="text-sm text-zinc-400 mb-5">Delete <span className="text-white font-medium">{name}</span>? All requests using this key will be rejected immediately.</p>
+        <p className="text-sm text-zinc-400 mb-4">Delete <span className="text-white font-medium">{name}</span>? All requests using this key will be rejected immediately.</p>
+        
+        {error && (
+          <div className="flex items-center gap-2 text-red-400 text-xs bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2 mb-4">
+            <AlertTriangle size={13} />{error}
+          </div>
+        )}
+
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancel</button>
           <button onClick={onConfirm} disabled={isDeleting}
@@ -567,7 +575,8 @@ export default function VirtualKeys() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => virtualKeysApi.remove(id),
-    onSuccess: () => { invalidate(); setDeletingVk(null) },
+    onSuccess: () => { invalidate(); setDeletingVk(null); setMutationError(null); },
+    onError: (e: Error) => setMutationError(e.message),
   })
 
   const filtered = useMemo(() => {
@@ -773,7 +782,7 @@ export default function VirtualKeys() {
                           <button onClick={() => { setMutationError(null); setEditingVk(vk) }}
                             className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-emerald-400 hover:bg-emerald-400/10 rounded transition-all" title="Edit"
                           ><Pencil size={12} /></button>
-                          <button onClick={() => setDeletingVk(vk)}
+                          <button onClick={() => { setMutationError(null); setDeletingVk(vk); }}
                             className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all" title="Delete"
                           ><Trash2 size={12} /></button>
                           <span className="text-zinc-600 ml-1">{expandedId === vk.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</span>
@@ -811,7 +820,7 @@ export default function VirtualKeys() {
       )}
       {deletingVk && (
         <DeleteConfirmModal name={deletingVk.name} onClose={() => setDeletingVk(null)}
-          onConfirm={() => deleteMutation.mutate(deletingVk.id)} isDeleting={deleteMutation.isPending} />
+          onConfirm={() => deleteMutation.mutate(deletingVk.id)} isDeleting={deleteMutation.isPending} error={mutationError} />
       )}
       {newKeyValue && (
         <VkModal initial={DEFAULT_FORM} isEdit={false} onClose={() => setNewKeyValue(null)} onSave={() => {}} isSaving={false} error={null} createdKey={newKeyValue} />
