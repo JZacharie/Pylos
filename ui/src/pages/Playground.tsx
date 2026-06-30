@@ -6,7 +6,7 @@ import { formatLatency, formatCost, providerColor } from '../lib/utils'
 import {
   Send, StopCircle, Trash2, ChevronDown,
   Zap, Clock, Hash, Coins, CheckCircle, XCircle,
-  SlidersHorizontal, X, Star,
+  SlidersHorizontal, X, Star, RotateCcw,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -218,21 +218,46 @@ export default function Playground() {
       return []
     }
   })
-  const [systemPrompt, setSystemPrompt] = useState('You are a helpful assistant.')
+  const [systemPrompt, setSystemPrompt] = useState(() => {
+    return localStorage.getItem('pylos-playground-system-prompt') ?? 'You are a helpful assistant.'
+  })
   const [input, setInput] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
-  const [streaming, setStreaming] = useState(true)
-  const [temperature, setTemperature] = useState(0.7)
-  const [maxTokens, setMaxTokens] = useState(512)
-  const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan'>('off')
-  const [cavemanCompress, setCavemanCompress] = useState(false)
-  const [forceProviderModel, setForceProviderModel] = useState(false)
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem('pylos-playground-messages')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const [streaming, setStreaming] = useState(() => {
+    const saved = localStorage.getItem('pylos-playground-streaming')
+    return saved !== null ? saved === 'true' : true
+  })
+  const [temperature, setTemperature] = useState(() => {
+    const saved = localStorage.getItem('pylos-playground-temperature')
+    return saved !== null ? parseFloat(saved) : 0.7
+  })
+  const [maxTokens, setMaxTokens] = useState(() => {
+    const saved = localStorage.getItem('pylos-playground-max-tokens')
+    return saved !== null ? parseInt(saved) : 512
+  })
+  const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan'>(() => {
+    return (localStorage.getItem('pylos-playground-caveman-mode') as any) || 'off'
+  })
+  const [cavemanCompress, setCavemanCompress] = useState(() => {
+    return localStorage.getItem('pylos-playground-caveman-compress') === 'true'
+  })
+  const [forceProviderModel, setForceProviderModel] = useState(() => {
+    return localStorage.getItem('pylos-playground-force-provider-model') === 'true'
+  })
   const [isRunning, setIsRunning] = useState(false)
   const [lastResult, setLastResult] = useState<RunResult | null>(null)
   const [streamingContent, setStreamingContent] = useState('')
   const [showConfig, setShowConfig] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
 
   useEffect(() => {
     if (selectedModel) {
@@ -243,6 +268,39 @@ export default function Playground() {
   useEffect(() => {
     localStorage.setItem('pylos-playground-favorites', JSON.stringify(favorites))
   }, [favorites])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-messages', JSON.stringify(messages))
+  }, [messages])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-system-prompt', systemPrompt)
+  }, [systemPrompt])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-streaming', streaming.toString())
+  }, [streaming])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-temperature', temperature.toString())
+  }, [temperature])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-max-tokens', maxTokens.toString())
+  }, [maxTokens])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-caveman-mode', cavemanMode)
+  }, [cavemanMode])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-caveman-compress', cavemanCompress.toString())
+  }, [cavemanCompress])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-force-provider-model', forceProviderModel.toString())
+  }, [forceProviderModel])
+
 
   const toggleFavorite = (modelStr: string) => {
     setFavorites(prev =>
@@ -530,6 +588,28 @@ export default function Playground() {
     setStreamingContent('')
   }
 
+  function reset() {
+    setMessages([])
+    setLastResult(null)
+    setStreamingContent('')
+    setSystemPrompt('You are a helpful assistant.')
+    setTemperature(0.7)
+    setMaxTokens(512)
+    setStreaming(true)
+    setCavemanMode('off')
+    setCavemanCompress(false)
+    setForceProviderModel(false)
+
+    localStorage.removeItem('pylos-playground-messages')
+    localStorage.removeItem('pylos-playground-system-prompt')
+    localStorage.removeItem('pylos-playground-streaming')
+    localStorage.removeItem('pylos-playground-temperature')
+    localStorage.removeItem('pylos-playground-max-tokens')
+    localStorage.removeItem('pylos-playground-caveman-mode')
+    localStorage.removeItem('pylos-playground-caveman-compress')
+    localStorage.removeItem('pylos-playground-force-provider-model')
+  }
+
   const { provider: currentProvider } = selectedModel ? parseSelected() : { provider: '' }
 
   return (
@@ -751,17 +831,31 @@ export default function Playground() {
 
           <div className="border-t border-zinc-800/50" />
 
-          {/* Clear button */}
-          <button
-            onClick={clear}
-            disabled={isRunning || messages.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg
-              border border-zinc-800 text-zinc-400 text-sm hover:border-red-700 hover:text-red-400
-              transition-colors disabled:opacity-40"
-          >
-            <Trash2 size={13} />
-            Clear conversation
-          </button>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={clear}
+              disabled={isRunning || messages.length === 0}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg
+                border border-zinc-800 text-zinc-400 text-xs hover:border-red-700/50 hover:text-red-400
+                transition-colors disabled:opacity-40"
+              title="Clear chat history only"
+            >
+              <Trash2 size={13} />
+              Clear
+            </button>
+            <button
+              onClick={reset}
+              disabled={isRunning}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg
+                border border-zinc-800 text-zinc-400 text-xs hover:border-amber-700/50 hover:text-amber-400
+                transition-colors disabled:opacity-40"
+              title="Reset chat and configuration to defaults"
+            >
+              <RotateCcw size={13} />
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Result badge */}
@@ -793,6 +887,14 @@ export default function Playground() {
               title="Clear conversation"
             >
               <Trash2 size={18} />
+            </button>
+            <button
+              onClick={reset}
+              disabled={isRunning}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-zinc-800 transition-colors disabled:opacity-40"
+              title="Reset conversation and config"
+            >
+              <RotateCcw size={18} />
             </button>
           </div>
         </div>
