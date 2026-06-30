@@ -5,6 +5,7 @@ pub(crate) mod db_pool;
 pub mod guardrails;
 pub mod log_store;
 pub mod mem0_plugin;
+#[cfg(feature = "memgraph")]
 pub mod memory_plugin;
 pub mod model_catalog;
 pub mod otel_plugin;
@@ -13,7 +14,7 @@ pub mod rag_plugin;
 pub mod rate_limit_store;
 pub mod semantic_cache;
 pub mod system_prompt_store;
-
+ 
 pub mod batching;
 pub mod mcp_server_store;
 pub mod organization_store;
@@ -23,13 +24,13 @@ pub mod search_tool_store;
 pub mod structured_output;
 pub mod use_cases;
 pub mod virtual_key_store;
-
+ 
 pub use mcp_server_store::McpServerStore;
 pub use organization_store::OrganizationStore;
 pub use search_tool_store::SearchToolStore;
 pub use system_prompt_store::SystemPromptStore;
 pub use virtual_key_store::VirtualKeyStore;
-
+ 
 pub use batching::BatchingPlugin;
 pub use budget_store::{BudgetPlugin, BudgetStore};
 pub use cache_aligner::CacheAlignerPlugin;
@@ -40,6 +41,7 @@ pub use log_store::{
     GuardrailsTimeline, KeywordCount, LogEntry, LogFilter, LogStats, LogStatus, LogStore,
 };
 pub use mem0_plugin::Mem0Plugin;
+#[cfg(feature = "memgraph")]
 pub use memory_plugin::MemoryPlugin;
 pub use model_catalog::{ModelCatalog, ModelHealth, ModelInfo, PricingReloadStatus};
 pub use otel_plugin::{OtelConfig, OtelPlugin};

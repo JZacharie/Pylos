@@ -1,0 +1,58 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+    <Package
+        Name="Pylos"
+        Manufacturer="Pylos"
+        Version="$(version)"
+        UpgradeCode="89abcdef-0123-4567-89ab-cdef01234567"
+        Scope="perMachine">
+
+        <MajorUpgrade
+            DowngradeErrorMessage="A newer version of Pylos is already installed."
+            Schedule="afterInstallInitialize" />
+
+        <MediaTemplate EmbedCab="yes" />
+
+        <!-- Installation directory: ProgramFiles64Folder\Pylos\ -->
+        <StandardDirectory Id="ProgramFiles64Folder">
+            <Directory Id="INSTALLDIR" Name="Pylos">
+                <Component Id="PylosBinary" Guid="98765432-10fe-dcba-9876-543210fedcba">
+                    <File Id="PylosExe" Name="pylos.exe" Source="$(var.PylosBinary)" Vital="yes" />
+                </Component>
+                <Component Id="PylosIcon" Guid="fedcba09-8765-4321-fe09-87654321fe09">
+                    <File Id="PylosIco" Name="pylos.ico" Source="resources/pylos.ico" Vital="yes" />
+                </Component>
+            </Directory>
+        </StandardDirectory>
+
+        <!-- Start menu shortcut -->
+        <StandardDirectory Id="ProgramMenuFolder">
+            <Directory Id="ApplicationProgramsFolder" Name="Pylos">
+                <Component Id="StartMenuShortcut" Guid="87654321-0fed-cba9-8765-43210fedcba9">
+                    <Shortcut
+                        Id="PylosStartMenu"
+                        Name="Pylos"
+                        Description="Pylos AI Gateway"
+                        Target="[INSTALLDIR]pylos.exe"
+                        WorkingDirectory="INSTALLDIR" />
+                    <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+                    <RegistryValue Root="HKCU" Key="Software\Pylos\Pylos" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+                </Component>
+            </Directory>
+        </StandardDirectory>
+
+        <!-- Registry for Add/Remove Programs -->
+        <Component Id="RegistryEntries" Guid="76543210-fedc-ba98-7654-3210fedcba98">
+            <RegistryKey Root="HKLM" Key="Software\Pylos\Pylos">
+                <RegistryValue Name="version" Type="string" Value="$(version)" />
+                <RegistryValue Name="install_dir" Type="string" Value="[INSTALLDIR]" />
+            </RegistryKey>
+        </Component>
+
+        <Feature Id="MainFeature" Title="Pylos" Level="1">
+            <ComponentRef Id="PylosBinary" />
+            <ComponentRef Id="PylosIcon" />
+            <ComponentRef Id="StartMenuShortcut" />
+            <ComponentRef Id="RegistryEntries" />
+        </Feature>
+    </Package>
+</Wix>

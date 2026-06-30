@@ -1,3 +1,5 @@
+#![cfg(feature = "memgraph")]
+
 use async_trait::async_trait;
 use neo4rs::{query, Graph};
 use std::sync::Arc;

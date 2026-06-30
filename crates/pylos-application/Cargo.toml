@@ -25,8 +25,11 @@ reqwest = { workspace = true }
 regex = "1.10"
 jsonschema = "0.46"
 moka = { workspace = true }
-neo4rs = "0.8.0"
+neo4rs = { version = "0.8.0", optional = true }
 
+[features]
+default = []
+memgraph = ["dep:neo4rs"]
 
 [dev-dependencies]
 tempfile = "3"

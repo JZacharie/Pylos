@@ -492,28 +492,35 @@ impl AppState {
                     tracing::info!(name = "semantic_cache", "Semantic Cache plugin enabled");
                 }
                 "memory" => {
-                    let memgraph_url = std::env::var("MEMGRAPH_URL")
-                        .unwrap_or_else(|_| "127.0.0.1:7687".to_string());
+                    #[cfg(feature = "memgraph")]
+                    {
+                        let memgraph_url = std::env::var("MEMGRAPH_URL")
+                            .unwrap_or_else(|_| "127.0.0.1:7687".to_string());
 
-                    // Since register_plugins is sync and MemoryPlugin::new is async, we use block_on or spawn.
-                    // Because register_plugins is called in an async context (from_config_with_dir), we can't easily await inside sync.
-                    // Let's create the runtime block here to await the connection:
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        let plugin_res = tokio::task::block_in_place(|| {
-                            handle.block_on(async {
-                                pylos_application::MemoryPlugin::new(memgraph_url).await
-                            })
-                        });
+                        // Since register_plugins is sync and MemoryPlugin::new is async, we use block_on or spawn.
+                        // Because register_plugins is called in an async context (from_config_with_dir), we can't easily await inside sync.
+                        // Let's create the runtime block here to await the connection:
+                        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                            let plugin_res = tokio::task::block_in_place(|| {
+                                handle.block_on(async {
+                                    pylos_application::MemoryPlugin::new(memgraph_url).await
+                                })
+                            });
 
-                        if let Ok(plugin) = plugin_res {
-                            plugins.push(Arc::new(plugin));
-                            tracing::info!(
-                                name = "memory",
-                                "Cross-Agent Memory (Memgraph) plugin enabled"
-                            );
-                        } else {
-                            tracing::error!("Failed to connect to Memgraph");
+                            if let Ok(plugin) = plugin_res {
+                                plugins.push(Arc::new(plugin));
+                                tracing::info!(
+                                    name = "memory",
+                                    "Cross-Agent Memory (Memgraph) plugin enabled"
+                                );
+                            } else {
+                                tracing::error!("Failed to connect to Memgraph");
+                            }
                         }
+                    }
+                    #[cfg(not(feature = "memgraph"))]
+                    {
+                        tracing::warn!("Memory (memgraph) plugin requested in configuration, but support for Memgraph is not compiled into this binary.");
                     }
                 }
                 "guardrails" => {
