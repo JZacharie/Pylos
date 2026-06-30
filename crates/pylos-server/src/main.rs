@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use axum::Router;
 use opentelemetry::trace::TracerProvider as _;
 use pylos_server::infrastructure::otel;
 use pylos_server::routes::create_router;
@@ -11,9 +12,6 @@ async fn main() -> anyhow::Result<()> {
     let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
     dotenvy::dotenv().ok();
 
-    // Résolution du chemin de config pour deux usages :
-    //   1. Niveau de log (avant init subscriber)
-    //   2. Chargement complet de l'état (AppState::from_config)
     let config_path = std::env::var("PYLOS_CONFIG")
         .ok()
         .map(PathBuf::from)
@@ -26,7 +24,6 @@ async fn main() -> anyhow::Result<()> {
             }
         });
 
-    // Niveau de log : RUST_LOG env var > pylos.json server.log_level > "info"
     let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| {
         config_path
             .as_ref()
@@ -40,8 +37,6 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|| "info".into())
     });
 
-    // OpenTelemetry (OTLP via OTEL_ENDPOINT)
-    // Appelé AVANT l'init du subscriber — ses logs utilisent eprintln! pour être visibles
     let _otel_provider = otel::setup_otel();
     let otel_tracer = _otel_provider.as_ref().map(|p| p.tracer("pylos"));
 
@@ -52,7 +47,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_default()
         == "json";
 
-    // Initialisation unique du subscriber avec TOUS les layers (fmt + OTel)
     if is_json {
         let otel_layer = otel_tracer
             .as_ref()
@@ -83,10 +77,8 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!(path = %p.display(), "Using config file");
     }
 
-    // Construction de l'état depuis la config
     let state = AppState::from_config(config_path).await?;
 
-    // Warning si l'API management n'est pas protégée
     let admin_key_set = state.admin_key_hash.read().await.is_some();
     let setup_needed = *state.setup_required.read().await;
 
@@ -100,21 +92,45 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("Management API protected with admin key hash");
     }
 
-    // Port depuis la config ou PORT env var (env var prioritaire pour docker/k8s)
     let port = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(state.config_store.get_port().await);
 
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+    let api_addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
 
-    // Création du router Axum
     let app = create_router(state);
 
-    tracing::info!("Pylos listening on {}", addr);
+    if pylos_server::ui::is_ui_available() {
+        tracing::info!("Admin UI available at http://localhost:{}", port);
+    } else {
+        tracing::warn!("Admin UI not embedded — run `cd ui && npm run build` first");
+    }
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, app).await?;
+    // Serve UI on a separate port if PYLOS_UI_PORT is set (e.g. 8080)
+    let ui_port = std::env::var("PYLOS_UI_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok());
+
+    let api_listener = tokio::net::TcpListener::bind(&api_addr).await?;
+
+    if let Some(ui_port) = ui_port {
+        let ui_addr = std::net::SocketAddr::from(([0, 0, 0, 0], ui_port));
+        let ui_app = Router::new().fallback_service(tower::service_fn(
+            |req: axum::http::Request<axum::body::Body>| async move {
+                Ok::<_, std::convert::Infallible>(pylos_server::ui::serve_ui(req).await)
+            },
+        ));
+        let ui_listener = tokio::net::TcpListener::bind(&ui_addr).await?;
+        tracing::info!("Admin UI also serving on http://localhost:{}", ui_port);
+
+        tokio::try_join!(
+            axum::serve(api_listener, app),
+            axum::serve(ui_listener, ui_app),
+        )?;
+    } else {
+        axum::serve(api_listener, app).await?;
+    }
 
     Ok(())
 }

@@ -847,7 +847,41 @@ fn auto_detect_config() -> PylosConfig {
         Some("https://api.cerebras.ai/v1"),
     );
 
-    // AWS Bedrock — auto-détection si AWS_ACCESS_KEY_ID ou profil AWS présent
+    // Ollama — auto-détection via OLLAMA_BASE_URL
+    let ollama_url = std::env::var("OLLAMA_BASE_URL")
+        .ok()
+        .filter(|u| !u.is_empty());
+    if ollama_url.is_some() || std::env::var("OLLAMA_API_KEY").is_ok() {
+        let provider = ProviderConfig {
+            keys: vec![ProviderKeyConfig {
+                name: "default".into(),
+                value: std::env::var("OLLAMA_API_KEY")
+                    .ok()
+                    .map(EnvVar::Literal)
+                    .unwrap_or(EnvVar::Literal("ollama".into())),
+                models: vec!["*".into()],
+                weight: 1.0,
+                bedrock_key_config: None,
+                azure_config: None,
+            }],
+            network: NetworkConfig {
+                base_url: ollama_url.or_else(|| Some("http://localhost:11434".into())),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        config.providers.insert("ollama".into(), provider);
+        detected.push("ollama");
+    }
+
+    // Lemonade
+    add_provider_from_env(
+        &mut config,
+        &mut detected,
+        "lemonade",
+        "LEMONADE_API_KEY",
+        None,
+    );
     // Priorité à AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY explicites
     // Sinon tente la chaîne de credentials par défaut (IAM role, IRSA, etc.)
     let has_aws_keys = std::env::var("AWS_ACCESS_KEY_ID").is_ok()
@@ -1076,7 +1110,7 @@ fn build_runtime_providers(
             "xai" | "x-ai" => ProviderKind::XAI,
             "nebius" => ProviderKind::Nebius,
             "deepseek" => ProviderKind::DeepSeek,
-            "ollama-jo3" => ProviderKind::Ollama,
+            "ollama-jo3" | "ollama" => ProviderKind::Ollama,
             "openrouter" => ProviderKind::OpenRouter,
             "lemonade" => ProviderKind::Lemonade,
             other => ProviderKind::Custom(other.to_string()),

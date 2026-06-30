@@ -12,12 +12,15 @@ use crate::state::AppState;
 
 pub mod setup;
 use axum::{
+    body::Body,
     extract::DefaultBodyLimit,
     http::Method,
     middleware,
     routing::{delete, get, post, put},
     Router,
 };
+use std::convert::Infallible;
+use tower::service_fn;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
@@ -86,6 +89,7 @@ pub fn create_router(state: AppState) -> Router {
         // Provider management routes (protected)
         .route("/providers", get(config::list_providers))
         .route("/providers", post(config::create_provider))
+        .route("/providers/defaults", get(config::list_provider_defaults))
         .route("/providers/{name}", put(config::upsert_provider))
         .route("/providers/{name}", delete(config::delete_provider))
         .route("/providers/{name}/test", post(config::test_provider))
@@ -261,7 +265,6 @@ pub fn create_router(state: AppState) -> Router {
         );
 
     Router::new()
-        .route("/", get(health::root))
         .route("/health", get(health::health_check))
         .route("/metrics", get(metrics::metrics))
         .merge(auth_routes)
@@ -275,6 +278,10 @@ pub fn create_router(state: AppState) -> Router {
         .layer(TraceLayer::new_for_http())
         .layer(middleware::from_fn(request_id_middleware))
         .layer(build_cors(&state))
+        // Fallback SPA — sert l'UI pour toutes les routes non-API
+        .fallback_service(service_fn(|req: axum::http::Request<Body>| async move {
+            Ok::<_, Infallible>(crate::ui::serve_ui(req).await)
+        }))
         .with_state(state)
 }
 

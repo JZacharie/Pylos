@@ -2,10 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { providersApi, type Provider } from '../lib/api'
 import { providerColor } from '../lib/utils'
-import { Key, Globe, RotateCcw, Plus, Pencil, Trash2, X, Check, AlertTriangle } from 'lucide-react'
+import { Key, Globe, RotateCcw, Plus, Pencil, Trash2, X, Check, AlertTriangle, Sparkles } from 'lucide-react'
 import { ProviderIcon } from '../components/ProviderIcon'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface KeyEntry { name: string; value: string; models: string; weight: number }
 
@@ -17,6 +15,15 @@ interface ProviderFormState {
   max_retries: number
 }
 
+interface ProviderPreset {
+  name: string
+  label: string
+  base_url: string | null
+  env_var: string | null
+  docs_url: string | null
+  default_models: string[]
+}
+
 const DEFAULT_FORM: ProviderFormState = {
   name: '',
   keys: [{ name: 'default', value: '', models: '*', weight: 1.0 }],
@@ -24,8 +31,6 @@ const DEFAULT_FORM: ProviderFormState = {
   timeout_secs: 30,
   max_retries: 3,
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formToPayload(form: ProviderFormState) {
   return {
@@ -58,7 +63,17 @@ function providerToForm(p: Provider): ProviderFormState {
   }
 }
 
-// ─── ProviderModal ────────────────────────────────────────────────────────────
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  { name: 'openai', label: 'OpenAI', base_url: null, env_var: 'OPENAI_API_KEY', docs_url: 'https://platform.openai.com/api-keys', default_models: ['gpt-4o', 'gpt-4o-mini'] },
+  { name: 'anthropic', label: 'Anthropic', base_url: null, env_var: 'ANTHROPIC_API_KEY', docs_url: 'https://console.anthropic.com/settings/keys', default_models: ['claude-sonnet-4-5', 'claude-haiku-3-5'] },
+  { name: 'ollama', label: 'Ollama (Local)', base_url: 'http://localhost:11434', env_var: null, docs_url: 'https://ollama.ai/download', default_models: ['llama3.2:3b', 'llama3.1:8b', 'mistral:7b'] },
+  { name: 'lemonade', label: 'Lemonade', base_url: null, env_var: 'LEMONADE_API_KEY', docs_url: null, default_models: ['lemonade-optimus'] },
+  { name: 'deepseek', label: 'DeepSeek', base_url: 'https://api.deepseek.com', env_var: 'DEEPSEEK_API_KEY', docs_url: 'https://platform.deepseek.com/api_keys', default_models: ['deepseek-v4-pro', 'deepseek-v4-flash'] },
+  { name: 'gemini', label: 'Google Gemini', base_url: 'https://generativelanguage.googleapis.com/v1beta', env_var: 'GEMINI_API_KEY', docs_url: 'https://aistudio.google.com/apikey', default_models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
+  { name: 'groq', label: 'Groq', base_url: 'https://api.groq.com/openai/v1', env_var: 'GROQ_API_KEY', docs_url: 'https://console.groq.com/keys', default_models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
+  { name: 'mistral', label: 'Mistral AI', base_url: 'https://api.mistral.ai/v1', env_var: 'MISTRAL_API_KEY', docs_url: 'https://console.mistral.ai/api-keys/', default_models: ['mistral-large-latest', 'mistral-small-latest'] },
+  { name: 'openrouter', label: 'OpenRouter', base_url: 'https://openrouter.ai/api/v1', env_var: 'OPENROUTER_API_KEY', docs_url: 'https://openrouter.ai/keys', default_models: [] },
+]
 
 function ProviderModal({
   initial,
@@ -76,6 +91,7 @@ function ProviderModal({
   error: string | null
 }) {
   const [form, setForm] = useState<ProviderFormState>(initial)
+  const [showPresets, setShowPresets] = useState(!isEdit && !initial.name)
 
   const setField = <K extends keyof ProviderFormState>(k: K, v: ProviderFormState[K]) =>
     setForm(f => ({ ...f, [k]: v }))
@@ -93,10 +109,20 @@ function ProviderModal({
   const removeKey = (i: number) =>
     setForm(f => ({ ...f, keys: f.keys.filter((_, idx) => idx !== i) }))
 
+  const applyPreset = (preset: ProviderPreset) => {
+    setForm({
+      name: preset.name,
+      keys: [{ name: 'default', value: '', models: preset.default_models.join(', ') || '*', weight: 1.0 }],
+      base_url: preset.base_url || '',
+      timeout_secs: 30,
+      max_retries: 3,
+    })
+    setShowPresets(false)
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-zinc-800/50">
           <h2 className="text-lg font-semibold text-white">
             {isEdit ? 'Edit provider' : 'Add provider'}
@@ -107,30 +133,79 @@ function ProviderModal({
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Provider name */}
+          {showPresets && !isEdit ? (
+            <div>
+              <label className="block text-xs text-zinc-400 mb-3">Quick-add a provider</label>
+              <div className="grid grid-cols-2 gap-2">
+                {PROVIDER_PRESETS.map(p => (
+                  <button
+                    key={p.name}
+                    onClick={() => applyPreset(p)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-zinc-800/50
+                      bg-zinc-950/30 hover:bg-zinc-800/40 hover:border-zinc-700/50 transition-all text-left"
+                  >
+                    <div
+                      className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+                      style={{ background: providerColor(p.name) + '20', color: providerColor(p.name) }}
+                    >
+                      <ProviderIcon name={p.name} size={13} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm text-zinc-200 truncate">{p.label}</div>
+                      {p.base_url && <div className="text-[10px] text-zinc-500 truncate font-mono">{p.base_url}</div>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800/50" /></div>
+                <div className="relative flex justify-center"><span className="bg-zinc-900 px-2 text-xs text-zinc-600">or configure manually</span></div>
+              </div>
+            </div>
+          ) : null}
+
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5">Provider name *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={e => setField('name', e.target.value)}
-              disabled={isEdit}
-              placeholder="openai, anthropic, ollama…"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
-                disabled:opacity-50 disabled:cursor-not-allowed
-                focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setField('name', e.target.value)}
+                disabled={isEdit}
+                placeholder="openai, anthropic, ollama…"
+                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+              />
+              {!isEdit && !showPresets && (
+                <button
+                  onClick={() => setShowPresets(true)}
+                  className="px-2.5 py-2 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-950 border border-zinc-800
+                    rounded-lg hover:border-zinc-700 transition-colors flex items-center gap-1"
+                  title="Choose a preset"
+                >
+                  <Sparkles size={13} />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Network */}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3">
-              <label className="block text-xs text-zinc-400 mb-1.5">Base URL (optional)</label>
+              <label className="block text-xs text-zinc-400 mb-1.5">
+                Base URL
+                {form.name && PROVIDER_PRESETS.find(p => p.name === form.name)?.base_url
+                  ? <span className="text-zinc-600 font-normal ml-1">(default: {PROVIDER_PRESETS.find(p => p.name === form.name)!.base_url})</span>
+                  : null}
+              </label>
               <input
                 type="text"
                 value={form.base_url}
                 onChange={e => setField('base_url', e.target.value)}
-                placeholder="https://api.openai.com/v1"
+                placeholder={(() => {
+                  const preset = PROVIDER_PRESETS.find(p => p.name === form.name)
+                  return preset?.base_url || 'https://api.openai.com/v1'
+                })()}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
                   focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 font-mono"
               />
@@ -159,7 +234,6 @@ function ProviderModal({
             </div>
           </div>
 
-          {/* API Keys */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs text-zinc-400">API Keys</label>
@@ -197,12 +271,17 @@ function ProviderModal({
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">API Key value</label>
+                    <label className="block text-xs text-zinc-500 mb-1">
+                      API Key value
+                      {form.name && PROVIDER_PRESETS.find(p => p.name === form.name)?.env_var
+                        ? <span className="text-zinc-600 font-normal ml-1">(or set env {PROVIDER_PRESETS.find(p => p.name === form.name)!.env_var})</span>
+                        : null}
+                    </label>
                     <input
                       type="password"
                       value={k.value}
                       onChange={e => setKey(i, 'value', e.target.value)}
-                      placeholder={isEdit ? '(unchanged — leave blank to keep)' : 'sk-…'}
+                      placeholder={isEdit ? '(unchanged)' : (PROVIDER_PRESETS.find(p => p.name === form.name)?.env_var ? `env.${PROVIDER_PRESETS.find(p => p.name === form.name)!.env_var}` : 'sk-…')}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200
                         font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
                     />
@@ -212,7 +291,11 @@ function ProviderModal({
                     <input
                       value={k.models}
                       onChange={e => setKey(i, 'models', e.target.value)}
-                      placeholder="*, gpt-4o, gpt-4o-mini"
+                      placeholder={
+                        form.name && PROVIDER_PRESETS.find(p => p.name === form.name)
+                          ? PROVIDER_PRESETS.find(p => p.name === form.name)!.default_models.join(', ')
+                          : '*, gpt-4o, gpt-4o-mini'
+                      }
                       className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200
                         font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
                     />
@@ -230,7 +313,6 @@ function ProviderModal({
             </div>
           </div>
 
-          {/* Error */}
           {error && (
             <div className="flex items-center gap-2 text-red-400 text-xs bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
               <AlertTriangle size={13} />
@@ -239,7 +321,6 @@ function ProviderModal({
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-zinc-800/50">
           <button
             onClick={onClose}
@@ -265,8 +346,6 @@ function ProviderModal({
     </div>
   )
 }
-
-// ─── DeleteConfirmModal ───────────────────────────────────────────────────────
 
 function DeleteConfirmModal({
   name,
@@ -312,8 +391,6 @@ function DeleteConfirmModal({
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 export default function Providers() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
@@ -354,7 +431,6 @@ export default function Providers() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Providers</h1>
@@ -372,7 +448,6 @@ export default function Providers() {
         </button>
       </div>
 
-      {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {isLoading
           ? Array.from({ length: 3 }).map((_, i) => (
@@ -394,7 +469,6 @@ export default function Providers() {
         )}
       </div>
 
-      {/* Create modal */}
       {showCreate && (
         <ProviderModal
           initial={DEFAULT_FORM}
@@ -406,7 +480,6 @@ export default function Providers() {
         />
       )}
 
-      {/* Edit modal */}
       {editingProvider && (
         <ProviderModal
           initial={providerToForm(editingProvider)}
@@ -418,7 +491,6 @@ export default function Providers() {
         />
       )}
 
-      {/* Delete confirm */}
       {deletingProvider && (
         <DeleteConfirmModal
           name={deletingProvider.name}
@@ -430,8 +502,6 @@ export default function Providers() {
     </div>
   )
 }
-
-// ─── ProviderCard ─────────────────────────────────────────────────────────────
 
 function ProviderCard({
   provider,
@@ -466,7 +536,6 @@ function ProviderCard({
   return (
     <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-5 hover:border-zinc-700/50
       transition-colors group">
-      {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center"
@@ -503,7 +572,6 @@ function ProviderCard({
           >
             <RotateCcw size={13} className={testing ? 'animate-spin' : ''} />
           </button>
-          {/* Actions — visible on hover */}
           <button
             onClick={e => { e.stopPropagation(); onEdit() }}
             className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-500 hover:text-white
@@ -523,7 +591,6 @@ function ProviderCard({
         </div>
       </div>
 
-      {/* Network info */}
       <div className="space-y-2 text-xs">
         {provider.network.base_url && (
           <div className="flex items-center gap-2 text-zinc-400">
@@ -540,7 +607,6 @@ function ProviderCard({
         </div>
       </div>
 
-      {/* Keys preview */}
       {provider.keys.length > 0 && (
         <div className="mt-3 pt-3 border-t border-zinc-800/50 space-y-1.5">
           {provider.keys.slice(0, 3).map((k, i) => (

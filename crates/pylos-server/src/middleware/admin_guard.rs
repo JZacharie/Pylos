@@ -36,6 +36,14 @@ pub async fn admin_guard_middleware(
         .and_then(|v| v.strip_prefix("Bearer "));
 
     if let Some(token) = auth_header {
+        // First check if the token matches the admin key directly (raw key as Bearer)
+        if let Some(expected_hash) = &*state.admin_key_hash.read().await {
+            let provided_hash = crate::state::hash_sha256(token);
+            if provided_hash == *expected_hash {
+                return next.run(request).await;
+            }
+        }
+        // Then try JWT validation
         if let Ok(claims) = jsonwebtoken::decode::<serde_json::Value>(
             token,
             &jsonwebtoken::DecodingKey::from_secret(state.jwt_secret.as_bytes()),

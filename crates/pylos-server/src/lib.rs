@@ -8,3 +8,4 @@ pub mod middleware;
 pub mod provider_utils;
 pub mod routes;
 pub mod state;
+pub mod ui;

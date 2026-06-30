@@ -21,20 +21,28 @@ setup: ## Installe les outils de développement nécessaires
 	@echo "Setup complete."
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-build: ## Compile en mode release
+build: ui-build ## Compile en mode release avec l'UI intégrée
 	$(call check_tool,cargo)
 	cargo build --release -p pylos-server
 
-build-dev: ## Compile en mode debug (rapide)
+build-dev: ui-build ## Compile en mode debug (rapide) avec l'UI intégrée
+	$(call check_tool,cargo)
+	cargo build -p pylos-server
+
+build-backend: ## Compile le backend seul (sans rebuild UI)
+	$(call check_tool,cargo)
+	cargo build --release -p pylos-server
+
+build-backend-dev: ## Compile le backend seul en debug (sans rebuild UI)
 	$(call check_tool,cargo)
 	cargo build -p pylos-server
 
 # ── Run ───────────────────────────────────────────────────────────────────────
-run: ## Lance le serveur en mode dev (rechargement manuel)
+run: ui-build ## Lance le serveur en mode dev (rechargement manuel) avec UI intégrée
 	$(call check_tool,cargo)
 	RUST_LOG=info cargo run -p pylos-server
 
-run-config: ## Lance le serveur avec un fichier de config spécifique
+run-config: ui-build ## Lance le serveur avec un fichier de config spécifique
 	$(call check_tool,cargo)
 	RUST_LOG=info cargo run -p pylos-server -- --config pylos.json
 

@@ -240,6 +240,28 @@ pub fn default_base_url(kind: &ProviderKind) -> Option<&'static str> {
         ProviderKind::Gemini => Some("https://generativelanguage.googleapis.com/v1beta"),
         ProviderKind::Cohere => Some("https://api.cohere.ai"),
         ProviderKind::DeepSeek => Some("https://api.deepseek.com"),
+        ProviderKind::Ollama => Some("http://localhost:11434"),
+        _ => None,
+    }
+}
+
+/// Environnement variable par défaut pour la clé API d'un provider
+pub fn default_env_var(kind: &ProviderKind) -> Option<&'static str> {
+    match kind {
+        ProviderKind::OpenAI => Some("OPENAI_API_KEY"),
+        ProviderKind::Anthropic => Some("ANTHROPIC_API_KEY"),
+        ProviderKind::Groq => Some("GROQ_API_KEY"),
+        ProviderKind::Mistral => Some("MISTRAL_API_KEY"),
+        ProviderKind::DeepSeek => Some("DEEPSEEK_API_KEY"),
+        ProviderKind::Gemini => Some("GEMINI_API_KEY"),
+        ProviderKind::Cohere => Some("COHERE_API_KEY"),
+        ProviderKind::Perplexity => Some("PERPLEXITY_API_KEY"),
+        ProviderKind::XAI => Some("XAI_API_KEY"),
+        ProviderKind::Cerebras => Some("CEREBRAS_API_KEY"),
+        ProviderKind::Nebius => Some("NEBIUS_API_KEY"),
+        ProviderKind::Fireworks => Some("FIREWORKS_API_KEY"),
+        ProviderKind::OpenRouter => Some("OPENROUTER_API_KEY"),
+        ProviderKind::Lemonade => Some("LEMONADE_API_KEY"),
         _ => None,
     }
 }

@@ -689,6 +689,97 @@ pub async fn promote_to_production() -> Result<serde_json::Value, String> {
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /config/guardrails
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /providers/defaults — presets de configuration pour les providers courants
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct ProviderPreset {
+    pub name: &'static str,
+    pub label: &'static str,
+    pub base_url: Option<&'static str>,
+    pub env_var: Option<&'static str>,
+    pub docs_url: Option<&'static str>,
+    pub default_models: Vec<&'static str>,
+}
+
+pub async fn list_provider_defaults() -> impl IntoResponse {
+    let presets = vec![
+        ProviderPreset {
+            name: "openai",
+            label: "OpenAI",
+            base_url: None,
+            env_var: Some("OPENAI_API_KEY"),
+            docs_url: Some("https://platform.openai.com/api-keys"),
+            default_models: vec!["gpt-4o", "gpt-4o-mini"],
+        },
+        ProviderPreset {
+            name: "anthropic",
+            label: "Anthropic",
+            base_url: None,
+            env_var: Some("ANTHROPIC_API_KEY"),
+            docs_url: Some("https://console.anthropic.com/settings/keys"),
+            default_models: vec!["claude-sonnet-4-5", "claude-haiku-3-5"],
+        },
+        ProviderPreset {
+            name: "ollama",
+            label: "Ollama (Local)",
+            base_url: Some("http://localhost:11434"),
+            env_var: None,
+            docs_url: Some("https://ollama.ai/download"),
+            default_models: vec!["llama3.2:3b", "llama3.1:8b", "mistral:7b"],
+        },
+        ProviderPreset {
+            name: "lemonade",
+            label: "Lemonade",
+            base_url: None,
+            env_var: Some("LEMONADE_API_KEY"),
+            docs_url: None,
+            default_models: vec!["lemonade-optimus"],
+        },
+        ProviderPreset {
+            name: "deepseek",
+            label: "DeepSeek",
+            base_url: Some("https://api.deepseek.com"),
+            env_var: Some("DEEPSEEK_API_KEY"),
+            docs_url: Some("https://platform.deepseek.com/api_keys"),
+            default_models: vec!["deepseek-v4-pro", "deepseek-v4-flash"],
+        },
+        ProviderPreset {
+            name: "gemini",
+            label: "Google Gemini",
+            base_url: Some("https://generativelanguage.googleapis.com/v1beta"),
+            env_var: Some("GEMINI_API_KEY"),
+            docs_url: Some("https://aistudio.google.com/apikey"),
+            default_models: vec!["gemini-2.5-pro", "gemini-2.5-flash"],
+        },
+        ProviderPreset {
+            name: "groq",
+            label: "Groq",
+            base_url: Some("https://api.groq.com/openai/v1"),
+            env_var: Some("GROQ_API_KEY"),
+            docs_url: Some("https://console.groq.com/keys"),
+            default_models: vec!["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+        },
+        ProviderPreset {
+            name: "mistral",
+            label: "Mistral AI",
+            base_url: Some("https://api.mistral.ai/v1"),
+            env_var: Some("MISTRAL_API_KEY"),
+            docs_url: Some("https://console.mistral.ai/api-keys/"),
+            default_models: vec!["mistral-large-latest", "mistral-small-latest"],
+        },
+        ProviderPreset {
+            name: "openrouter",
+            label: "OpenRouter",
+            base_url: Some("https://openrouter.ai/api/v1"),
+            env_var: Some("OPENROUTER_API_KEY"),
+            docs_url: Some("https://openrouter.ai/keys"),
+            default_models: vec![],
+        },
+    ];
+    Json(json!({ "defaults": presets, "total": presets.len() }))
+}
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateGuardrailsRequest {

@@ -38,6 +38,8 @@ tracing-opentelemetry = { workspace = true }
 jsonwebtoken = { workspace = true }
 dotenvy = { workspace = true }
 sha2 = "0.10"
+rust-embed = { version = "8.5", features = ["interpolate-folder-path"] }
+mime_guess = "2"
 
 [features]
 default = []

@@ -120,23 +120,18 @@ pub async fn list_collections(State(_state): State<AppState>) -> impl IntoRespon
     let resp = match client.get(&url).send().await {
         Ok(r) => r,
         Err(e) => {
-            error!("Failed to fetch collections from Qdrant: {:?}", e);
-            return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({ "error": format!("Failed to connect to Qdrant: {}", e) })),
-            )
-                .into_response();
+            info!("Qdrant not available, returning empty collections: {:?}", e);
+            return Json(json!({ "collections": [] })).into_response();
         }
     };
 
     if !resp.status().is_success() {
         let err_body = resp.text().await.unwrap_or_default();
-        error!("Qdrant collections API returned error: {}", err_body);
-        return (
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "error": format!("Qdrant returned error: {}", err_body) })),
-        )
-            .into_response();
+        info!(
+            "Qdrant collections API returned error, returning empty: {}",
+            err_body
+        );
+        return Json(json!({ "collections": [] })).into_response();
     }
 
     let body: Value = match resp.json().await {
