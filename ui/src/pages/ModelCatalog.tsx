@@ -173,6 +173,12 @@ function ModelModal({
   const [form, setForm] = useState<ModelFormState>(initial)
   const [detailTab, setDetailTab] = useState('overview')
   const { data: providers } = useQuery({ queryKey: ['providers'], queryFn: providersApi.getAll })
+  const [isCustom, setIsCustom] = useState(() => {
+    if (!initial.provider) return false
+    const standardProviders = ['ollama', 'lemonade', 'gemini', 'openai', 'anthropic', 'deepseek']
+    const isStandardOrActive = providers?.providers?.some(p => p.name === initial.provider) || standardProviders.includes(initial.provider)
+    return !isStandardOrActive
+  })
 
   const set = <K extends keyof ModelFormState>(k: K, v: ModelFormState[K]) =>
     setForm(f => ({ ...f, [k]: v }))
@@ -249,17 +255,37 @@ function ModelModal({
                 </ProviderField>
                 <ProviderField label="Provider *">
                   <div className="relative">
-                    <select value={form.provider} onChange={e => set('provider', e.target.value)}
+                    <select
+                      value={isCustom ? '__custom__' : form.provider}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val === '__custom__') {
+                          setIsCustom(true)
+                          set('provider', '')
+                        } else {
+                          setIsCustom(false)
+                          set('provider', val)
+                        }
+                      }}
                       disabled={isEdit}
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
-                        disabled:opacity-50 appearance-none focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20">
+                        disabled:opacity-50 appearance-none focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20"
+                    >
                       <option value="">Select provider...</option>
+                      {/* Active providers */}
                       {providers?.providers?.map(p => (
                         <option key={p.name} value={p.name}>{p.name}</option>
                       ))}
+                      {/* Standard providers (if not already active) */}
+                      {!providers?.providers?.some(p => p.name === 'ollama') && <option value="ollama">ollama</option>}
+                      {!providers?.providers?.some(p => p.name === 'lemonade') && <option value="lemonade">lemonade</option>}
+                      {!providers?.providers?.some(p => p.name === 'gemini') && <option value="gemini">gemini</option>}
+                      {!providers?.providers?.some(p => p.name === 'openai') && <option value="openai">openai</option>}
+                      {!providers?.providers?.some(p => p.name === 'anthropic') && <option value="anthropic">anthropic</option>}
+                      {!providers?.providers?.some(p => p.name === 'deepseek') && <option value="deepseek">deepseek</option>}
                       <option value="__custom__">── Custom ──</option>
                     </select>
-                    {form.provider && form.provider !== '__custom__' && !providers?.providers?.find(p => p.name === form.provider) && (
+                    {isCustom && (
                       <input value={form.provider} onChange={e => set('provider', e.target.value)}
                         placeholder="custom-provider"
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
