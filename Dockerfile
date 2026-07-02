@@ -71,6 +71,12 @@ RUN rm -rf \
 COPY crates/ crates/
 COPY rustfmt.toml ./
 
+# Le crate pylos-server embarque l'UI via rust-embed (ui/dist).
+# On crée un répertoire vide pour que la macro ne plante pas, même si l'UI
+# n'est pas construite dans cette image (le serveur sert alors une page
+# d'avertissement).
+RUN mkdir -p ui/dist
+
 # Build de release pour la cible, et copie dans un chemin neutre
 RUN PKG_CONFIG=xx-pkg-config xx-cargo build --release -p pylos-server && \
     cp target/$(xx-cargo --print-target-triple)/release/pylos-server ./pylos-server
