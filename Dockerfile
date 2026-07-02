@@ -78,10 +78,18 @@ COPY rustfmt.toml ./
 RUN mkdir -p ui/dist
 
 # Build de release pour la cible, et copie dans un chemin neutre
-# xx-cargo dépose le binaire à un chemin variable selon qu'il cross-compile ou
-# non ; on utilise find pour le localiser
+# xx-cargo utilise --target ce qui crée un sous-répertoire dans target/.
+# On cherche explicitement dans target/*/release/ puis target/release/
 RUN PKG_CONFIG=xx-pkg-config xx-cargo build --release -p pylos-server && \
-    find target -type f -name pylos-server -exec cp {} ./pylos-server \;
+    src="$(ls target/*/release/pylos-server 2>/dev/null | head -1)" && \
+    if [ -z "$src" ]; then src="target/release/pylos-server"; fi && \
+    if [ -f "$src" ]; then \
+        cp "$src" ./pylos-server; \
+    else \
+        echo "ERROR: pylos-server not found in target/"; \
+        ls -d target/*/release/ 2>/dev/null || echo "(no target subdirs)"; \
+        exit 1; \
+    fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Runtime
