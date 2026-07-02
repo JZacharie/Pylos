@@ -78,13 +78,10 @@ COPY rustfmt.toml ./
 RUN mkdir -p ui/dist
 
 # Build de release pour la cible, et copie dans un chemin neutre
+# xx-cargo dépose le binaire à un chemin variable selon qu'il cross-compile ou
+# non ; on utilise find pour le localiser
 RUN PKG_CONFIG=xx-pkg-config xx-cargo build --release -p pylos-server && \
-    src="target/$(xx-cargo --print-target-triple)/release/pylos-server" && \
-    if [ -f "$src" ]; then \
-        cp "$src" ./pylos-server; \
-    else \
-        cp target/release/pylos-server ./pylos-server; \
-    fi
+    find target -type f -name pylos-server -exec cp {} ./pylos-server \;
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Runtime
