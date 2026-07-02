@@ -79,7 +79,12 @@ RUN mkdir -p ui/dist
 
 # Build de release pour la cible, et copie dans un chemin neutre
 RUN PKG_CONFIG=xx-pkg-config xx-cargo build --release -p pylos-server && \
-    cp target/$(xx-cargo --print-target-triple)/release/pylos-server ./pylos-server
+    src="target/$(xx-cargo --print-target-triple)/release/pylos-server" && \
+    if [ -f "$src" ]; then \
+        cp "$src" ./pylos-server; \
+    else \
+        cp target/release/pylos-server ./pylos-server; \
+    fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Runtime
