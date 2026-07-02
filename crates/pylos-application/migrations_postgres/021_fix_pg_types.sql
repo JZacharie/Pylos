@@ -3,12 +3,12 @@
 -- Runs in a separate transaction after 020 has committed the DROP DEFAULT,
 -- so PG does not need to cast the old default expression.
 
-ALTER TABLE model_catalog ALTER COLUMN supports_vision TYPE BOOLEAN USING (supports_vision != 0);
-ALTER TABLE model_catalog ALTER COLUMN supports_tools TYPE BOOLEAN USING (supports_tools != 0);
-ALTER TABLE model_catalog ALTER COLUMN supports_streaming TYPE BOOLEAN USING (supports_streaming != 0);
-ALTER TABLE model_catalog ALTER COLUMN supports_embeddings TYPE BOOLEAN USING (supports_embeddings != 0);
-ALTER TABLE model_catalog ALTER COLUMN is_deprecated TYPE BOOLEAN USING (is_deprecated != 0);
-ALTER TABLE model_catalog ALTER COLUMN enabled TYPE BOOLEAN USING (enabled != 0);
+ALTER TABLE model_catalog ALTER COLUMN supports_vision TYPE BOOLEAN USING (supports_vision::text::boolean);
+ALTER TABLE model_catalog ALTER COLUMN supports_tools TYPE BOOLEAN USING (supports_tools::text::boolean);
+ALTER TABLE model_catalog ALTER COLUMN supports_streaming TYPE BOOLEAN USING (supports_streaming::text::boolean);
+ALTER TABLE model_catalog ALTER COLUMN supports_embeddings TYPE BOOLEAN USING (supports_embeddings::text::boolean);
+ALTER TABLE model_catalog ALTER COLUMN is_deprecated TYPE BOOLEAN USING (is_deprecated::text::boolean);
+ALTER TABLE model_catalog ALTER COLUMN enabled TYPE BOOLEAN USING (enabled::text::boolean);
 
 ALTER TABLE model_catalog ALTER COLUMN supports_vision SET DEFAULT FALSE;
 ALTER TABLE model_catalog ALTER COLUMN supports_tools SET DEFAULT TRUE;
