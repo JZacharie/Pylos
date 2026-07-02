@@ -78,16 +78,17 @@ COPY rustfmt.toml ./
 RUN mkdir -p ui/dist
 
 # Build de release pour la cible, et copie dans un chemin neutre
-# xx-cargo utilise --target ce qui crée un sous-répertoire dans target/.
-# On cherche explicitement dans target/*/release/ puis target/release/
+# Note: le [[bin]] name = "pylos" dans Cargo.toml produit un binaire
+# nommé "pylos" (pas "pylos-server"). xx-cargo ajoute --target, donc le
+# binaire est dans target/<triple>/release/pylos ou target/release/pylos.
 RUN PKG_CONFIG=xx-pkg-config xx-cargo build --release -p pylos-server && \
-    src="$(ls target/*/release/pylos-server 2>/dev/null | head -1)" && \
-    if [ -z "$src" ]; then src="target/release/pylos-server"; fi && \
+    src="$(ls target/*/release/pylos 2>/dev/null | head -1)" && \
+    if [ -z "$src" ]; then src="target/release/pylos"; fi && \
     if [ -f "$src" ]; then \
         cp "$src" ./pylos-server; \
     else \
-        echo "ERROR: pylos-server not found in target/"; \
-        ls -d target/*/release/ 2>/dev/null || echo "(no target subdirs)"; \
+        echo "ERROR: pylos binary not found in target/"; \
+        ls -la target/*/release/pylos* 2>/dev/null || true; \
         exit 1; \
     fi
 
