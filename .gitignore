@@ -21,6 +21,7 @@ vault-token
 .vscode/
 *.iml
 .DS_Store
+.kiro
 
 # ── Docker volumes locaux ────────────────────────────────────────────────────
 docker/grafana/data/
@@ -37,3 +38,7 @@ Final_project_Survey.xlsx
 # SQLite databases
 .sqlite/
 
+# ── BMAD ────────────────────────────────────────────────────
+
+_bmad
+_bmad_output
