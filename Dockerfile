@@ -71,9 +71,26 @@ RUN rm -rf \
 COPY crates/ crates/
 COPY rustfmt.toml ./
 
+# Le crate pylos-server embarque l'UI via rust-embed (ui/dist).
+# On crée un répertoire vide pour que la macro ne plante pas, même si l'UI
+# n'est pas construite dans cette image (le serveur sert alors une page
+# d'avertissement).
+RUN mkdir -p ui/dist
+
 # Build de release pour la cible, et copie dans un chemin neutre
+# Note: le [[bin]] name = "pylos" dans Cargo.toml produit un binaire
+# nommé "pylos" (pas "pylos-server"). xx-cargo ajoute --target, donc le
+# binaire est dans target/<triple>/release/pylos ou target/release/pylos.
 RUN PKG_CONFIG=xx-pkg-config xx-cargo build --release -p pylos-server && \
-    cp target/$(xx-cargo --print-target-triple)/release/pylos-server ./pylos-server
+    src="$(ls target/*/release/pylos 2>/dev/null | head -1)" && \
+    if [ -z "$src" ]; then src="target/release/pylos"; fi && \
+    if [ -f "$src" ]; then \
+        cp "$src" ./pylos-server; \
+    else \
+        echo "ERROR: pylos binary not found in target/"; \
+        ls -la target/*/release/pylos* 2>/dev/null || true; \
+        exit 1; \
+    fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Runtime

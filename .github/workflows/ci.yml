@@ -22,6 +22,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
       # - name: Format check
       #   run: cargo fmt --all -- --check
+      - name: Create UI stub for rust-embed
+        run: mkdir -p ui/dist
       - name: Lint with clippy
         run: cargo clippy -- -D warnings
       - name: Run tests

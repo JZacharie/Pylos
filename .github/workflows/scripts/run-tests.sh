@@ -4,6 +4,9 @@ set -euo pipefail
 # Comprehensive test runner for Pylos PR validation
 # This script runs all test suites to validate changes
 
+# Création du répertoire stub pour rust-embed (ui/dist)
+mkdir -p ui/dist
+
 echo "🧪 Starting Pylos Test Suite..."
 echo "=================================="
 
