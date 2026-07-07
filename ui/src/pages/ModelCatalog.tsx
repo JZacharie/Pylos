@@ -153,6 +153,15 @@ function pylosToForm(p: ModelInfo): ModelFormState {
   }
 }
 
+// ─── Shared sub-components (stable references to avoid focus loss) ───────────
+
+const ProviderField = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div>
+    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">{label}</label>
+    {children}
+  </div>
+)
+
 // ─── ModelDetailModal ─── LiteLLM-style unified model detail view ────────────
 
 function ModelModal({
@@ -188,13 +197,6 @@ function ModelModal({
   )
 
   const selectedProvider = providers?.providers?.find(p => p.name === form.provider)
-
-  const ProviderField = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div>
-      <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">{label}</label>
-      {children}
-    </div>
-  )
 
   const detailTabs = [
     { id: 'overview', label: 'Overview', icon: null },
