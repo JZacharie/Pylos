@@ -1,5 +1,5 @@
 # Étape 1 : Image de build avec Python et les dépendances
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 COPY requirements.txt .
