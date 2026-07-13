@@ -21,6 +21,7 @@ pub mod organization_store;
 pub mod prefix_cache;
 pub mod prompt_registry;
 pub mod search_tool_store;
+pub mod smart_router;
 pub mod structured_output;
 pub mod use_cases;
 pub mod virtual_key_store;
@@ -52,6 +53,7 @@ pub use rag_plugin::{RagConfig, RagModelRoute, RagPlugin};
 pub use rate_limit_store::{RateLimitPlugin, RateLimitStatus, RateLimitStore};
 pub use semantic_cache::SemanticCachePlugin;
 
+pub use smart_router::{MetricsSnapshot, RouterMetrics, SmartRouterPlugin};
 pub use structured_output::StructuredOutputPlugin;
 pub use use_cases::InferenceOrchestrator;
 
