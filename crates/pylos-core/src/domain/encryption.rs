@@ -1,9 +1,9 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use rand::RngCore;
+use rand::{rngs::OsRng, RngCore};
 
 const NONCE_SIZE: usize = 12;
 const KEY_ENV_VAR: &str = "PYLOS_ENCRYPTION_KEY";
@@ -40,10 +40,10 @@ thread_local! {
 pub fn encrypt(plaintext: &str) -> String {
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
     CIPHER.with(|cipher| {
         let ciphertext = cipher
-            .encrypt(nonce, plaintext.as_bytes())
+            .encrypt(&nonce, plaintext.as_bytes())
             .expect("encryption failed");
         let mut combined = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
         combined.extend_from_slice(&nonce_bytes);
@@ -58,10 +58,10 @@ pub fn decrypt(encoded: &str) -> Option<String> {
         return None;
     }
     let (nonce_bytes, ciphertext) = combined.split_at(NONCE_SIZE);
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let nonce = Nonce::try_from(nonce_bytes).ok()?;
     CIPHER.with(|cipher| {
         cipher
-            .decrypt(nonce, ciphertext)
+            .decrypt(&nonce, ciphertext)
             .ok()
             .and_then(|v| String::from_utf8(v).ok())
     })
