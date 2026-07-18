@@ -29,7 +29,7 @@ opentelemetry-semantic-conventions = "0.13"
 tracing-opentelemetry = "0.33"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # AWS SDK
-aws-config = { version = "1.8", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio", "credentials-process", "sso"] }
+aws-config = { version = "1.9.0", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio", "credentials-process", "sso"] }
 aws-sdk-bedrockruntime = { version = "1.135", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-sts = { version = "1.60", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-credential-types = "1.2"

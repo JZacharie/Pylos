@@ -658,7 +658,7 @@ async fn submit_openai_batch(
                 );
                 return Err(PylosError::Internal(format!(
                     "Batch {} ended with status '{}'",
-                    &batch_id, status
+                    batch_id, status
                 )));
             }
             s => {
@@ -674,7 +674,7 @@ async fn submit_openai_batch(
 
     Err(PylosError::Internal(format!(
         "AsyncBatch: batch {} did not complete within the polling window",
-        &batch_id
+        batch_id
     )))
 }
 

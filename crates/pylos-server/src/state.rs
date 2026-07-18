@@ -4,8 +4,8 @@ use std::sync::Arc;
 use pylos_application::{
     BudgetPlugin, BudgetStore, ConfigStore, GuardrailsPlugin, InferenceOrchestrator, LogStore,
     McpServerStore, ModelCatalog, OrganizationStore, OtelConfig, PgLogStore, PrefixCachePlugin,
-    RateLimitPlugin, RateLimitStore, SearchToolStore, SemanticCachePlugin, StructuredOutputPlugin,
-    VirtualKeyStore,
+    RateLimitPlugin, RateLimitStore, SearchToolStore, SemanticCachePlugin, SmartRouterPlugin,
+    StructuredOutputPlugin, VirtualKeyStore,
 };
 use pylos_core::domain::traits::{LlmPlugin, Provider};
 
@@ -619,6 +619,78 @@ impl AppState {
                             );
                         }
                     }
+                }
+                "smart_router" => {
+                    let tiers = plugin_cfg.config.get("tiers");
+                    let flash_model = tiers
+                        .and_then(|t| t.get("flash"))
+                        .and_then(|f| f.get("model"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let mid_model = tiers
+                        .and_then(|t| t.get("mid"))
+                        .and_then(|m| m.get("model"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let frontier_model = tiers
+                        .and_then(|t| t.get("frontier"))
+                        .and_then(|f| f.get("model"))
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let flash_cost = tiers
+                        .and_then(|t| t.get("flash"))
+                        .and_then(|f| f.get("cost_per_mtok"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.10);
+                    let mid_cost = tiers
+                        .and_then(|t| t.get("mid"))
+                        .and_then(|m| m.get("cost_per_mtok"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1.50);
+                    let frontier_cost = tiers
+                        .and_then(|t| t.get("frontier"))
+                        .and_then(|f| f.get("cost_per_mtok"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(10.00);
+                    let flash_max_msgs = plugin_cfg
+                        .config
+                        .get("flash_max_messages")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(3) as usize;
+                    let flash_max_chars = plugin_cfg
+                        .config
+                        .get("flash_max_content_chars")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(2000) as usize;
+                    let compaction_threshold = plugin_cfg
+                        .config
+                        .get("context_compaction")
+                        .and_then(|c| c.get("threshold_messages"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(20) as usize;
+                    let compaction_target = plugin_cfg
+                        .config
+                        .get("context_compaction")
+                        .and_then(|c| c.get("target_messages"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(10) as usize;
+
+                    plugins.push(Arc::new(SmartRouterPlugin::new(
+                        flash_model,
+                        mid_model,
+                        frontier_model,
+                        flash_cost,
+                        mid_cost,
+                        frontier_cost,
+                        flash_max_msgs,
+                        flash_max_chars,
+                        compaction_threshold,
+                        compaction_target,
+                    )));
+                    tracing::info!(
+                        name = "smart_router",
+                        "Smart Tiered Router plugin enabled — 70/20/10 + SLM-default/LLM-fallback"
+                    );
                 }
                 name => tracing::debug!(name = %name, "Unknown plugin, skipping"),
             }
