@@ -58,16 +58,34 @@ impl RouterMetrics {
         MetricsSnapshot {
             flash_count: self.flash_count.load(std::sync::atomic::Ordering::Relaxed),
             mid_count: self.mid_count.load(std::sync::atomic::Ordering::Relaxed),
-            frontier_count: self.frontier_count.load(std::sync::atomic::Ordering::Relaxed),
-            flash_success: self.flash_success.load(std::sync::atomic::Ordering::Relaxed),
+            frontier_count: self
+                .frontier_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            flash_success: self
+                .flash_success
+                .load(std::sync::atomic::Ordering::Relaxed),
             mid_success: self.mid_success.load(std::sync::atomic::Ordering::Relaxed),
-            frontier_success: self.frontier_success.load(std::sync::atomic::Ordering::Relaxed),
-            flash_escalation: self.flash_escalation.load(std::sync::atomic::Ordering::Relaxed),
-            mid_escalation: self.mid_escalation.load(std::sync::atomic::Ordering::Relaxed),
-            flash_cost_millicents: self.flash_cost_millicents.load(std::sync::atomic::Ordering::Relaxed),
-            mid_cost_millicents: self.mid_cost_millicents.load(std::sync::atomic::Ordering::Relaxed),
-            frontier_cost_millicents: self.frontier_cost_millicents.load(std::sync::atomic::Ordering::Relaxed),
-            context_compactions: self.context_compactions.load(std::sync::atomic::Ordering::Relaxed),
+            frontier_success: self
+                .frontier_success
+                .load(std::sync::atomic::Ordering::Relaxed),
+            flash_escalation: self
+                .flash_escalation
+                .load(std::sync::atomic::Ordering::Relaxed),
+            mid_escalation: self
+                .mid_escalation
+                .load(std::sync::atomic::Ordering::Relaxed),
+            flash_cost_millicents: self
+                .flash_cost_millicents
+                .load(std::sync::atomic::Ordering::Relaxed),
+            mid_cost_millicents: self
+                .mid_cost_millicents
+                .load(std::sync::atomic::Ordering::Relaxed),
+            frontier_cost_millicents: self
+                .frontier_cost_millicents
+                .load(std::sync::atomic::Ordering::Relaxed),
+            context_compactions: self
+                .context_compactions
+                .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 }
@@ -140,6 +158,7 @@ pub struct SmartRouterPlugin {
 }
 
 impl SmartRouterPlugin {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         flash_model: Option<String>,
         mid_model: Option<String>,
@@ -210,15 +229,12 @@ impl SmartRouterPlugin {
             .map(|c| c.len())
             .sum();
 
-        let has_tools = chat_req
-            .tools
-            .as_ref()
-            .map_or(false, |t| !t.is_empty());
+        let has_tools = chat_req.tools.as_ref().is_some_and(|t| !t.is_empty());
 
         let has_json_schema = chat_req
             .response_format
             .as_ref()
-            .map_or(false, |f| f.format_type == "json_schema");
+            .is_some_and(|f| f.format_type == "json_schema");
 
         // Frontier : raisonnement complexe
         if msg_count > 20 || total_chars > 16_000 {
@@ -296,7 +312,6 @@ impl SmartRouterPlugin {
     fn tier_config(&self, tier: RequestTier) -> Option<&TierConfig> {
         self.tiers.get(tier.as_str())
     }
-
 }
 
 #[async_trait]
@@ -319,9 +334,7 @@ impl LlmPlugin for SmartRouterPlugin {
         let tier = self.classify(request);
 
         // 2. Compaction du contexte si nécessaire
-        let compacted = if request
-            .model()
-            .contains("gemma4:e2b")
+        let compacted = if request.model().contains("gemma4:e2b")
             || request.model().contains("flash")
             || self.classify(request) == RequestTier::Flash
         {
@@ -331,16 +344,12 @@ impl LlmPlugin for SmartRouterPlugin {
                 _ => return Ok(None),
             };
             if chat_req.messages.len() > self.context_compaction_threshold {
-                let did_compact =
-                    Self::compact_context(request, self.context_compaction_target);
+                let did_compact = Self::compact_context(request, self.context_compaction_target);
                 if did_compact {
                     self.metrics
                         .context_compactions
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    info!(
-                        tier = tier.as_str(),
-                        "Context compacted for SLM request"
-                    );
+                    info!(tier = tier.as_str(), "Context compacted for SLM request");
                 }
                 did_compact
             } else {
@@ -564,11 +573,7 @@ mod tests {
     #[test]
     fn test_classify_flash_simple_request() {
         let plugin = make_plugin();
-        let req = make_request(
-            vec![(MessageRole::User, "What is 2+2?")],
-            false,
-            false,
-        );
+        let req = make_request(vec![(MessageRole::User, "What is 2+2?")], false, false);
         assert_eq!(plugin.classify(&req), RequestTier::Flash);
     }
 
@@ -586,11 +591,7 @@ mod tests {
     #[test]
     fn test_classify_mid_with_json_schema() {
         let plugin = make_plugin();
-        let req = make_request(
-            vec![(MessageRole::User, "Extract as JSON")],
-            false,
-            true,
-        );
+        let req = make_request(vec![(MessageRole::User, "Extract as JSON")], false, true);
         assert_eq!(plugin.classify(&req), RequestTier::Mid);
     }
 
@@ -601,10 +602,8 @@ mod tests {
         for i in 0..25 {
             messages.push((MessageRole::User, format!("Message {}", i)));
         }
-        let msgs_ref: Vec<(MessageRole, &str)> = messages
-            .iter()
-            .map(|(r, s)| (*r, s.as_str()))
-            .collect();
+        let msgs_ref: Vec<(MessageRole, &str)> =
+            messages.iter().map(|(r, s)| (*r, s.as_str())).collect();
         let req = make_request(msgs_ref, false, false);
         assert_eq!(plugin.classify(&req), RequestTier::Frontier);
     }
@@ -612,13 +611,11 @@ mod tests {
     #[test]
     fn test_context_compaction() {
         let _plugin = make_plugin();
-        let mut messages = vec![
-            ChatCompletionMessage {
-                role: MessageRole::System,
-                content: Some("Be helpful".to_string()),
-                ..Default::default()
-            },
-        ];
+        let mut messages = vec![ChatCompletionMessage {
+            role: MessageRole::System,
+            content: Some("Be helpful".to_string()),
+            ..Default::default()
+        }];
         for i in 0..30 {
             messages.push(ChatCompletionMessage {
                 role: if i % 2 == 0 {
@@ -708,11 +705,7 @@ mod tests {
     #[tokio::test]
     async fn test_plugin_metrics_tracking() {
         let plugin = make_plugin();
-        let req = make_request(
-            vec![(MessageRole::User, "Hello")],
-            false,
-            false,
-        );
+        let req = make_request(vec![(MessageRole::User, "Hello")], false, false);
         let mut mut_req = req.clone();
         let mut ctx = RequestContext::default();
 
