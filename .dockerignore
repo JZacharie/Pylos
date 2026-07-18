@@ -15,6 +15,11 @@ target/
 .vscode/
 *.iml
 
+# ── Dépendances (ne pas copier les node_modules de l'hôte, car les binaires
+#    natifs peuvent différer entre l'hôte et le conteneur Docker) ───────────────
+node_modules/
+**/node_modules/
+
 # ── Docs et fichiers non nécessaires au build ─────────────────────────────────
 README.md
 docs/
