@@ -687,7 +687,10 @@ impl AppState {
                         compaction_threshold,
                         compaction_target,
                     )));
-                    tracing::info!(name = "smart_router", "Smart Tiered Router plugin enabled — 70/20/10 + SLM-default/LLM-fallback");
+                    tracing::info!(
+                        name = "smart_router",
+                        "Smart Tiered Router plugin enabled — 70/20/10 + SLM-default/LLM-fallback"
+                    );
                 }
                 name => tracing::debug!(name = %name, "Unknown plugin, skipping"),
             }

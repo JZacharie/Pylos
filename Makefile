@@ -15,9 +15,9 @@ setup: ## Installe les outils de développement nécessaires
 	$(call check_tool,cargo)
 	rustup component add clippy rustfmt
 	@echo "Installing cargo-audit (security audits)..."
-	cargo install cargo-audit --quiet || true
+	cargo install cargo-audit --locked --quiet || true
 	@echo "Installing cargo-deny (dependency policy)..."
-	cargo install cargo-deny --quiet || true
+	cargo install cargo-deny --locked --quiet || true
 	@echo "Setup complete."
 
 # ── Build ─────────────────────────────────────────────────────────────────────
