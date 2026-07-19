@@ -60,41 +60,13 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   ui:
     build:
-      context: ./ui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ui/Dockerfile
     image: pylos-ui:local
     container_name: pylos-ui
     restart: unless-stopped
     ports:
       - "8080:80"
-    depends_on:
-      pylos:
-        condition: service_healthy
-    networks:
-      - pylos-net
-
-  # ───────────────────────────────────────────────────────────────────────────
-  # Mem0 Sidecar — Memory Management Service
-  # ───────────────────────────────────────────────────────────────────────────
-  mem0-sidecar:
-    build:
-      context: .
-      dockerfile: pylos/memory/Dockerfile
-    image: pylos-mem0-sidecar:local
-    container_name: pylos-mem0-sidecar
-    restart: unless-stopped
-    ports:
-      - "7577:7577"
-    environment:
-      MEM0_BACKEND: "${MEM0_BACKEND:-postgres}"
-      MEM0_BACKEND_URL: "${MEM0_BACKEND_URL:-postgres://postgres:postgres@postgres:5432/mem0}"
-      MEM0_COLLECTION_NAME: "${MEM0_COLLECTION_NAME:-pylos-memories}"
-      MEM0_EMBEDDING_MODEL: "${MEM0_EMBEDDING_MODEL:-nomic-embed-text-v2-moe-GGUF}"
-      MEM0_EMBEDDING_PROVIDER: "${MEM0_EMBEDDING_PROVIDER:-ollama}"
-      MEM0_EMBEDDING_BASE_URL: "${MEM0_EMBEDDING_BASE_URL:-http://192.168.0.58:11434/v1}"
-      MEM0_MAX_CONTEXT_TOKENS: "${MEM0_MAX_CONTEXT_TOKENS:-2048}"
-      MEM0_TTL_SECONDS: "${MEM0_TTL_SECONDS:-86400}"
-      MEM0_LOG_LEVEL: "${MEM0_LOG_LEVEL:-INFO}"
     depends_on:
       pylos:
         condition: service_healthy
