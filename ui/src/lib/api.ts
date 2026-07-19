@@ -87,6 +87,8 @@ export interface LogEntry {
   guardrail_triggered: boolean | null
   guardrail_type: string | null
   guardrail_detail: string | null
+  moderation_scores: string | null
+  caveman_input: string | null
 }
 
 export interface LogStats {

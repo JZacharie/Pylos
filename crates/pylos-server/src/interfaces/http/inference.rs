@@ -24,19 +24,21 @@ fn guardrails_info_from_response(
     finish_reason: &Option<String>,
     output_preview: &Option<String>,
     ctx: &RequestContext,
-) -> (Option<bool>, Option<String>, Option<String>) {
+) -> (Option<bool>, Option<String>, Option<String>, Option<String>) {
+    let moderation_scores = ctx.headers.get("x-moderation-scores").cloned();
     if let Some(triggered_val) = ctx.headers.get("guardrail_triggered") {
         if triggered_val == "true" {
             return (
                 Some(true),
                 ctx.headers.get("guardrail_type").cloned(),
                 ctx.headers.get("guardrail_detail").cloned(),
+                moderation_scores,
             );
         }
     }
     let triggered = finish_reason.as_deref() == Some("content_filter");
     if !triggered {
-        return (None, None, None);
+        return (None, None, None, moderation_scores);
     }
     let (gtype, detail) = match output_preview.as_deref() {
         Some(msg) if msg.contains("prompt injection") => (
@@ -49,7 +51,7 @@ fn guardrails_info_from_response(
         ),
         _ => (Some("content_filter".into()), None),
     };
-    (Some(true), gtype, detail)
+    (Some(true), gtype, detail, moderation_scores)
 }
 
 use crate::middleware::request_id::RequestTrace;
@@ -79,6 +81,10 @@ pub async fn chat_completions(
 
     let saved_bytes =
         crate::compression::optimize_request(&mut payload, caveman_mode, shrink_input);
+
+    let caveman_input = (caveman_mode != crate::compression::CavemanMode::Off || shrink_input)
+        .then(|| crate::compression::caveman_input_json(&payload))
+        .flatten();
 
     let is_stream = payload.stream.unwrap_or(false);
     let model = payload.model.clone();
@@ -133,6 +139,7 @@ pub async fn chat_completions(
             saved_bytes,
             request_id,
             source,
+            caveman_input,
         )
         .await
     } else {
@@ -146,6 +153,7 @@ pub async fn chat_completions(
             saved_bytes,
             request_id,
             source,
+            caveman_input,
         )
         .await
     }
@@ -162,6 +170,7 @@ async fn complete_response(
     saved_bytes: usize,
     request_id: String,
     source: Option<String>,
+    caveman_input: Option<String>,
 ) -> Response {
     let start = Instant::now();
     let req_type = "chat_completion";
@@ -194,7 +203,7 @@ async fn complete_response(
 
             let output_preview = resp.choices.first().and_then(|c| c.message.content.clone());
             let finish_reason = resp.choices.first().and_then(|c| c.finish_reason.clone());
-            let (gr_triggered, gr_type, gr_detail) =
+            let (gr_triggered, gr_type, gr_detail, moderation_scores) =
                 guardrails_info_from_response(&finish_reason, &output_preview, &final_ctx);
             let provider = guess_provider(&resp.model);
             let vk_name = vk_info.map(|v| v.name);
@@ -207,6 +216,7 @@ async fn complete_response(
                 latency_ms = format!("{:.2}", latency),
                 guardrail_triggered = ?gr_triggered,
                 guardrail_type = ?gr_type,
+                moderation_scores = ?moderation_scores,
                 "[Complete] Inference succeeded"
             );
 
@@ -231,6 +241,8 @@ async fn complete_response(
                 gr_detail,
                 obfuscated_input,
                 pii_mapping,
+                moderation_scores,
+                caveman_input,
             );
 
             let state_clone = state.clone();
@@ -317,6 +329,8 @@ async fn complete_response(
                 None,
                 None,
                 None,
+                None,
+                caveman_input,
             );
             let state_clone = state.clone();
             tokio::spawn(async move {
@@ -363,6 +377,7 @@ async fn stream_response(
     saved_bytes: usize,
     request_id: String,
     source: Option<String>,
+    caveman_input: Option<String>,
 ) -> Response {
     let start = Instant::now();
     let req_type = "chat_completion";
@@ -514,7 +529,7 @@ async fn stream_response(
                         ..Default::default()
                     };
 
-                    let (gr_triggered, gr_type, gr_detail) =
+                    let (gr_triggered, gr_type, gr_detail, moderation_scores) =
                         guardrails_info_from_response(&finish, &output_preview, &final_ctx_clone);
                     let obfuscated_input = final_ctx_clone.headers.get("x-obfuscated-input").cloned();
                     let pii_mapping = final_ctx_clone.headers.get("x-pii-mapping").cloned();
@@ -537,6 +552,8 @@ async fn stream_response(
                         gr_detail,
                         obfuscated_input,
                         pii_mapping,
+                        moderation_scores,
+                        caveman_input.clone(),
                     );
                     state_for_log.log_store.push(entry).await;
                 }
@@ -591,6 +608,8 @@ async fn stream_response(
                 None,
                 None,
                 None,
+                None,
+                caveman_input.clone(),
             );
             tokio::spawn(async move {
                 state.log_store.push(entry).await;

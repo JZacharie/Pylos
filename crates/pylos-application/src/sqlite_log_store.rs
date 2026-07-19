@@ -454,6 +454,8 @@ fn row_to_log_entry(row: &sqlx::sqlite::SqliteRow) -> LogEntry {
         guardrail_detail: None,
         obfuscated_input: None,
         pii_mapping: None,
+        moderation_scores: None,
+        caveman_input: None,
     }
 }
 

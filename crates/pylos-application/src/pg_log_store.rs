@@ -486,5 +486,7 @@ fn row_to_log_entry(row: &sqlx::postgres::PgRow) -> LogEntry {
         guardrail_detail: row.try_get("guardrail_detail").ok(),
         obfuscated_input: None,
         pii_mapping: None,
+        moderation_scores: None,
+        caveman_input: None,
     }
 }

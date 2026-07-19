@@ -23,3 +23,8 @@ pub fn optimize_request(
 
     saved_bytes
 }
+
+/// Serialise les messages de la requête en JSON pour le logging du payload compressé.
+pub fn caveman_input_json(request: &ChatCompletionRequest) -> Option<String> {
+    serde_json::to_string(&request.messages).ok()
+}

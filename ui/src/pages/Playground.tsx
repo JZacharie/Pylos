@@ -242,7 +242,7 @@ export default function Playground() {
     const saved = localStorage.getItem('pylos-playground-max-tokens')
     return saved !== null ? parseInt(saved, 10) : 512
   })
-  const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan'>(() => {
+  const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan' | 'spaghetti'>(() => {
     return (localStorage.getItem('pylos-playground-caveman-mode') as any) || 'off'
   })
   const [cavemanCompress, setCavemanCompress] = useState(() => {
@@ -814,6 +814,7 @@ export default function Playground() {
               <option value="full">Full (Classic)</option>
               <option value="ultra">Ultra (Terse)</option>
               <option value="wenyan">Wenyan (Classical)</option>
+              <option value="spaghetti">Spaghetti Mix (Multi-script)</option>
             </select>
           </div>
 
