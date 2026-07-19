@@ -251,6 +251,9 @@ export default function Playground() {
   const [forceProviderModel, setForceProviderModel] = useState(() => {
     return localStorage.getItem('pylos-playground-force-provider-model') === 'true'
   })
+  const [bypassGuardrails, setBypassGuardrails] = useState(() => {
+    return localStorage.getItem('pylos-playground-bypass-guardrails') === 'true'
+  })
   const [isRunning, setIsRunning] = useState(false)
   const [lastResult, setLastResult] = useState<RunResult | null>(null)
   const [streamingContent, setStreamingContent] = useState('')
@@ -300,6 +303,10 @@ export default function Playground() {
   useEffect(() => {
     localStorage.setItem('pylos-playground-force-provider-model', String(forceProviderModel))
   }, [forceProviderModel])
+
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-bypass-guardrails', String(bypassGuardrails))
+  }, [bypassGuardrails])
   const toggleFavorite = (modelStr: string) => {
     setFavorites(prev =>
       prev.includes(modelStr)
@@ -408,6 +415,9 @@ export default function Playground() {
       if (forceProviderModel) {
         headers['x-pylos-force-provider'] = provider
         headers['x-pylos-force-model'] = model
+      }
+      if (bypassGuardrails) {
+        headers['x-bypass-guardrails'] = 'true'
       }
 
       if (streaming) {
@@ -838,6 +848,23 @@ export default function Playground() {
             >
               <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform
                 ${forceProviderModel ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Bypass Guardrails */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs text-zinc-400">Bypass Guardrails</span>
+              <span className="text-[10px] text-zinc-500">Disable PII/secret filters</span>
+            </div>
+            <button
+              onClick={() => setBypassGuardrails(!bypassGuardrails)}
+              disabled={isRunning}
+              className={`relative w-10 h-5 rounded-full transition-colors
+                ${bypassGuardrails ? 'bg-emerald-600' : 'bg-zinc-700'}`}
+            >
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform
+                ${bypassGuardrails ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
           </div>
 

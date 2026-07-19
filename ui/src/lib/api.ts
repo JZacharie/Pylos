@@ -84,6 +84,9 @@ export interface LogEntry {
   output_preview: string | null
   obfuscated_input: string | null
   pii_mapping: string | null
+  guardrail_triggered: boolean | null
+  guardrail_type: string | null
+  guardrail_detail: string | null
 }
 
 export interface LogStats {

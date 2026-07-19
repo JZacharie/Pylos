@@ -24,6 +24,9 @@ static RE_IBAN: LazyLock<regex::Regex> = LazyLock::new(|| {
 static RE_SSN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b[12][ -]*\d{2}[ -]*\d{2}[ -]*\d{2}[ -]*\d{3}[ -]*\d{3}[ -]*\d{2}\b").unwrap()
 });
+static RE_IP: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap()
+});
 static RE_CC: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b(?:\d[ -]*?){13,16}\b").unwrap());
 static RE_OPENAI_KEY: LazyLock<regex::Regex> =
@@ -86,6 +89,17 @@ impl GuardrailsPlugin {
             for (idx, mat) in (start_ssn_idx..).zip(RE_SSN.find_iter(&masked)) {
                 let original = mat.as_str().to_string();
                 let placeholder = format!("[SSN_{}]", idx);
+                pii_map.insert(placeholder.clone(), original);
+                next_masked = next_masked.replace(mat.as_str(), &placeholder);
+            }
+            masked = next_masked;
+
+            // IP Addresses
+            let start_ip_idx = pii_map.len() + 1;
+            let mut next_masked = masked.clone();
+            for (idx, mat) in (start_ip_idx..).zip(RE_IP.find_iter(&masked)) {
+                let original = mat.as_str().to_string();
+                let placeholder = format!("[IP_{}]", idx);
                 pii_map.insert(placeholder.clone(), original);
                 next_masked = next_masked.replace(mat.as_str(), &placeholder);
             }
@@ -176,6 +190,10 @@ impl LlmPlugin for GuardrailsPlugin {
         request: &mut PylosRequest,
         ctx: &mut RequestContext,
     ) -> Result<Option<PylosResponse>, PylosError> {
+        if ctx.headers.get("x-bypass-guardrails").map(|s| s == "true").unwrap_or(false) {
+            return Ok(None);
+        }
+
         let chat_req = match request {
             PylosRequest::ChatCompletion(ref mut req) => req,
             _ => return Ok(None),

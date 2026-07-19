@@ -276,6 +276,17 @@ export default function Logs() {
             <Row label="Cost"     value={formatCost(selectedLog.cost_usd)} />
             {selectedLog.virtual_key && <Row label="Virtual Key" value={selectedLog.virtual_key} />}
             {selectedLog.finish_reason && <Row label="Finish" value={selectedLog.finish_reason} />}
+            {selectedLog.guardrail_triggered && (
+              <div>
+                <div className="text-xs text-zinc-500 mb-1">Guardrail Status</div>
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded p-2 text-amber-300 text-xs">
+                  <div className="font-semibold">Triggered: {selectedLog.guardrail_type ?? 'pii'}</div>
+                  {selectedLog.guardrail_detail && (
+                    <div className="mt-1 opacity-80">{selectedLog.guardrail_detail}</div>
+                  )}
+                </div>
+              </div>
+            )}
             {selectedLog.error_message && (
               <div>
                 <div className="text-xs text-zinc-500 mb-1">Error</div>
