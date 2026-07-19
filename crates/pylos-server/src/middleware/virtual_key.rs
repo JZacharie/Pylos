@@ -56,8 +56,14 @@ pub async fn virtual_key_middleware(
                     Some(vk_cfg)
                 }
                 Ok(None) => {
-                    // Deleted in DB -> ensure it is removed from memory
-                    state.vk_registry.deregister(token).await;
+                    // Deleted in DB -> ensure it is removed from memory only if not in static config
+                    let cfg = state.config_store.get().await;
+                    let is_in_static = cfg.governance.virtual_keys.iter().any(|v| {
+                        v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
+                    });
+                    if !is_in_static {
+                        state.vk_registry.deregister(token).await;
+                    }
                     None
                 }
                 Err(_) => {
@@ -66,7 +72,7 @@ pub async fn virtual_key_middleware(
                 }
             };
 
-            // 2. If active key is found in DB, register/update it in the in-memory registry
+            // 2. If active key is found in DB or config, register/update it in the in-memory registry
             let provider_configs = if let Some(ref vk_cfg) = db_vk {
                 let cfg = state.config_store.get().await;
                 let rate_limit = cfg
@@ -86,14 +92,47 @@ pub async fn virtual_key_middleware(
                 vk_cfg.provider_configs.clone()
             } else {
                 let cfg = state.config_store.get().await;
-                cfg.governance
+                let static_vk = cfg.governance
                     .virtual_keys
                     .iter()
                     .find(|v| {
                         v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
-                    })
-                    .map(|v| v.provider_configs.clone())
-                    .unwrap_or_default()
+                    });
+
+                if let Some(vk_cfg) = static_vk {
+                    if !vk_cfg.is_active {
+                        state.vk_registry.deregister(token).await;
+                        return (
+                            StatusCode::UNAUTHORIZED,
+                            Json(json!({
+                                "error": {
+                                    "message": "Virtual key is inactive",
+                                    "type": "governance_error",
+                                    "code": 401
+                                }
+                            })),
+                        )
+                            .into_response();
+                    }
+
+                    let rate_limit = cfg
+                        .governance
+                        .rate_limits
+                        .iter()
+                        .find(|rl| Some(&rl.id) == vk_cfg.rate_limit_id.as_ref())
+                        .map(|rl| rl.request_max_limit)
+                        .unwrap_or(0);
+
+                    let v_key = pylos_core::domain::virtual_key::VirtualKey::new(
+                        token.to_string(),
+                        &vk_cfg.name,
+                    )
+                    .with_rpm(rate_limit);
+                    state.vk_registry.register(v_key).await;
+                    vk_cfg.provider_configs.clone()
+                } else {
+                    Vec::new()
+                }
             };
 
             // 3. Verify in memory registry (for RPM rate limiting check & increment)

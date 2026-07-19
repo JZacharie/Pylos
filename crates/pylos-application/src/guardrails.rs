@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use pylos_core::domain::openai::{
     ChatCompletionChoice, ChatCompletionMessage, ChatCompletionResponse, MessageRole,
@@ -205,31 +205,10 @@ impl LlmPlugin for GuardrailsPlugin {
                 let lower_content = content.to_lowercase();
                 for keyword in &blocked_keywords {
                     if lower_content.contains(&keyword.to_lowercase()) {
-                        warn!(keyword = %keyword, "Guardrails: Blocked request due to flagged keyword match");
-                        // Return short-circuit response
-                        let blocked_response = ChatCompletionResponse {
-                            id: format!("blocked-{}", fastrand::u32(..)),
-                            object: "chat.completion".to_string(),
-                            created: std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs() as i64,
-                            model: chat_req.model.clone(),
-                            choices: vec![ChatCompletionChoice {
-                                index: 0,
-                                message: ChatCompletionMessage {
-                                    role: MessageRole::Assistant,
-                                    content: Some(
-                                        "Request flagged and blocked by guardrails safety policy."
-                                            .to_string(),
-                                    ),
-                                    ..Default::default()
-                                },
-                                finish_reason: Some("content_filter".to_string()),
-                            }],
-                            usage: Some(Default::default()),
-                        };
-                        return Ok(Some(PylosResponse::ChatCompletion(blocked_response)));
+                        warn!(keyword = %keyword, "Guardrails: Keyword match detected (logging but not blocking)");
+                        ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
+                        ctx.headers.insert("guardrail_type".to_string(), "keyword_block".to_string());
+                        ctx.headers.insert("guardrail_detail".to_string(), format!("Blocked keyword: {}", keyword));
                     }
                 }
             }
@@ -250,55 +229,45 @@ impl LlmPlugin for GuardrailsPlugin {
                     let lower_content = content.to_lowercase();
                     for indicator in &injection_indicators {
                         if lower_content.contains(indicator) {
-                            warn!(indicator = %indicator, "Guardrails: Blocked request due to prompt injection detection");
-                            let blocked_response = ChatCompletionResponse {
-                                id: format!("blocked-{}", fastrand::u32(..)),
-                                object: "chat.completion".to_string(),
-                                created: std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs() as i64,
-                                model: chat_req.model.clone(),
-                                choices: vec![ChatCompletionChoice {
-                                    index: 0,
-                                    message: ChatCompletionMessage {
-                                        role: MessageRole::Assistant,
-                                        content: Some(
-                                            "Request flagged and blocked by guardrails safety policy: potential prompt injection detected."
-                                                .to_string(),
-                                        ),
-                                        ..Default::default()
-                                    },
-                                    finish_reason: Some("content_filter".to_string()),
-                                }],
-                                usage: Some(Default::default()),
-                            };
-                            return Ok(Some(PylosResponse::ChatCompletion(blocked_response)));
+                            warn!(indicator = %indicator, "Guardrails: Prompt injection detected (logging but not blocking)");
+                            ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
+                            ctx.headers.insert("guardrail_type".to_string(), "prompt_injection".to_string());
+                            ctx.headers.insert("guardrail_detail".to_string(), format!("Prompt injection indicator: {}", indicator));
                         }
                     }
                 }
             }
         }
 
-        // 2. Masking (PII & Secrets)
-        if mask_pii || mask_secrets {
-            let mut pii_map = HashMap::new();
-            for message in &mut chat_req.messages {
-                if let Some(ref content) = message.content {
-                    let masked = self.mask_text(content, &mut pii_map, mask_pii, mask_secrets);
-                    message.content = Some(masked);
+        // 2. Detection & Masking (PII & Secrets)
+        let mut pii_map = HashMap::new();
+        for message in &mut chat_req.messages {
+            if message.role == MessageRole::User {
+                if let Some(ref mut content) = message.content {
+                    let original = content.clone();
+                    let masked = self.mask_text(&original, &mut pii_map, mask_pii, mask_secrets);
+                    
+                    info!(
+                        "[Guardrails] Original message:\n{}\n[Guardrails] Obfuscated message:\n{}",
+                        original, masked
+                    );
+
+                    if (mask_pii || mask_secrets) && masked != original {
+                        *content = masked;
+                    }
                 }
             }
+        }
 
-            if !pii_map.is_empty() {
-                debug!(
-                    pii_items = pii_map.len(),
-                    "Guardrails: Masked items in user request"
-                );
-                // Save mapping in request context headers to restore it in post_hook
-                if let Ok(serialized) = serde_json::to_string(&pii_map) {
-                    ctx.headers.insert("x-pii-mapping".to_string(), serialized);
-                }
+        if !pii_map.is_empty() && (mask_pii || mask_secrets) {
+            warn!("Guardrails: PII or Secrets detected and masked");
+            ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
+            ctx.headers.insert("guardrail_type".to_string(), "pii".to_string());
+            let detected_keys: Vec<String> = pii_map.keys().cloned().collect();
+            ctx.headers.insert("guardrail_detail".to_string(), format!("Detected PII/Secrets keys: {:?}", detected_keys));
+            
+            if let Ok(serialized) = serde_json::to_string(&pii_map) {
+                ctx.headers.insert("x-pii-mapping".to_string(), serialized);
             }
         }
 

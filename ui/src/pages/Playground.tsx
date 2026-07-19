@@ -396,6 +396,7 @@ export default function Playground() {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer sk-pylos-admin',
         'X-Pylos-Source': 'playground',
       }
       if (cavemanMode !== 'off') {
@@ -514,22 +515,37 @@ export default function Playground() {
           actualModel,
         })
       } else {
-        const resp = await api.post('/v1/chat/completions', payload, {
+        const resp = await fetch('/v1/chat/completions', {
+          method: 'POST',
           headers,
+          body: JSON.stringify(payload),
           signal: abortRef.current.signal,
         })
+
+        if (!resp.ok) {
+          let errorMsg: string
+          try {
+            const err = await resp.clone().json()
+            errorMsg = err.error?.message ?? `HTTP ${resp.status}`
+          } catch {
+            const text = await resp.text()
+            errorMsg = `HTTP ${resp.status}: ${text.slice(0, 300)}`
+          }
+          throw new Error(errorMsg)
+        }
+
         const latency = performance.now() - start
-        const choice = resp.data.choices?.[0]
-        const usage = resp.data.usage ?? {}
+        const data = await resp.json()
+        const choice = data.choices?.[0]
+        const usage = data.usage ?? {}
         const content = choice?.message?.content ?? ''
 
-        // Validate that we received some content
         if (!content.trim()) {
           throw new Error('Empty response from model')
         }
 
-        const actualProvider = resp.headers?.['x-pylos-provider'] ?? undefined
-        const actualModel = resp.headers?.['x-pylos-model'] ?? undefined
+        const actualProvider = resp.headers.get('X-Pylos-Provider') ?? undefined
+        const actualModel = resp.headers.get('X-Pylos-Model') ?? undefined
 
         const assistantMsg: Message = { role: 'assistant', content }
         setMessages(prev => [...prev, assistantMsg])
@@ -551,9 +567,7 @@ export default function Playground() {
       }
     } catch (err: unknown) {
       if ((err as Error)?.name === 'AbortError') return
-      const axiosErr = err as { response?: { data?: { error?: { message?: string } } }; message?: string }
-      const msg = axiosErr.response?.data?.error?.message
-        ?? (err instanceof Error ? err.message : String(err))
+      const msg = err instanceof Error ? err.message : String(err)
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: `Error: ${msg}` },

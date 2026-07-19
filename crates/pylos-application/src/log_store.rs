@@ -260,46 +260,17 @@ impl SqliteBackend {
         limit: usize,
         offset: usize,
     ) -> rusqlite::Result<(Vec<LogEntry>, u64)> {
-        // Build dynamic WHERE from filter
-        let mut conditions = Vec::<String>::new();
-
-        if filter.provider.is_some() {
-            conditions.push("provider = ?1".into());
-        }
-        if filter.model.is_some() {
-            conditions.push("model LIKE ?2".into());
-        }
-        if filter.status.is_some() {
-            conditions.push("status = ?3".into());
-        }
-        if filter.since_ms.is_some() {
-            conditions.push("timestamp >= ?4".into());
-        }
-        if filter.until_ms.is_some() {
-            conditions.push("timestamp <= ?5".into());
-        }
-        if filter.virtual_key.is_some() {
-            conditions.push("virtual_key = ?6".into());
-        }
-
-        let where_str = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        // Named params via a fixed-position approach: always pass all 6, using NULL for absent
-        let p1: Option<String> = filter.provider.clone();
-        let p2: Option<String> = filter.model.as_ref().map(|m| format!("%{m}%"));
-        let p3: Option<String> = filter.status.as_ref().map(|s| s.as_str().to_string());
-        let p4: Option<i64> = filter.since_ms;
-        let p5: Option<i64> = filter.until_ms;
-        let p6: Option<String> = filter.virtual_key.clone();
+        let (where_str, params_vec) = build_where_clause(filter);
+        let idx = params_vec.len();
 
         let count_sql = format!("SELECT COUNT(*) FROM logs {where_str}");
         let total: u64 = self
             .conn
-            .query_row(&count_sql, params![p1, p2, p3, p4, p5, p6], |r| r.get(0))?;
+            .query_row(
+                &count_sql,
+                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+                |r| r.get(0),
+            )?;
 
         let rows_sql = format!(
             "SELECT id,timestamp,provider,model,object,status,latency_ms,
@@ -308,13 +279,19 @@ impl SqliteBackend {
                     input_preview,output_preview,compression_saved_bytes,
                     guardrail_triggered,guardrail_type,guardrail_detail
              FROM logs {where_str}
-             ORDER BY timestamp DESC LIMIT ?7 OFFSET ?8"
+             ORDER BY timestamp DESC LIMIT ?{} OFFSET ?{}",
+            idx + 1,
+            idx + 2,
         );
+
+        let mut all_params = params_vec;
+        all_params.push(Box::new(limit as i64));
+        all_params.push(Box::new(offset as i64));
 
         let mut stmt = self.conn.prepare(&rows_sql)?;
         let entries = stmt
             .query_map(
-                params![p1, p2, p3, p4, p5, p6, limit as i64, offset as i64],
+                rusqlite::params_from_iter(all_params.iter().map(|p| p.as_ref())),
                 row_to_entry,
             )?
             .filter_map(|r| r.ok())
@@ -324,38 +301,7 @@ impl SqliteBackend {
     }
 
     fn stats(&self, filter: &LogFilter) -> rusqlite::Result<LogStats> {
-        let mut conditions = Vec::<String>::new();
-        if filter.provider.is_some() {
-            conditions.push("provider = ?1".into());
-        }
-        if filter.model.is_some() {
-            conditions.push("model LIKE ?2".into());
-        }
-        if filter.status.is_some() {
-            conditions.push("status = ?3".into());
-        }
-        if filter.since_ms.is_some() {
-            conditions.push("timestamp >= ?4".into());
-        }
-        if filter.until_ms.is_some() {
-            conditions.push("timestamp <= ?5".into());
-        }
-        if filter.virtual_key.is_some() {
-            conditions.push("virtual_key = ?6".into());
-        }
-
-        let where_str = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        let p1: Option<String> = filter.provider.clone();
-        let p2: Option<String> = filter.model.as_ref().map(|m| format!("%{m}%"));
-        let p3: Option<String> = filter.status.as_ref().map(|s| s.as_str().to_string());
-        let p4: Option<i64> = filter.since_ms;
-        let p5: Option<i64> = filter.until_ms;
-        let p6: Option<String> = filter.virtual_key.clone();
+        let (where_str, params_vec) = build_where_clause(filter);
 
         let sql = format!(
             "SELECT COUNT(*),
@@ -370,24 +316,28 @@ impl SqliteBackend {
         );
 
         self.conn
-            .query_row(&sql, params![p1, p2, p3, p4, p5, p6], |r| {
-                let total: u64 = r.get(0)?;
-                let success: u64 = r.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64;
-                Ok(LogStats {
-                    total_requests: total,
-                    success_rate: if total > 0 {
-                        success as f64 / total as f64 * 100.0
-                    } else {
-                        0.0
-                    },
-                    average_latency_ms: r.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
-                    total_tokens: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                    total_cost_usd: r.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
-                    total_prompt_tokens: r.get::<_, Option<i64>>(5)?.unwrap_or(0),
-                    total_completion_tokens: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
-                    total_compression_saved_bytes: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
-                })
-            })
+            .query_row(
+                &sql,
+                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+                |r| {
+                    let total: u64 = r.get(0)?;
+                    let success: u64 = r.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64;
+                    Ok(LogStats {
+                        total_requests: total,
+                        success_rate: if total > 0 {
+                            success as f64 / total as f64 * 100.0
+                        } else {
+                            0.0
+                        },
+                        average_latency_ms: r.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
+                        total_tokens: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                        total_cost_usd: r.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
+                        total_prompt_tokens: r.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                        total_completion_tokens: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
+                        total_compression_saved_bytes: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                    })
+                },
+            )
     }
 
     fn histogram(
@@ -396,37 +346,7 @@ impl SqliteBackend {
         bucket_secs: i64,
     ) -> rusqlite::Result<Vec<HistogramBucket>> {
         let bucket_ms = bucket_secs * 1000;
-        let mut conditions = Vec::<String>::new();
-        if filter.provider.is_some() {
-            conditions.push("provider = ?1".into());
-        }
-        if filter.model.is_some() {
-            conditions.push("model LIKE ?2".into());
-        }
-        if filter.status.is_some() {
-            conditions.push("status = ?3".into());
-        }
-        if filter.since_ms.is_some() {
-            conditions.push("timestamp >= ?4".into());
-        }
-        if filter.until_ms.is_some() {
-            conditions.push("timestamp <= ?5".into());
-        }
-        if filter.virtual_key.is_some() {
-            conditions.push("virtual_key = ?6".into());
-        }
-        let where_str = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        let p1: Option<String> = filter.provider.clone();
-        let p2: Option<String> = filter.model.as_ref().map(|m| format!("%{m}%"));
-        let p3: Option<String> = filter.status.as_ref().map(|s| s.as_str().to_string());
-        let p4: Option<i64> = filter.since_ms;
-        let p5: Option<i64> = filter.until_ms;
-        let p6: Option<String> = filter.virtual_key.clone();
+        let (where_str, params_vec) = build_where_clause(filter);
 
         let sql = format!(
             "SELECT (timestamp/{b})*{b} AS ts,
@@ -440,14 +360,17 @@ impl SqliteBackend {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![p1, p2, p3, p4, p5, p6], |r| {
-                Ok(HistogramBucket {
-                    timestamp: r.get(0)?,
-                    count: r.get::<_, i64>(1)? as u64,
-                    success: r.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,
-                    error: r.get::<_, Option<i64>>(3)?.unwrap_or(0) as u64,
-                })
-            })?
+            .query_map(
+                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+                |r| {
+                    Ok(HistogramBucket {
+                        timestamp: r.get(0)?,
+                        count: r.get::<_, i64>(1)? as u64,
+                        success: r.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,
+                        error: r.get::<_, Option<i64>>(3)?.unwrap_or(0) as u64,
+                    })
+                },
+            )?
             .filter_map(|r| r.ok())
             .collect();
         Ok(rows)
@@ -652,37 +575,7 @@ impl SqliteBackend {
         bucket_secs: i64,
     ) -> rusqlite::Result<Vec<TokenBucket>> {
         let bucket_ms = bucket_secs * 1000;
-        let mut conditions = Vec::<String>::new();
-        if filter.provider.is_some() {
-            conditions.push("provider = ?1".into());
-        }
-        if filter.model.is_some() {
-            conditions.push("model LIKE ?2".into());
-        }
-        if filter.status.is_some() {
-            conditions.push("status = ?3".into());
-        }
-        if filter.since_ms.is_some() {
-            conditions.push("timestamp >= ?4".into());
-        }
-        if filter.until_ms.is_some() {
-            conditions.push("timestamp <= ?5".into());
-        }
-        if filter.virtual_key.is_some() {
-            conditions.push("virtual_key = ?6".into());
-        }
-        let where_str = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        let p1: Option<String> = filter.provider.clone();
-        let p2: Option<String> = filter.model.as_ref().map(|m| format!("%{m}%"));
-        let p3: Option<String> = filter.status.as_ref().map(|s| s.as_str().to_string());
-        let p4: Option<i64> = filter.since_ms;
-        let p5: Option<i64> = filter.until_ms;
-        let p6: Option<String> = filter.virtual_key.clone();
+        let (where_str, params_vec) = build_where_clause(filter);
 
         let sql = format!(
             "SELECT (timestamp/{b})*{b} AS ts,
@@ -696,14 +589,17 @@ impl SqliteBackend {
 
         let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![p1, p2, p3, p4, p5, p6], |r| {
-                Ok(TokenBucket {
-                    timestamp: r.get(0)?,
-                    prompt_tokens: r.get::<_, Option<i64>>(1)?.unwrap_or(0),
-                    completion_tokens: r.get::<_, Option<i64>>(2)?.unwrap_or(0),
-                    total_tokens: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                })
-            })?
+            .query_map(
+                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+                |r| {
+                    Ok(TokenBucket {
+                        timestamp: r.get(0)?,
+                        prompt_tokens: r.get::<_, Option<i64>>(1)?.unwrap_or(0),
+                        completion_tokens: r.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                        total_tokens: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    })
+                },
+            )?
             .filter_map(|r| r.ok())
             .collect();
         Ok(rows)
@@ -747,6 +643,51 @@ fn build_guardrails_where(filter: &LogFilter) -> (String, Vec<Box<dyn rusqlite::
     }
 
     (conditions.join(" AND "), params_vec)
+}
+
+fn build_where_clause(filter: &LogFilter) -> (String, Vec<Box<dyn rusqlite::types::ToSql>>) {
+    let mut conditions = Vec::<String>::new();
+    let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    let mut idx = 0;
+
+    if let Some(ref provider) = filter.provider {
+        idx += 1;
+        conditions.push(format!("provider = ?{idx}"));
+        params_vec.push(Box::new(provider.clone()));
+    }
+    if let Some(ref model) = filter.model {
+        idx += 1;
+        conditions.push(format!("model LIKE ?{idx}"));
+        params_vec.push(Box::new(format!("%{model}%")));
+    }
+    if let Some(ref status) = filter.status {
+        idx += 1;
+        conditions.push(format!("status = ?{idx}"));
+        params_vec.push(Box::new(status.as_str().to_string()));
+    }
+    if let Some(since) = filter.since_ms {
+        idx += 1;
+        conditions.push(format!("timestamp >= ?{idx}"));
+        params_vec.push(Box::new(since));
+    }
+    if let Some(until) = filter.until_ms {
+        idx += 1;
+        conditions.push(format!("timestamp <= ?{idx}"));
+        params_vec.push(Box::new(until));
+    }
+    if let Some(ref vk) = filter.virtual_key {
+        idx += 1;
+        conditions.push(format!("virtual_key = ?{idx}"));
+        params_vec.push(Box::new(vk.clone()));
+    }
+
+    let where_str = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    (where_str, params_vec)
 }
 
 fn row_to_entry(r: &rusqlite::Row) -> rusqlite::Result<LogEntry> {
@@ -1198,8 +1139,8 @@ pub fn build_log_entry_full(
         error_message,
         virtual_key,
         is_stream,
-        input_preview: input_preview.map(|s| truncate(&s, 200)),
-        output_preview: output_preview.map(|s| truncate(&s, 200)),
+        input_preview,
+        output_preview,
         compression_saved_bytes,
         guardrail_triggered,
         guardrail_type,
@@ -1207,6 +1148,7 @@ pub fn build_log_entry_full(
     }
 }
 
+#[allow(dead_code)]
 fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()

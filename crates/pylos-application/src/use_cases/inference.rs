@@ -358,7 +358,7 @@ impl InferenceOrchestrator {
         &self,
         mut request: PylosRequest,
         mut ctx: RequestContext,
-    ) -> Result<PylosResponse, PylosError> {
+    ) -> Result<(PylosResponse, RequestContext), PylosError> {
         // Convertit TextCompletion en ChatCompletion (compat)
         let text_completion_prompt = if let PylosRequest::TextCompletion(ref tc) = request {
             let prompt = tc.prompt.first().to_string();
@@ -400,7 +400,7 @@ impl InferenceOrchestrator {
             match plugin.pre_hook(&mut request, &mut ctx).await {
                 Ok(Some(short_circuit)) => {
                     debug!(plugin = plugin.name(), "Pre-hook short-circuited request");
-                    return Ok(short_circuit);
+                    return Ok((short_circuit, ctx));
                 }
                 Ok(None) => {}
                 Err(e) => {
@@ -496,23 +496,26 @@ impl InferenceOrchestrator {
                                 .choices
                                 .first()
                                 .and_then(|c| c.finish_reason.clone());
-                            return Ok(PylosResponse::TextCompletion(TextCompletionResponse {
-                                id: chat_resp.id.clone(),
-                                object: "text_completion".to_string(),
-                                created: chat_resp.created,
-                                model: model.clone(),
-                                choices: vec![TextCompletionChoice {
-                                    text,
-                                    index: 0,
-                                    finish_reason: finish,
-                                    logprobs: None,
-                                }],
-                                usage: chat_resp.usage.clone(),
-                            }));
+                            return Ok((
+                                PylosResponse::TextCompletion(TextCompletionResponse {
+                                    id: chat_resp.id.clone(),
+                                    object: "text_completion".to_string(),
+                                    created: chat_resp.created,
+                                    model: model.clone(),
+                                    choices: vec![TextCompletionChoice {
+                                        text,
+                                        index: 0,
+                                        finish_reason: finish,
+                                        logprobs: None,
+                                    }],
+                                    usage: chat_resp.usage.clone(),
+                                }),
+                                ctx,
+                            ));
                         }
                     }
 
-                    return Ok(response);
+                    return Ok((response, ctx));
                 }
                 Err(e) => {
                     self.record_failure(provider.name());
@@ -542,7 +545,7 @@ impl InferenceOrchestrator {
         &self,
         mut request: PylosRequest,
         mut ctx: RequestContext,
-    ) -> Result<(ChunkStream, String), PylosError> {
+    ) -> Result<(ChunkStream, String, RequestContext), PylosError> {
         // Pre-hooks
         for plugin in &self.plugins {
             match plugin.pre_hook(&mut request, &mut ctx).await {
@@ -564,7 +567,7 @@ impl InferenceOrchestrator {
                     let chunk = make_terminal_chunk(&model, &content);
                     let stream: ChunkStream =
                         Box::pin(futures::stream::once(async move { Ok(chunk) }));
-                    return Ok((stream, "short-circuit".into()));
+                    return Ok((stream, "short-circuit".into(), ctx));
                 }
                 Ok(None) => {}
                 Err(e) => {
@@ -638,7 +641,7 @@ impl InferenceOrchestrator {
                         request.clone(),
                         ctx.clone(),
                     );
-                    return Ok((wrapped, actual_provider));
+                    return Ok((wrapped, actual_provider, ctx));
                 }
                 Err(e) => {
                     self.record_failure(provider.name());

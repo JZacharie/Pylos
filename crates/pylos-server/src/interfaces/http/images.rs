@@ -39,7 +39,7 @@ pub async fn generate_image(
     }
 
     match state.orchestrator.complete(request, request_ctx).await {
-        Ok(PylosResponse::Image(resp)) => {
+        Ok((PylosResponse::Image(resp), _)) => {
             let latency = start.elapsed().as_secs_f64() * 1000.0;
             let provider = guess_provider(&model);
 
@@ -65,7 +65,7 @@ pub async fn generate_image(
 
             Json(resp).into_response()
         }
-        Ok(other) => {
+        Ok((other, _)) => {
             let latency = start.elapsed().as_secs_f64() * 1000.0;
             let provider = guess_provider(&model);
             let err_msg = format!("Unexpected response type: {:?}", other);

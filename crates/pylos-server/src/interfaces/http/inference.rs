@@ -23,7 +23,17 @@ use pylos_core::error::PylosError;
 fn guardrails_info_from_response(
     finish_reason: &Option<String>,
     output_preview: &Option<String>,
+    ctx: &RequestContext,
 ) -> (Option<bool>, Option<String>, Option<String>) {
+    if let Some(triggered_val) = ctx.headers.get("guardrail_triggered") {
+        if triggered_val == "true" {
+            return (
+                Some(true),
+                ctx.headers.get("guardrail_type").cloned(),
+                ctx.headers.get("guardrail_detail").cloned(),
+            );
+        }
+    }
     let triggered = finish_reason.as_deref() == Some("content_filter");
     if !triggered {
         return (None, None, None);
@@ -75,6 +85,7 @@ pub async fn chat_completions(
     let input_preview = payload
         .messages
         .iter()
+        .rev()
         .find(|m| matches!(m.role, pylos_core::domain::openai::MessageRole::User))
         .and_then(|m| m.content.clone());
 
@@ -159,7 +170,7 @@ async fn complete_response(
     state.metrics.inc_requests(&provider_name, &model, req_type);
 
     match state.orchestrator.complete(request, ctx).await {
-        Ok(pylos_core::domain::request::PylosResponse::ChatCompletion(resp)) => {
+        Ok((pylos_core::domain::request::PylosResponse::ChatCompletion(resp), final_ctx)) => {
             let latency = start.elapsed().as_secs_f64() * 1000.0;
             state.metrics.inc_success(&provider_name, &model);
             state
@@ -184,7 +195,7 @@ async fn complete_response(
             let output_preview = resp.choices.first().and_then(|c| c.message.content.clone());
             let finish_reason = resp.choices.first().and_then(|c| c.finish_reason.clone());
             let (gr_triggered, gr_type, gr_detail) =
-                guardrails_info_from_response(&finish_reason, &output_preview);
+                guardrails_info_from_response(&finish_reason, &output_preview, &final_ctx);
             let provider = guess_provider(&resp.model);
             let vk_name = vk_info.map(|v| v.name);
 
@@ -235,7 +246,7 @@ async fn complete_response(
             );
             response
         }
-        Ok(pylos_core::domain::request::PylosResponse::Image(resp)) => {
+        Ok((pylos_core::domain::request::PylosResponse::Image(resp), _)) => {
             state.metrics.inc_success(&provider_name, &model);
             info!(
                 request_id = %request_id,
@@ -245,7 +256,7 @@ async fn complete_response(
             );
             Json(resp).into_response()
         }
-        Ok(pylos_core::domain::request::PylosResponse::Embedding(resp)) => {
+        Ok((pylos_core::domain::request::PylosResponse::Embedding(resp), _)) => {
             state.metrics.inc_success(&provider_name, &model);
             info!(
                 request_id = %request_id,
@@ -255,7 +266,7 @@ async fn complete_response(
             );
             Json(resp).into_response()
         }
-        Ok(pylos_core::domain::request::PylosResponse::TextCompletion(resp)) => {
+        Ok((pylos_core::domain::request::PylosResponse::TextCompletion(resp), _)) => {
             state.metrics.inc_success(&provider_name, &model);
             info!(
                 request_id = %request_id,
@@ -354,7 +365,7 @@ async fn stream_response(
         .inc_requests(&guess_provider(&model), &model, req_type);
 
     match state.orchestrator.stream(request, ctx).await {
-        Ok((chunk_stream, actual_provider)) => {
+        Ok((chunk_stream, actual_provider, final_ctx)) => {
             let vk_name = vk_info.map(|v| v.name);
 
             info!(
@@ -413,6 +424,7 @@ async fn stream_response(
             let provider_clone = actual_provider.clone();
             let req_id_for_log = request_id.clone();
             let src_for_log = source.clone();
+            let final_ctx_clone = final_ctx.clone();
             tokio::spawn(async move {
                 if log_rx.recv().await.is_some() {
                     let elapsed_total = start.elapsed().as_secs_f64();
@@ -496,7 +508,7 @@ async fn stream_response(
                     };
 
                     let (gr_triggered, gr_type, gr_detail) =
-                        guardrails_info_from_response(&finish, &output_preview);
+                        guardrails_info_from_response(&finish, &output_preview, &final_ctx_clone);
                     let entry = build_log_entry_full(
                         &provider_clone,
                         &model_clone,

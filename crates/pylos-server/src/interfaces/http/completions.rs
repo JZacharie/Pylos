@@ -23,7 +23,7 @@ pub async fn text_completions(
     Json(payload): Json<TextCompletionRequest>,
 ) -> impl IntoResponse {
     let model = payload.model.clone();
-    let prompt_preview = Some(payload.prompt.first().chars().take(200).collect::<String>());
+    let prompt_preview = Some(payload.prompt.first().to_string());
     let start = Instant::now();
 
     let request = PylosRequest::TextCompletion(payload);
@@ -35,12 +35,12 @@ pub async fn text_completions(
     let vk_name = vk_info.map(|v| v.name);
 
     match state.orchestrator.complete(request, ctx).await {
-        Ok(pylos_core::domain::request::PylosResponse::TextCompletion(resp)) => {
+        Ok((pylos_core::domain::request::PylosResponse::TextCompletion(resp), _)) => {
             let latency = start.elapsed().as_secs_f64() * 1000.0;
             let output_preview = resp
                 .choices
                 .first()
-                .map(|c| c.text.chars().take(200).collect::<String>());
+                .map(|c| c.text.clone());
             let finish_reason = resp.choices.first().and_then(|c| c.finish_reason.clone());
             let provider = guess_provider(&resp.model);
 
@@ -65,7 +65,7 @@ pub async fn text_completions(
 
             Json(resp).into_response()
         }
-        Ok(other) => {
+        Ok((other, _)) => {
             // Ne devrait pas arriver — mais au cas où
             error!(model = %model, "Unexpected response type for text completion");
             Json(other).into_response()
