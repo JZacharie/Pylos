@@ -210,6 +210,9 @@ async fn complete_response(
                 "[Complete] Inference succeeded"
             );
 
+            let obfuscated_input = final_ctx.headers.get("x-obfuscated-input").cloned();
+            let pii_mapping = final_ctx.headers.get("x-pii-mapping").cloned();
+
             let entry = build_log_entry_full(
                 &provider,
                 &resp.model,
@@ -226,6 +229,8 @@ async fn complete_response(
                 gr_triggered,
                 gr_type,
                 gr_detail,
+                obfuscated_input,
+                pii_mapping,
             );
 
             let state_clone = state.clone();
@@ -307,6 +312,8 @@ async fn complete_response(
                 None,
                 vk_name,
                 saved_bytes,
+                None,
+                None,
                 None,
                 None,
                 None,
@@ -509,6 +516,9 @@ async fn stream_response(
 
                     let (gr_triggered, gr_type, gr_detail) =
                         guardrails_info_from_response(&finish, &output_preview, &final_ctx_clone);
+                    let obfuscated_input = final_ctx_clone.headers.get("x-obfuscated-input").cloned();
+                    let pii_mapping = final_ctx_clone.headers.get("x-pii-mapping").cloned();
+
                     let entry = build_log_entry_full(
                         &provider_clone,
                         &model_clone,
@@ -525,6 +535,8 @@ async fn stream_response(
                         gr_triggered,
                         gr_type,
                         gr_detail,
+                        obfuscated_input,
+                        pii_mapping,
                     );
                     state_for_log.log_store.push(entry).await;
                 }
@@ -574,6 +586,8 @@ async fn stream_response(
                 None,
                 vk_name,
                 saved_bytes,
+                None,
+                None,
                 None,
                 None,
                 None,

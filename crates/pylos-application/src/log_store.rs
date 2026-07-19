@@ -34,6 +34,8 @@ pub struct LogEntry {
     pub guardrail_triggered: Option<bool>,
     pub guardrail_type: Option<String>,
     pub guardrail_detail: Option<String>,
+    pub obfuscated_input: Option<String>,
+    pub pii_mapping: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -185,6 +187,12 @@ impl SqliteBackend {
         let _ = b
             .conn
             .execute("ALTER TABLE logs ADD COLUMN guardrail_detail TEXT", []);
+        let _ = b
+            .conn
+            .execute("ALTER TABLE logs ADD COLUMN obfuscated_input TEXT", []);
+        let _ = b
+            .conn
+            .execute("ALTER TABLE logs ADD COLUMN pii_mapping TEXT", []);
         Ok(b)
     }
 
@@ -219,7 +227,7 @@ impl SqliteBackend {
     fn insert(&self, e: &LogEntry) -> rusqlite::Result<()> {
         self.conn.execute(
             "INSERT OR IGNORE INTO logs VALUES
-             (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21)",
+             (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23)",
             params![
                 e.id,
                 e.timestamp,
@@ -242,6 +250,8 @@ impl SqliteBackend {
                 e.guardrail_triggered,
                 e.guardrail_type,
                 e.guardrail_detail,
+                e.obfuscated_input,
+                e.pii_mapping,
             ],
         )?;
         Ok(())
@@ -277,7 +287,8 @@ impl SqliteBackend {
                     prompt_tokens,completion_tokens,total_tokens,cost_usd,
                     finish_reason,error_message,virtual_key,is_stream,
                     input_preview,output_preview,compression_saved_bytes,
-                    guardrail_triggered,guardrail_type,guardrail_detail
+                    guardrail_triggered,guardrail_type,guardrail_detail,
+                    obfuscated_input,pii_mapping
              FROM logs {where_str}
              ORDER BY timestamp DESC LIMIT ?{} OFFSET ?{}",
             idx + 1,
@@ -433,7 +444,8 @@ impl SqliteBackend {
                     prompt_tokens,completion_tokens,total_tokens,cost_usd,
                     finish_reason,error_message,virtual_key,is_stream,
                     input_preview,output_preview,compression_saved_bytes,
-                    guardrail_triggered,guardrail_type,guardrail_detail
+                    guardrail_triggered,guardrail_type,guardrail_detail,
+                    obfuscated_input,pii_mapping
              FROM logs WHERE {where_clause}
              ORDER BY timestamp DESC LIMIT ?{} OFFSET ?{}",
             idx + 1,
@@ -713,6 +725,8 @@ fn row_to_entry(r: &rusqlite::Row) -> rusqlite::Result<LogEntry> {
         guardrail_triggered: r.get::<_, Option<i32>>(18)?.map(|v| v != 0),
         guardrail_type: r.get(19)?,
         guardrail_detail: r.get(20)?,
+        obfuscated_input: r.get(21).ok(),
+        pii_mapping: r.get(22).ok(),
     })
 }
 
@@ -1094,6 +1108,8 @@ pub fn build_log_entry(
         None,
         None,
         None,
+        None,
+        None,
     )
 }
 
@@ -1114,6 +1130,8 @@ pub fn build_log_entry_full(
     guardrail_triggered: Option<bool>,
     guardrail_type: Option<String>,
     guardrail_detail: Option<String>,
+    obfuscated_input: Option<String>,
+    pii_mapping: Option<String>,
 ) -> LogEntry {
     let (prompt_tokens, completion_tokens, total_tokens) = usage
         .map(|u| (u.prompt_tokens, u.completion_tokens, u.total_tokens))
@@ -1145,6 +1163,8 @@ pub fn build_log_entry_full(
         guardrail_triggered,
         guardrail_type,
         guardrail_detail,
+        obfuscated_input,
+        pii_mapping,
     }
 }
 

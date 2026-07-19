@@ -292,6 +292,29 @@ export default function Logs() {
                 </div>
               </div>
             )}
+            {selectedLog.obfuscated_input && selectedLog.obfuscated_input !== selectedLog.input_preview && (
+              <div>
+                <div className="text-xs text-zinc-500 mb-1">Obfuscated Input (Sent to LLM)</div>
+                <div className="bg-zinc-800 rounded p-2 text-zinc-300 text-xs break-words">
+                  {selectedLog.obfuscated_input}
+                </div>
+              </div>
+            )}
+            {selectedLog.pii_mapping && (
+              <div>
+                <div className="text-xs text-zinc-500 mb-1">PII Mapping</div>
+                <div className="bg-zinc-800 rounded p-2 text-zinc-300 text-xs font-mono break-all whitespace-pre-wrap">
+                  {(() => {
+                    try {
+                      const parsed = JSON.parse(selectedLog.pii_mapping);
+                      return Object.entries(parsed).map(([k, v]) => `${k} -> ${v}`).join('\n');
+                    } catch (e) {
+                      return selectedLog.pii_mapping;
+                    }
+                  })()}
+                </div>
+              </div>
+            )}
             {selectedLog.output_preview && (
               <div>
                 <div className="text-xs text-zinc-500 mb-1">Output</div>

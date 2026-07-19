@@ -82,6 +82,8 @@ export interface LogEntry {
   is_stream: boolean
   input_preview: string | null
   output_preview: string | null
+  obfuscated_input: string | null
+  pii_mapping: string | null
 }
 
 export interface LogStats {

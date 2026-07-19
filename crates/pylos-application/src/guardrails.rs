@@ -16,7 +16,13 @@ use crate::config_store::ConfigStore;
 static RE_EMAIL: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
 static RE_PHONE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\+?\d{1,4}[-.\s]?\(?\d{1,3}?\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}").unwrap()
+    regex::Regex::new(r"\+?\d{1,4}[-.\s]?\(?\d{1,4}?\)?(?:[-.\s]?\d{1,4}){2,5}").unwrap()
+});
+static RE_IBAN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b[a-zA-Z]{2}\d{2}(?:[ -]*[a-zA-Z0-9]){12,30}\b").unwrap()
+});
+static RE_SSN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\b[12][ -]*\d{2}[ -]*\d{2}[ -]*\d{2}[ -]*\d{3}[ -]*\d{3}[ -]*\d{2}\b").unwrap()
 });
 static RE_CC: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b(?:\d[ -]*?){13,16}\b").unwrap());
@@ -58,6 +64,28 @@ impl GuardrailsPlugin {
             for (idx, mat) in (start_email_idx..).zip(RE_EMAIL.find_iter(&masked)) {
                 let original = mat.as_str().to_string();
                 let placeholder = format!("[EMAIL_{}]", idx);
+                pii_map.insert(placeholder.clone(), original);
+                next_masked = next_masked.replace(mat.as_str(), &placeholder);
+            }
+            masked = next_masked;
+
+            // IBANs
+            let start_iban_idx = pii_map.len() + 1;
+            let mut next_masked = masked.clone();
+            for (idx, mat) in (start_iban_idx..).zip(RE_IBAN.find_iter(&masked)) {
+                let original = mat.as_str().to_string();
+                let placeholder = format!("[IBAN_{}]", idx);
+                pii_map.insert(placeholder.clone(), original);
+                next_masked = next_masked.replace(mat.as_str(), &placeholder);
+            }
+            masked = next_masked;
+
+            // Social Security Numbers (SSN)
+            let start_ssn_idx = pii_map.len() + 1;
+            let mut next_masked = masked.clone();
+            for (idx, mat) in (start_ssn_idx..).zip(RE_SSN.find_iter(&masked)) {
+                let original = mat.as_str().to_string();
+                let placeholder = format!("[SSN_{}]", idx);
                 pii_map.insert(placeholder.clone(), original);
                 next_masked = next_masked.replace(mat.as_str(), &placeholder);
             }
@@ -253,7 +281,8 @@ impl LlmPlugin for GuardrailsPlugin {
                     );
 
                     if (mask_pii || mask_secrets) && masked != original {
-                        *content = masked;
+                        *content = masked.clone();
+                        ctx.headers.insert("x-obfuscated-input".to_string(), masked);
                     }
                 }
             }

@@ -448,6 +448,12 @@ fn row_to_log_entry(row: &sqlx::sqlite::SqliteRow) -> LogEntry {
         is_stream: is_stream_int != 0,
         input_preview: row.try_get("input_preview").ok(),
         output_preview: row.try_get("output_preview").ok(),
+        compression_saved_bytes: 0,
+        guardrail_triggered: None,
+        guardrail_type: None,
+        guardrail_detail: None,
+        obfuscated_input: None,
+        pii_mapping: None,
     }
 }
 
