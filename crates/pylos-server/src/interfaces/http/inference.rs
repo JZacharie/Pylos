@@ -531,7 +531,8 @@ async fn stream_response(
 
                     let (gr_triggered, gr_type, gr_detail, moderation_scores) =
                         guardrails_info_from_response(&finish, &output_preview, &final_ctx_clone);
-                    let obfuscated_input = final_ctx_clone.headers.get("x-obfuscated-input").cloned();
+                    let obfuscated_input =
+                        final_ctx_clone.headers.get("x-obfuscated-input").cloned();
                     let pii_mapping = final_ctx_clone.headers.get("x-pii-mapping").cloned();
 
                     let entry = build_log_entry_full(

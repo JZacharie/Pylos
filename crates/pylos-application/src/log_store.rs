@@ -284,13 +284,11 @@ impl SqliteBackend {
         let idx = params_vec.len();
 
         let count_sql = format!("SELECT COUNT(*) FROM logs {where_str}");
-        let total: u64 = self
-            .conn
-            .query_row(
-                &count_sql,
-                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
-                |r| r.get(0),
-            )?;
+        let total: u64 = self.conn.query_row(
+            &count_sql,
+            rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+            |r| r.get(0),
+        )?;
 
         let rows_sql = format!(
             "SELECT id,timestamp,provider,model,object,status,latency_ms,
@@ -337,29 +335,28 @@ impl SqliteBackend {
              FROM logs {where_str}"
         );
 
-        self.conn
-            .query_row(
-                &sql,
-                rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
-                |r| {
-                    let total: u64 = r.get(0)?;
-                    let success: u64 = r.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64;
-                    Ok(LogStats {
-                        total_requests: total,
-                        success_rate: if total > 0 {
-                            success as f64 / total as f64 * 100.0
-                        } else {
-                            0.0
-                        },
-                        average_latency_ms: r.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
-                        total_tokens: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                        total_cost_usd: r.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
-                        total_prompt_tokens: r.get::<_, Option<i64>>(5)?.unwrap_or(0),
-                        total_completion_tokens: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
-                        total_compression_saved_bytes: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
-                    })
-                },
-            )
+        self.conn.query_row(
+            &sql,
+            rusqlite::params_from_iter(params_vec.iter().map(|p| p.as_ref())),
+            |r| {
+                let total: u64 = r.get(0)?;
+                let success: u64 = r.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64;
+                Ok(LogStats {
+                    total_requests: total,
+                    success_rate: if total > 0 {
+                        success as f64 / total as f64 * 100.0
+                    } else {
+                        0.0
+                    },
+                    average_latency_ms: r.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
+                    total_tokens: r.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    total_cost_usd: r.get::<_, Option<f64>>(4)?.unwrap_or(0.0),
+                    total_prompt_tokens: r.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                    total_completion_tokens: r.get::<_, Option<i64>>(6)?.unwrap_or(0),
+                    total_compression_saved_bytes: r.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                })
+            },
+        )
     }
 
     fn histogram(

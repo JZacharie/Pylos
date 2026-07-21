@@ -37,10 +37,7 @@ pub async fn text_completions(
     match state.orchestrator.complete(request, ctx).await {
         Ok((pylos_core::domain::request::PylosResponse::TextCompletion(resp), _)) => {
             let latency = start.elapsed().as_secs_f64() * 1000.0;
-            let output_preview = resp
-                .choices
-                .first()
-                .map(|c| c.text.clone());
+            let output_preview = resp.choices.first().map(|c| c.text.clone());
             let finish_reason = resp.choices.first().and_then(|c| c.finish_reason.clone());
             let provider = guess_provider(&resp.model);
 

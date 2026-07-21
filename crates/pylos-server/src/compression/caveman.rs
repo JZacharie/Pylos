@@ -38,31 +38,31 @@ const PROMPT_SPAGHETTI: &str = "The user message below has been encoded using a 
 /// Homoglyph substitution map: Latin char -> visually similar Unicode chars from other scripts
 fn homoglyph_map() -> Vec<(char, &'static [char])> {
     vec![
-        ('a', &['а', 'α', 'à', 'á', 'â', 'ã', 'ä', 'å']),  // Cyrillic, Greek
-        ('b', &['Ь', 'ъ', 'β']),  // Cyrillic soft sign looks like b, Greek beta
-        ('c', &['с', 'ϲ', '¢']),  // Cyrillic es, Greek lunate sigma
+        ('a', &['а', 'α', 'à', 'á', 'â', 'ã', 'ä', 'å']), // Cyrillic, Greek
+        ('b', &['Ь', 'ъ', 'β']), // Cyrillic soft sign looks like b, Greek beta
+        ('c', &['с', 'ϲ', '¢']), // Cyrillic es, Greek lunate sigma
         ('d', &['ԁ', 'ɗ', 'ԃ']),
-        ('e', &['е', 'ё', 'є', 'ε', 'é', 'è', 'ê', 'ë']),  // Cyrillic, Greek
+        ('e', &['е', 'ё', 'є', 'ε', 'é', 'è', 'ê', 'ë']), // Cyrillic, Greek
         ('f', &['ғ', 'ƒ']),
         ('g', &['ɡ', 'ĝ', 'ğ']),
-        ('h', &['һ', 'հ', 'н']),  // Cyrillic shha, Armenian ho
-        ('i', &['і', 'ɪ', 'ι', 'í', 'ì', 'î', 'ï']),  // Cyrillic, Greek
-        ('j', &['ј', 'ϳ']),  // Cyrillic je, Greek yot
-        ('k', &['к', 'κ', 'ķ']),  // Cyrillic, Greek
+        ('h', &['һ', 'հ', 'н']), // Cyrillic shha, Armenian ho
+        ('i', &['і', 'ɪ', 'ι', 'í', 'ì', 'î', 'ï']), // Cyrillic, Greek
+        ('j', &['ј', 'ϳ']),      // Cyrillic je, Greek yot
+        ('k', &['к', 'κ', 'ķ']), // Cyrillic, Greek
         ('l', &['ӏ', 'ӏ', 'ӏ']),
         ('m', &['м', 'ṃ', 'ϻ']),
-        ('n', &['п', 'η', 'ή']),  // Cyrillic pe looks like n, Greek eta
+        ('n', &['п', 'η', 'ή']), // Cyrillic pe looks like n, Greek eta
         ('o', &['о', 'ο', 'σ', 'ó', 'ò', 'ô', 'õ', 'ö', 'ø']),
-        ('p', &['р', 'ρ', 'þ']),  // Cyrillic er, Greek rho
+        ('p', &['р', 'ρ', 'þ']), // Cyrillic er, Greek rho
         ('q', &['ԛ', 'զ']),
-        ('r', &['г', 'я']),  // Cyrillic ge, ya (lowercase)
+        ('r', &['г', 'я']), // Cyrillic ge, ya (lowercase)
         ('s', &['ѕ', 'ʂ', 'ş']),
         ('t', &['т', 'ţ', '†']),
-        ('u', &['у', 'υ', 'ú', 'ù', 'û', 'ü']),  // Cyrillic, Greek
-        ('v', &['ѵ', 'ν', '∨']),  // Cyrillic, Greek nu
-        ('w', &['ш', 'ω', 'ώ']),  // Cyrillic sha, Greek omega
-        ('x', &['х', 'χ', '×']),  // Cyrillic, Greek
-        ('y', &['у', 'γ', 'ý', 'ÿ']),  // Cyrillic u, Greek gamma
+        ('u', &['у', 'υ', 'ú', 'ù', 'û', 'ü']), // Cyrillic, Greek
+        ('v', &['ѵ', 'ν', '∨']),                // Cyrillic, Greek nu
+        ('w', &['ш', 'ω', 'ώ']),                // Cyrillic sha, Greek omega
+        ('x', &['х', 'χ', '×']),                // Cyrillic, Greek
+        ('y', &['у', 'γ', 'ý', 'ÿ']),           // Cyrillic u, Greek gamma
         ('z', &['z', 'ζ', 'ż']),
         ('A', &['Α', 'Α', 'À', 'Á', 'Â', 'Ã', 'Ä', 'Å']),
         ('B', &['Β', 'В']),

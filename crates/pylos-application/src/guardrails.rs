@@ -30,6 +30,7 @@ pub struct ContentModerationScores {
     pub social_risk: f64,
 }
 
+#[allow(dead_code)]
 struct ModCategory {
     name: &'static str,
     score_key: &'static str,
@@ -123,7 +124,10 @@ static MOD_CATEGORIES: &[ModCategory] = &[
         score_key: "hate_speech",
         patterns: &[
             (r"\bhate (speech|crime)\b", 0.3),
-            (r"\b(you|they) (should|must) (be )?(killed|eliminated|exterminated)\b", 0.9),
+            (
+                r"\b(you|they) (should|must) (be )?(killed|eliminated|exterminated)\b",
+                0.9,
+            ),
             (r"\bdeath to\b", 0.8),
             (r"\bexterminat(e|ion)\b", 0.7),
             (r"\b(religious|ethnic) (cleansing|war)\b", 0.8),
@@ -185,7 +189,10 @@ static MOD_CATEGORIES: &[ModCategory] = &[
             (r"\b(illegal|black) (market|trade)\b", 0.6),
             (r"\bcounterfeit\b", 0.5),
             (r"\bterroris(m|t)\b", 0.5),
-            (r"\bhow to (make|manufacture|synthesize)\s+(drug|meth|cocaine|heroin|lsd)\b", 0.9),
+            (
+                r"\bhow to (make|manufacture|synthesize)\s+(drug|meth|cocaine|heroin|lsd)\b",
+                0.9,
+            ),
         ],
     },
     ModCategory {
@@ -197,7 +204,10 @@ static MOD_CATEGORIES: &[ModCategory] = &[
             (r"\bbank (account|routing) number\b", 0.6),
             (r"\bcredit (card|report)\b", 0.4),
             (r"\b(patient|medical) (record|history|info)\b", 0.5),
-            (r"\b(cover|reveal|disclose) (personal|private|confidential)\b", 0.4),
+            (
+                r"\b(cover|reveal|disclose) (personal|private|confidential)\b",
+                0.4,
+            ),
             (r"\bleak (personal|private|sensitive|confidential)\b", 0.5),
             (r"\b(leaked|breach) (data|information|password)\b", 0.5),
             (r"\bdox(x?ing)?\b", 0.6),
@@ -274,11 +284,11 @@ static RE_IBAN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\b[a-zA-Z]{2}\d{2}(?:[ -]*[a-zA-Z0-9]){12,30}\b").unwrap()
 });
 static RE_SSN: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b[12][ -]*\d{2}[ -]*\d{2}[ -]*\d{2}[ -]*\d{3}[ -]*\d{3}[ -]*\d{2}\b").unwrap()
+    regex::Regex::new(r"\b[12][ -]*\d{2}[ -]*\d{2}[ -]*\d{2}[ -]*\d{3}[ -]*\d{3}[ -]*\d{2}\b")
+        .unwrap()
 });
-static RE_IP: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap()
-});
+static RE_IP: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap());
 static RE_CC: LazyLock<regex::Regex> =
     LazyLock::new(|| regex::Regex::new(r"\b(?:\d[ -]*?){13,16}\b").unwrap());
 static RE_OPENAI_KEY: LazyLock<regex::Regex> =
@@ -442,7 +452,12 @@ impl LlmPlugin for GuardrailsPlugin {
         request: &mut PylosRequest,
         ctx: &mut RequestContext,
     ) -> Result<Option<PylosResponse>, PylosError> {
-        if ctx.headers.get("x-bypass-guardrails").map(|s| s == "true").unwrap_or(false) {
+        if ctx
+            .headers
+            .get("x-bypass-guardrails")
+            .map(|s| s == "true")
+            .unwrap_or(false)
+        {
             return Ok(None);
         }
 
@@ -454,19 +469,60 @@ impl LlmPlugin for GuardrailsPlugin {
         // Lire dynamiquement la configuration du plugin guardrails
         let cfg = self.config_store.get().await;
         let plugin_cfg = cfg.plugins.iter().find(|p| p.name == "guardrails");
-        let (enabled, mask_pii, mask_secrets, prevent_prompt_injection, blocked_keywords,
-             enable_moderation, moderation_threshold) = match plugin_cfg {
+        let (
+            enabled,
+            mask_pii,
+            mask_secrets,
+            prevent_prompt_injection,
+            blocked_keywords,
+            enable_moderation,
+            moderation_threshold,
+        ) = match plugin_cfg {
             Some(p) => {
-                let mask_pii = p.config.get("mask_pii").and_then(|v| v.as_bool()).unwrap_or(true);
-                let mask_secrets = p.config.get("mask_secrets").and_then(|v| v.as_bool()).unwrap_or(false);
-                let prevent_prompt_injection = p.config.get("prevent_prompt_injection").and_then(|v| v.as_bool()).unwrap_or(false);
-                let blocked_keywords = p.config.get("blocked_keywords").and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|val| val.as_str().map(|s| s.to_string())).collect())
+                let mask_pii = p
+                    .config
+                    .get("mask_pii")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                let mask_secrets = p
+                    .config
+                    .get("mask_secrets")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let prevent_prompt_injection = p
+                    .config
+                    .get("prevent_prompt_injection")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let blocked_keywords = p
+                    .config
+                    .get("blocked_keywords")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|val| val.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
                     .unwrap_or_default();
-                let enable_moderation = p.config.get("enable_moderation").and_then(|v| v.as_bool()).unwrap_or(true);
-                let moderation_threshold = p.config.get("moderation_threshold").and_then(|v| v.as_f64()).unwrap_or(0.7);
-                (p.enabled, mask_pii, mask_secrets, prevent_prompt_injection, blocked_keywords,
-                 enable_moderation, moderation_threshold)
+                let enable_moderation = p
+                    .config
+                    .get("enable_moderation")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                let moderation_threshold = p
+                    .config
+                    .get("moderation_threshold")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.7);
+                (
+                    p.enabled,
+                    mask_pii,
+                    mask_secrets,
+                    prevent_prompt_injection,
+                    blocked_keywords,
+                    enable_moderation,
+                    moderation_threshold,
+                )
             }
             None => (false, false, false, false, vec![], true, 0.7),
         };
@@ -478,28 +534,41 @@ impl LlmPlugin for GuardrailsPlugin {
         // 0. Content Moderation Scoring
         if enable_moderation {
             let mut combined_scores = ContentModerationScores {
-                racism: 0.0, toxicity: 0.0, harassment: 0.0, violence: 0.0,
-                hate_speech: 0.0, self_harm: 0.0, sexual: 0.0, illegal: 0.0,
-                personal_data_leak: 0.0, social_risk: 0.0,
+                racism: 0.0,
+                toxicity: 0.0,
+                harassment: 0.0,
+                violence: 0.0,
+                hate_speech: 0.0,
+                self_harm: 0.0,
+                sexual: 0.0,
+                illegal: 0.0,
+                personal_data_leak: 0.0,
+                social_risk: 0.0,
             };
             for message in &chat_req.messages {
                 if let Some(ref content) = message.content {
                     let msg_scores = compute_moderation_scores(content);
                     combined_scores.racism = combined_scores.racism.max(msg_scores.racism);
                     combined_scores.toxicity = combined_scores.toxicity.max(msg_scores.toxicity);
-                    combined_scores.harassment = combined_scores.harassment.max(msg_scores.harassment);
+                    combined_scores.harassment =
+                        combined_scores.harassment.max(msg_scores.harassment);
                     combined_scores.violence = combined_scores.violence.max(msg_scores.violence);
-                    combined_scores.hate_speech = combined_scores.hate_speech.max(msg_scores.hate_speech);
+                    combined_scores.hate_speech =
+                        combined_scores.hate_speech.max(msg_scores.hate_speech);
                     combined_scores.self_harm = combined_scores.self_harm.max(msg_scores.self_harm);
                     combined_scores.sexual = combined_scores.sexual.max(msg_scores.sexual);
                     combined_scores.illegal = combined_scores.illegal.max(msg_scores.illegal);
-                    combined_scores.personal_data_leak = combined_scores.personal_data_leak.max(msg_scores.personal_data_leak);
-                    combined_scores.social_risk = combined_scores.social_risk.max(msg_scores.social_risk);
+                    combined_scores.personal_data_leak = combined_scores
+                        .personal_data_leak
+                        .max(msg_scores.personal_data_leak);
+                    combined_scores.social_risk =
+                        combined_scores.social_risk.max(msg_scores.social_risk);
                 }
             }
             if let Ok(json) = serde_json::to_string(&combined_scores) {
                 ctx.headers.insert("x-moderation-scores".to_string(), json);
-                let max_score = combined_scores.racism
+                let max_score = combined_scores
+                    .racism
                     .max(combined_scores.toxicity)
                     .max(combined_scores.harassment)
                     .max(combined_scores.violence)
@@ -515,9 +584,19 @@ impl LlmPlugin for GuardrailsPlugin {
                         threshold = moderation_threshold,
                         "[Moderation] Content moderation triggered"
                     );
-                    ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
-                    ctx.headers.insert("guardrail_type".to_string(), "content_moderation".to_string());
-                    ctx.headers.insert("guardrail_detail".to_string(), format!("Moderation score {:.2} exceeded threshold {:.2}", max_score, moderation_threshold));
+                    ctx.headers
+                        .insert("guardrail_triggered".to_string(), "true".to_string());
+                    ctx.headers.insert(
+                        "guardrail_type".to_string(),
+                        "content_moderation".to_string(),
+                    );
+                    ctx.headers.insert(
+                        "guardrail_detail".to_string(),
+                        format!(
+                            "Moderation score {:.2} exceeded threshold {:.2}",
+                            max_score, moderation_threshold
+                        ),
+                    );
                 }
             }
         }
@@ -529,9 +608,14 @@ impl LlmPlugin for GuardrailsPlugin {
                 for keyword in &blocked_keywords {
                     if lower_content.contains(&keyword.to_lowercase()) {
                         warn!(keyword = %keyword, "Guardrails: Keyword match detected (logging but not blocking)");
-                        ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
-                        ctx.headers.insert("guardrail_type".to_string(), "keyword_block".to_string());
-                        ctx.headers.insert("guardrail_detail".to_string(), format!("Blocked keyword: {}", keyword));
+                        ctx.headers
+                            .insert("guardrail_triggered".to_string(), "true".to_string());
+                        ctx.headers
+                            .insert("guardrail_type".to_string(), "keyword_block".to_string());
+                        ctx.headers.insert(
+                            "guardrail_detail".to_string(),
+                            format!("Blocked keyword: {}", keyword),
+                        );
                     }
                 }
             }
@@ -553,9 +637,16 @@ impl LlmPlugin for GuardrailsPlugin {
                     for indicator in &injection_indicators {
                         if lower_content.contains(indicator) {
                             warn!(indicator = %indicator, "Guardrails: Prompt injection detected (logging but not blocking)");
-                            ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
-                            ctx.headers.insert("guardrail_type".to_string(), "prompt_injection".to_string());
-                            ctx.headers.insert("guardrail_detail".to_string(), format!("Prompt injection indicator: {}", indicator));
+                            ctx.headers
+                                .insert("guardrail_triggered".to_string(), "true".to_string());
+                            ctx.headers.insert(
+                                "guardrail_type".to_string(),
+                                "prompt_injection".to_string(),
+                            );
+                            ctx.headers.insert(
+                                "guardrail_detail".to_string(),
+                                format!("Prompt injection indicator: {}", indicator),
+                            );
                         }
                     }
                 }
@@ -569,7 +660,7 @@ impl LlmPlugin for GuardrailsPlugin {
                 if let Some(ref mut content) = message.content {
                     let original = content.clone();
                     let masked = self.mask_text(&original, &mut pii_map, mask_pii, mask_secrets);
-                    
+
                     info!(
                         "[Guardrails] Original message:\n{}\n[Guardrails] Obfuscated message:\n{}",
                         original, masked
@@ -585,11 +676,16 @@ impl LlmPlugin for GuardrailsPlugin {
 
         if !pii_map.is_empty() && (mask_pii || mask_secrets) {
             warn!("Guardrails: PII or Secrets detected and masked");
-            ctx.headers.insert("guardrail_triggered".to_string(), "true".to_string());
-            ctx.headers.insert("guardrail_type".to_string(), "pii".to_string());
+            ctx.headers
+                .insert("guardrail_triggered".to_string(), "true".to_string());
+            ctx.headers
+                .insert("guardrail_type".to_string(), "pii".to_string());
             let detected_keys: Vec<String> = pii_map.keys().cloned().collect();
-            ctx.headers.insert("guardrail_detail".to_string(), format!("Detected PII/Secrets keys: {:?}", detected_keys));
-            
+            ctx.headers.insert(
+                "guardrail_detail".to_string(),
+                format!("Detected PII/Secrets keys: {:?}", detected_keys),
+            );
+
             if let Ok(serialized) = serde_json::to_string(&pii_map) {
                 ctx.headers.insert("x-pii-mapping".to_string(), serialized);
             }

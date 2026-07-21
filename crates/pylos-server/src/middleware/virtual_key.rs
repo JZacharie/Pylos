@@ -92,12 +92,9 @@ pub async fn virtual_key_middleware(
                 vk_cfg.provider_configs.clone()
             } else {
                 let cfg = state.config_store.get().await;
-                let static_vk = cfg.governance
-                    .virtual_keys
-                    .iter()
-                    .find(|v| {
-                        v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
-                    });
+                let static_vk = cfg.governance.virtual_keys.iter().find(|v| {
+                    v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
+                });
 
                 if let Some(vk_cfg) = static_vk {
                     if !vk_cfg.is_active {
