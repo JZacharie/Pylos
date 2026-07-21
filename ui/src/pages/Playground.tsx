@@ -6,7 +6,7 @@ import { formatLatency, formatCost, providerColor } from '../lib/utils'
 import {
   Send, StopCircle, Trash2, ChevronDown,
   Zap, Clock, Hash, Coins, CheckCircle, XCircle,
-  SlidersHorizontal, X, Star, RotateCcw,
+  SlidersHorizontal, X, Star, RotateCcw, Globe,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -202,6 +202,94 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   )
 }
 
+// ─── Translation languages ──────────────────────────────────────────────────
+
+const LANGUAGES = [
+  { value: '', label: 'Off' },
+  { value: 'French', label: 'Français' },
+  { value: 'Spanish', label: 'Español' },
+  { value: 'German', label: 'Deutsch' },
+  { value: 'Italian', label: 'Italiano' },
+  { value: 'Portuguese', label: 'Português' },
+  { value: 'Dutch', label: 'Nederlands' },
+  { value: 'Russian', label: 'Русский' },
+  { value: 'Chinese', label: '中文' },
+  { value: 'Japanese', label: '日本語' },
+  { value: 'Korean', label: '한국어' },
+  { value: 'Arabic', label: 'العربية' },
+  { value: 'Hindi', label: 'हिन्दी' },
+]
+
+// ─── Spaghetti homoglyph map (mirrors backend caveman.rs) ───────────────────
+
+const HOMOGLYPH_MAP: Record<string, string[]> = {
+  'a': ['а', 'α', 'à', 'á', 'â', 'ã', 'ä', 'å'],
+  'b': ['Ь', 'ъ', 'β'],
+  'c': ['с', 'ϲ', '¢'],
+  'd': ['ԁ', 'ɗ', 'ԃ'],
+  'e': ['е', 'ё', 'є', 'ε', 'é', 'è', 'ê', 'ë'],
+  'f': ['ғ', 'ƒ'],
+  'g': ['ɡ', 'ĝ', 'ğ'],
+  'h': ['һ', 'հ', 'н'],
+  'i': ['і', 'ɪ', 'ι', 'í', 'ì', 'î', 'ï'],
+  'j': ['ј', 'ϳ'],
+  'k': ['к', 'κ', 'ķ'],
+  'l': ['ӏ', 'ӏ', 'ӏ'],
+  'm': ['м', 'ṃ', 'ϻ'],
+  'n': ['п', 'η', 'ή'],
+  'o': ['о', 'ο', 'σ', 'ó', 'ò', 'ô', 'õ', 'ö', 'ø'],
+  'p': ['р', 'ρ', 'þ'],
+  'q': ['ԛ', 'զ'],
+  'r': ['г', 'я'],
+  's': ['ѕ', 'ʂ', 'ş'],
+  't': ['т', 'ţ', '†'],
+  'u': ['у', 'υ', 'ú', 'ù', 'û', 'ü'],
+  'v': ['ѵ', 'ν', '∨'],
+  'w': ['ш', 'ω', 'ώ'],
+  'x': ['х', 'χ', '×'],
+  'y': ['у', 'γ', 'ý', 'ÿ'],
+  'z': ['z', 'ζ', 'ż'],
+  'A': ['Α', 'Α', 'À', 'Á', 'Â', 'Ã', 'Ä', 'Å'],
+  'B': ['Β', 'В'],
+  'C': ['Ϲ', 'С'],
+  'D': ['Ɗ', 'Đ'],
+  'E': ['Ε', 'Е', 'Ё', 'Є', 'É', 'È', 'Ê', 'Ë'],
+  'F': ['Ϝ', 'Ғ'],
+  'G': ['Ԍ', 'Ǵ'],
+  'H': ['Η', 'Н', 'Ң'],
+  'I': ['І', 'Ӏ', 'Í', 'Ì', 'Î', 'Ï'],
+  'J': ['Ј', 'Ղ'],
+  'K': ['Κ', 'К'],
+  'L': ['Ⅼ', 'Ĺ'],
+  'M': ['Μ', 'М'],
+  'N': ['Ν', 'П'],
+  'O': ['Ο', 'О', 'Ó', 'Ò', 'Ô', 'Õ', 'Ö', 'Ø'],
+  'P': ['Ρ', 'Р'],
+  'Q': ['Ԛ', 'Ⴍ'],
+  'R': ['Я'],
+  'S': ['Ѕ', 'Տ'],
+  'T': ['Τ', 'Т'],
+  'U': ['Υ', 'У', 'Ú', 'Ù', 'Û', 'Ü'],
+  'V': ['Ѵ', 'Ⅴ'],
+  'W': ['Ւ', 'Ԝ'],
+  'X': ['Χ', 'Х'],
+  'Y': ['Υ', 'Ύ', 'Ý', 'Ÿ'],
+  'Z': ['Ζ', 'Ζ'],
+}
+
+function spaghettiEncode(text: string): string {
+  let result = ''
+  for (const char of text) {
+    const alternates = HOMOGLYPH_MAP[char]
+    if (alternates && alternates.length > 0) {
+      result += alternates[Math.floor(Math.random() * alternates.length)]
+    } else {
+      result += char
+    }
+  }
+  return result
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export default function Playground() {
@@ -253,6 +341,9 @@ export default function Playground() {
   })
   const [bypassGuardrails, setBypassGuardrails] = useState(() => {
     return localStorage.getItem('pylos-playground-bypass-guardrails') === 'true'
+  })
+  const [translateTo, setTranslateTo] = useState(() => {
+    return localStorage.getItem('pylos-playground-translate-to') || ''
   })
   const [isRunning, setIsRunning] = useState(false)
   const [lastResult, setLastResult] = useState<RunResult | null>(null)
@@ -307,6 +398,9 @@ export default function Playground() {
   useEffect(() => {
     localStorage.setItem('pylos-playground-bypass-guardrails', String(bypassGuardrails))
   }, [bypassGuardrails])
+  useEffect(() => {
+    localStorage.setItem('pylos-playground-translate-to', translateTo)
+  }, [translateTo])
   const toggleFavorite = (modelStr: string) => {
     setFavorites(prev =>
       prev.includes(modelStr)
@@ -389,10 +483,15 @@ export default function Playground() {
     const start = performance.now()
     abortRef.current = new AbortController()
 
+    const translateMsg = translateTo
+      ? { role: 'system' as const, content: `IMPORTANT: Translate the user's message to ${translateTo} and respond in ${translateTo}. The user's message should be translated to ${translateTo} before you respond. Respond only in ${translateTo}.` }
+      : null
+
     const payload = {
       model,
       messages: [
         ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        ...(translateMsg ? [translateMsg] : []),
         ...newMessages,
       ],
       temperature,
@@ -621,6 +720,7 @@ export default function Playground() {
     setCavemanMode('off')
     setCavemanCompress(false)
     setForceProviderModel(false)
+    setTranslateTo('')
 
     localStorage.removeItem('pylos-playground-messages')
     localStorage.removeItem('pylos-playground-system-prompt')
@@ -630,6 +730,7 @@ export default function Playground() {
     localStorage.removeItem('pylos-playground-caveman-mode')
     localStorage.removeItem('pylos-playground-caveman-compress')
     localStorage.removeItem('pylos-playground-force-provider-model')
+    localStorage.removeItem('pylos-playground-translate-to')
   }
 
   const { provider: currentProvider } = selectedModel ? parseSelected() : { provider: '' }
@@ -871,6 +972,24 @@ export default function Playground() {
 
           <div className="border-t border-zinc-800/50" />
 
+          {/* Translate prompt */}
+          <div className="space-y-1.5">
+            <label className="text-xs text-zinc-400 flex items-center gap-1.5">
+              <Globe size={12} className="text-zinc-500" />
+              Translate prompt to
+            </label>
+            <select
+              value={translateTo}
+              onChange={e => setTranslateTo(e.target.value)}
+              disabled={isRunning}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
+            >
+              {LANGUAGES.map(l => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Action buttons */}
           <div className="flex gap-2">
             <button
@@ -1036,11 +1155,24 @@ export default function Playground() {
               </button>
             )}
           </div>
+          {cavemanMode === 'spaghetti' && input.trim() && (
+            <div className="mt-2 ml-1 text-xs text-zinc-500 bg-zinc-900/60 border border-zinc-800/60 rounded-lg px-3 py-2 break-all max-h-24 overflow-y-auto">
+              <div className="flex items-center gap-1.5 mb-1 text-zinc-600">
+                <Zap size={10} />
+                <span className="font-semibold">Spaghetti Mix Preview</span>
+              </div>
+              <span className="font-mono text-zinc-400 text-[11px] leading-relaxed">
+                {spaghettiEncode(input.trim())}
+              </span>
+            </div>
+          )}
           {selectedModel && (
             <div className="text-xs text-zinc-600 mt-2 ml-1">
               {parseSelected().model} via {parseSelected().provider}
               {streaming ? ' · streaming' : ' · blocking'}
               · temp {temperature} · max {maxTokens} tokens
+              {translateTo && ` · translate → ${translateTo}`}
+              {cavemanMode !== 'off' && ` · caveman ${cavemanMode}`}
             </div>
           )}
         </div>
