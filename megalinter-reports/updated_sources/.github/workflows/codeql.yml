@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: ["main", "master"]
   schedule:
-    - cron: '30 18 * * 0'
+    - cron: "30 18 * * 0"
 
 env:
   CARGO_TERM_COLOR: always
@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ['rust']
+        language: ["rust"]
 
     steps:
       - name: Checkout repository
