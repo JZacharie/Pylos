@@ -1,0 +1,8 @@
+Results of ts-standard linter (version 12.0.2)
+See documentation on https://megalinter.io/9.4.0/descriptors/typescript_ts_standard/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+Unable to locate the project file. A project file (tsconfig.json or tsconfig.eslint.json) is required in order to use ts-standard.
+

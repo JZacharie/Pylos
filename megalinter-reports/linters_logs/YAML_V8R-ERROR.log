@@ -1,0 +1,70 @@
+Results of v8r linter (version 6.0.0)
+See documentation on https://megalinter.io/9.4.0/descriptors/yaml_v8r/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+ℹ No config file found
+ℹ Pre-warming the cache
+ℹ Processing .github/workflows/ci.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .github/workflows/ci.yml against schema from https://www.schemastore.org/github-workflow.json ...
+✔ .github/workflows/ci.yml is valid
+
+ℹ Processing .github/workflows/codeql.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .github/workflows/codeql.yml against schema from https://www.schemastore.org/github-workflow.json ...
+✔ .github/workflows/codeql.yml is valid
+
+ℹ Processing .github/workflows/megalinter.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .github/workflows/megalinter.yml against schema from https://www.schemastore.org/github-workflow.json ...
+✔ .github/workflows/megalinter.yml is valid
+
+ℹ Processing .github/workflows/pr-tests.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .github/workflows/pr-tests.yml against schema from https://www.schemastore.org/github-workflow.json ...
+✔ .github/workflows/pr-tests.yml is valid
+
+ℹ Processing .github/workflows/promote.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .github/workflows/promote.yml against schema from https://www.schemastore.org/github-workflow.json ...
+✔ .github/workflows/promote.yml is valid
+
+ℹ Processing .mega-linter.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .mega-linter.yml against schema from https://raw.githubusercontent.com/megalinter/megalinter/main/megalinter/descriptors/schemas/megalinter-configuration.jsonschema.json ...
+✖ .mega-linter.yml is invalid
+
+.mega-linter.yml#/DISABLE_LINTERS/1 must be equal to one of the allowed values
+
+ℹ Processing .pre-commit-config.yaml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating .pre-commit-config.yaml against schema from https://www.schemastore.org/pre-commit-config.json ...
+✔ .pre-commit-config.yaml is valid
+
+ℹ Processing docker-compose.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating docker-compose.yml against schema from https://raw.githubusercontent.com/compose-spec/compose-go/master/schema/compose-spec.json ...
+✔ docker-compose.yml is valid
+
+ℹ Processing docker/grafana/provisioning/dashboards/provider.yml
+✖ Could not find a schema to validate docker/grafana/provisioning/dashboards/provider.yml
+
+ℹ Processing docker/prometheus/prometheus.yml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating docker/prometheus/prometheus.yml against schema from https://www.schemastore.org/prometheus.json ...
+✔ docker/prometheus/prometheus.yml is valid
+
+ℹ Processing helm/pylos/Chart.yaml
+ℹ Found schema in https://www.schemastore.org/api/json/catalog.json ...
+ℹ Validating helm/pylos/Chart.yaml against schema from https://www.schemastore.org/chart.json ...
+✔ helm/pylos/Chart.yaml is valid
+
+ℹ Processing helm/pylos/values-dev.yaml
+✖ Could not find a schema to validate helm/pylos/values-dev.yaml
+
+ℹ Processing helm/pylos/values.yaml
+✖ Could not find a schema to validate helm/pylos/values.yaml
+
+

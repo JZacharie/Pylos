@@ -1,0 +1,50 @@
+Results of yamllint linter (version 1.38.0)
+See documentation on https://megalinter.io/9.4.0/descriptors/yaml_yamllint/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+.github/workflows/ci.yml
+  1:1       warning  missing document start "---"  (document-start)
+  3:1       warning  truthy value should be one of [false, true]  (truthy)
+  155:3     warning  comment not indented like content  (comments-indentation)
+
+.github/workflows/codeql.yml
+  1:1       warning  missing document start "---"  (document-start)
+  3:1       warning  truthy value should be one of [false, true]  (truthy)
+
+.github/workflows/megalinter.yml
+  1:1       warning  missing document start "---"  (document-start)
+  3:1       warning  truthy value should be one of [false, true]  (truthy)
+
+.github/workflows/pr-tests.yml
+  1:1       warning  missing document start "---"  (document-start)
+  3:1       warning  truthy value should be one of [false, true]  (truthy)
+
+.github/workflows/promote.yml
+  1:1       warning  missing document start "---"  (document-start)
+  3:1       warning  truthy value should be one of [false, true]  (truthy)
+
+.pre-commit-config.yaml
+  1:1       warning  missing document start "---"  (document-start)
+  21:1      error    too many blank lines (1 > 0)  (empty-lines)
+
+docker-compose.yml
+  16:1      warning  missing document start "---"  (document-start)
+
+docker/grafana/provisioning/dashboards/provider.yml
+  1:1       warning  missing document start "---"  (document-start)
+
+docker/prometheus/prometheus.yml
+  1:1       warning  missing document start "---"  (document-start)
+
+helm/pylos/Chart.yaml
+  1:1       warning  missing document start "---"  (document-start)
+
+helm/pylos/values-dev.yaml
+  1:1       warning  missing document start "---"  (document-start)
+
+helm/pylos/values.yaml
+  1:1       warning  missing document start "---"  (document-start)
+
+

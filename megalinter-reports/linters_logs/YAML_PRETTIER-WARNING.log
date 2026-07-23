@@ -1,0 +1,11 @@
+Results of prettier linter (version 3.8.1)
+See documentation on https://megalinter.io/9.4.0/descriptors/yaml_prettier/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+Checking formatting...
+[warn] .github/workflows/codeql.yml
+[warn] docker-compose.yml
+[warn] Code style issues found in 2 files. Run Prettier with --write to fix.
+

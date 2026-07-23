@@ -1,0 +1,885 @@
+----------------------------------------------------------------------------------------------------
+------------------------------------ MegaLinter, by OX Security ------------------------------------
+----------------------------------------------------------------------------------------------------
+ - Image Creation Date: 2026-02-28T10:08:53Z
+ - Image Revision: 8fbdead70d1409964ab3d5afa885e18ee85388bb
+ - Image Version: v9.4.0
+----------------------------------------------------------------------------------------------------
+The MegaLinter documentation can be found at:
+ - https://megalinter.io/9.4.0
+----------------------------------------------------------------------------------------------------
+MegaLinter initialization
+MegaLinter will analyze workspace [/tmp/lint]
+
+[Activation] JAVASCRIPT_ES has been set inactive, as none of these files has been found: ['.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc.js', '.eslintrc.cjs', 'package.json:eslintConfig']
+[Activation] TYPESCRIPT_ES has been set inactive, as none of these files has been found: ['.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml', '.eslintrc.js', '.eslintrc.cjs', 'package.json:eslintConfig']
+JSON_ESLINT_PLUGIN_JSONC has been disabled in MegaLinter for the following reason: Bug in eslint-plugin-jsonc: <https://github.com/ota-meshi/eslint-plugin-jsonc/issues/328>
+LUA_SELENE has been disabled in MegaLinter for the following reason: https://github.com/Kampfkarren/selene/issues/662
+MAKEFILE_CHECKMAKE has been disabled in MegaLinter for the following reason: Security issues: <https://github.com/checkmake/checkmake/issues/99>
+MARKDOWN_REMARK_LINT has been disabled in MegaLinter for the following reason: Bug in remark-lint: <https://github.com/remarkjs/remark-lint/issues/322>
+PUPPET_PUPPET_LINT has been disabled in MegaLinter for the following reason: <https://github.com/puppetlabs/puppet-lint/issues/251>
+SALESFORCE_LIGHTNING_FLOW_SCANNER has been disabled in MegaLinter for the following reason: Repo archived -> <https://github.com/Lightning-Flow-Scanner>
+Skipped linters: ACTION_ACTIONLINT, ANSIBLE_ANSIBLE_LINT, API_SPECTRAL, ARM_ARM_TTK, BICEP_BICEP_LINTER, CLOJURE_CLJSTYLE, CLOJURE_CLJ_KONDO, CLOUDFORMATION_CFN_LINT, COFFEE_COFFEELINT, COPYPASTE_JSCPD, CPP_CLANG_FORMAT, CPP_CPPCHECK, CPP_CPPLINT, CSHARP_CSHARPIER, CSHARP_DOTNET_FORMAT, CSHARP_ROSLYNATOR, C_CLANG_FORMAT, C_CPPCHECK, C_CPPLINT, DART_DARTANALYZER, EDITORCONFIG_EDITORCONFIG_CHECKER, ENV_DOTENV_LINTER, GHERKIN_GHERKIN_LINT, GO_GOLANGCI_LINT, GO_REVIVE, GRAPHQL_GRAPHQL_SCHEMA_LINTER, GROOVY_NPM_GROOVY_LINT, JAVASCRIPT_ES, JAVASCRIPT_PRETTIER, JAVASCRIPT_STANDARD, JAVA_CHECKSTYLE, JAVA_PMD, JSON_ESLINT_PLUGIN_JSONC, JSON_JSONLINT, JSX_ESLINT, KOTLIN_DETEKT, KOTLIN_KTLINT, KUBERNETES_HELM, KUBERNETES_KUBECONFORM, KUBERNETES_KUBESCAPE, LATEX_CHKTEX, LUA_LUACHECK, LUA_SELENE, LUA_STYLUA, MAKEFILE_CHECKMAKE, MARKDOWN_REMARK_LINT, MARKDOWN_RUMDL, PERL_PERLCRITIC, PHP_PHPCS, PHP_PHPCSFIXER, PHP_PHPLINT, PHP_PHPSTAN, PHP_PSALM, POWERSHELL_POWERSHELL, POWERSHELL_POWERSHELL_FORMATTER, PROTOBUF_PROTOLINT, PUPPET_PUPPET_LINT, PYTHON_BANDIT, PYTHON_BLACK, PYTHON_FLAKE8, PYTHON_ISORT, PYTHON_MYPY, PYTHON_NBQA_MYPY, PYTHON_PYLINT, PYTHON_PYRIGHT, PYTHON_RUFF, PYTHON_RUFF_FORMAT, RAKU_RAKU, REPOSITORY_CHECKOV, REPOSITORY_DEVSKIM, REPOSITORY_DUSTILOCK, REPOSITORY_GITLEAKS, REPOSITORY_GIT_DIFF, REPOSITORY_GRYPE, REPOSITORY_KICS, REPOSITORY_KINGFISHER, REPOSITORY_LS_LINT, REPOSITORY_SECRETLINT, REPOSITORY_SEMGREP, REPOSITORY_SYFT, REPOSITORY_TRIVY, REPOSITORY_TRIVY_SBOM, REPOSITORY_TRUFFLEHOG, ROBOTFRAMEWORK_ROBOCOP, RST_RSTCHECK, RST_RSTFMT, RST_RST_LINT, RUBY_RUBOCOP, RUST_CLIPPY, R_LINTR, SALESFORCE_CODE_ANALYZER_APEX, SALESFORCE_CODE_ANALYZER_AURA, SALESFORCE_CODE_ANALYZER_LWC, SALESFORCE_LIGHTNING_FLOW_SCANNER, SALESFORCE_SFDX_SCANNER_APEX, SALESFORCE_SFDX_SCANNER_AURA, SALESFORCE_SFDX_SCANNER_LWC, SCALA_SCALAFIX, SNAKEMAKE_LINT, SNAKEMAKE_SNAKEFMT, SPELL_CODESPELL, SPELL_CSPELL, SPELL_LYCHEE, SPELL_PROSELINT, SPELL_VALE, SQL_SQLFLUFF, SQL_TSQLLINT, SWIFT_SWIFTLINT, TEKTON_TEKTON_LINT, TERRAFORM_TERRAFORM_FMT, TERRAFORM_TERRAGRUNT, TERRAFORM_TERRASCAN, TERRAFORM_TFLINT, TSX_ESLINT, TYPESCRIPT_ES, TYPESCRIPT_PRETTIER, TYPESCRIPT_STANDARD, VBDOTNET_DOTNET_FORMAT, XML_XMLLINT
+To receive reports as email, please set variable EMAIL_REPORTER_EMAIL
+[ApiReporter] Not enabled as API_REPORTER is not defined to true
+
+MegaLinter now collects the files to analyse
+Listing all files in directory [/tmp/lint], then filter with:
+- File extensions: , .bash, .css, .dash, .htm, .html, .json, .ksh, .md, .saas, .scss, .sh, .yaml, .yml
+- File names (regex): (.*\.)?Dockerfile, Containerfile, package\.json
+- Excluding regex: (helm/.*templates/.*|docker/grafana/provisioning/datasources/prometheus\.yml)
+⚠️ More than 300 .gitignored files have been detected (41343). To improve MegaLinter performances, consider adding more excluded directories using the ADDITIONAL_EXCLUDED_DIRECTORIES variable. See https://megalinter.io/9.4.0/config-filtering/
+- Excluding .gitignored files [41343]: .env, .sqlite/pylos-budget.db, .sqlite/pylos-catalog.db, .sqlite/pylos-config.db, .sqlite/pylos-logs.db, .sqlite/pylos-logs.db-shm, .sqlite/pylos-logs.db-wal, .sqlite/pylos-mcp.db, .sqlite/pylos-org.db, .sqlite/pylos-prompts.db,…(full list in DEBUG)
+Kept [66] files on [17271] found files
+
++----MATCHING LINTERS-------------------+---------------------------------+----------------+------------+
+| Descriptor | Linter                   | Criteria                        | Matching files | Format/Fix |
++------------+--------------------------+---------------------------------+----------------+------------+
+| BASH       | bash-exec                | |.sh|.bash|.dash|.ksh           | 4              | no         |
+| BASH       | shellcheck               | |.sh|.bash|.dash|.ksh           | 4              | no         |
+| BASH       | shfmt                    | |.sh|.bash|.dash|.ksh           | 4              | no         |
+| CSS        | stylelint                | .css|.scss|.saas                | 1              | no         |
+| DOCKERFILE | hadolint                 | Containerfile|(.*\.)?Dockerfile | 5              | no         |
+| HTML       | djlint                   | .html|.htm                      | 1              | no         |
+| HTML       | htmlhint                 | .html|.htm                      | 1              | no         |
+| JSON       | v8r                      | .json                           | 12             | no         |
+| JSON       | prettier                 | .json                           | 12             | no         |
+| JSON       | npm-package-json-lint    | .json|package\.json             | project        | no         |
+| MARKDOWN   | markdownlint             | .md                             | 26             | no         |
+| MARKDOWN   | markdown-table-formatter | .md                             | 26             | no         |
+| YAML       | prettier                 | .yml|.yaml                      | 13             | no         |
+| YAML       | yamllint                 | .yml|.yaml                      | 13             | no         |
+| YAML       | v8r                      | .yml|.yaml                      | 13             | no         |
++------------+--------------------------+---------------------------------+----------------+------------+
+
+Processing linters on [8] parallel cores… (can be decreased with variable PARALLEL_PROCESS_NUMBER in case of performance issues)
+[33m⚠️ Linted [BASH] files with [shfmt]: Found 3 non blocking error(s) and 0 non blocking warning(s) - (0.01s)[0m
+- Using [shfmt v3.12.0] https://megalinter.io/9.4.0/descriptors/bash_shfmt
+- MegaLinter key: [BASH_SHFMT]
+- Rules config: identified by [shfmt]
+- Number of files analyzed: [4]
+- CWD: [/tmp/lint]
+- Command: [shfmt -d .github/workflows/scripts/run-tests.sh local-ci.sh test-local.sh ui/docker-entrypoint.sh]
+--Error detail:
+[1mdiff .github/workflows/scripts/run-tests.sh.orig .github/workflows/scripts/run-tests.sh
+--- .github/workflows/scripts/run-tests.sh.orig
++++ .github/workflows/scripts/run-tests.sh
+[36m@@ -22,15 +22,15 @@
+[0m 
+ # Function to report test result
+ report_result() {
+[31m-  local test_name=$1
+-  local result=$2
+-  if [ "$result" -eq 0 ]; then
+-    echo -e "${GREEN}✅ $test_name passed${NC}"
+-    TESTS_PASSED=$((TESTS_PASSED + 1))
+-  else
+-    echo -e "${RED}❌ $test_name failed${NC}"
+-    TESTS_FAILED=$((TESTS_FAILED + 1))
+-  fi
+[32m+	local test_name=$1
++	local result=$2
++	if [ "$result" -eq 0 ]; then
++		echo -e "${GREEN}✅ $test_name passed${NC}"
++		TESTS_PASSED=$((TESTS_PASSED + 1))
++	else
++		echo -e "${RED}❌ $test_name failed${NC}"
++		TESTS_FAILED=$((TESTS_FAILED + 1))
++	fi
+[0m }
+ 
+ # 1. Formatting Check (disabled)
+[36m@@ -48,9 +48,9 @@
+[0m echo "🔍 2/4 - Running Linting (Clippy)..."
+ echo "-----------------------------------"
+ if cargo clippy --workspace -- -D warnings; then
+[31m-  report_result "Clippy Lints" 0
+-else
+-  report_result "Clippy Lints" 1
+[32m+	report_result "Clippy Lints" 0
++else
++	report_result "Clippy Lints" 1
+[0m fi
+ 
+ # 3. Unit & Integration Tests
+[36m@@ -58,9 +58,9 @@
+[0m echo "🧪 3/4 - Running Unit & Integration Tests..."
+ echo "-----------------------------------"
+ if cargo test --workspace; then
+[31m-  report_result "Unit & Integration Tests" 0
+-else
+-  report_result "Unit & Integration Tests" 1
+[32m+	report_result "Unit & Integration Tests" 0
++else
++	report_result "Unit & Integration Tests" 1
+[0m fi
+ 
+ # 4. Security Audit
+[36m@@ -68,15 +68,15 @@
+[0m echo "🛡️  4/4 - Running Security Audit..."
+ echo "-----------------------------------"
+ # We check if cargo-audit is installed, otherwise we skip but warn
+[31m-if command -v cargo-audit &> /dev/null; then
+-  if cargo audit; then
+-    report_result "Security Audit" 0
+-  else
+-    report_result "Security Audit" 1
+-  fi
+-else
+-  echo -e "${YELLOW}⚠️  cargo-audit not found, skipping security check...${NC}"
+-  report_result "Security Audit (Skipped)" 0
+[32m+if command -v cargo-audit &>/dev/null; then
++	if cargo audit; then
++		report_result "Security Audit" 0
++	else
++		report_result "Security Audit" 1
++	fi
++else
++	echo -e "${YELLOW}⚠️  cargo-audit not found, skipping security check...${NC}"
++	report_result "Security Audit (Skipped)" 0
+[0m fi
+ 
+ # Final Summary
+[36m@@ -89,9 +89,9 @@
+[0m echo ""
+ 
+ if [ "$TESTS_FAILED" -gt 0 ]; then
+[31m-  echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
+-  exit 1
+-else
+-  echo -e "${GREEN}✅ All tests passed successfully!${NC}"
+-  exit 0
+[32m+	echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
++	exit 1
++else
++	echo -e "${GREEN}✅ All tests passed successfully!${NC}"
++	exit 0
+[0m fi
+[1mdiff local-ci.sh.orig local-ci.sh
+--- local-ci.sh.orig
++++ local-ci.sh
+[36m@@ -14,8 +14,8 @@
+[0m # 1. Vérification du formatage
+ echo -e "\n${YELLOW}[1/5] Vérification du formatage (cargo fmt)...${NC}"
+ if ! cargo fmt --all -- --check; then
+[31m-    echo -e "${RED}✘ Erreur de formatage détectée ! Lancez 'cargo fmt --all' pour corriger.${NC}"
+-    exit 1
+[32m+	echo -e "${RED}✘ Erreur de formatage détectée ! Lancez 'cargo fmt --all' pour corriger.${NC}"
++	exit 1
+[0m fi
+ echo -e "${GREEN}✔ Formatage correct.${NC}"
+ 
+[36m@@ -22,8 +22,8 @@
+[0m # 2. Analyse statique (Clippy)
+ echo -e "\n${YELLOW}[2/5] Analyse statique (cargo clippy)...${NC}"
+ if ! cargo clippy --all-targets -- -D warnings; then
+[31m-    echo -e "${RED}✘ Clippy a trouvé des avertissements ou erreurs !${NC}"
+-    exit 1
+[32m+	echo -e "${RED}✘ Clippy a trouvé des avertissements ou erreurs !${NC}"
++	exit 1
+[0m fi
+ echo -e "${GREEN}✔ L'analyse statique a réussi.${NC}"
+ 
+[36m@@ -30,8 +30,8 @@
+[0m # 3. Exécution des tests unitaires
+ echo -e "\n${YELLOW}[3/5] Exécution des tests (cargo test)...${NC}"
+ if ! cargo test; then
+[31m-    echo -e "${RED}✘ Des tests ont échoué !${NC}"
+-    exit 1
+[32m+	echo -e "${RED}✘ Des tests ont échoué !${NC}"
++	exit 1
+[0m fi
+ echo -e "${GREEN}✔ Tous les tests sont passés.${NC}"
+ 
+[36m@@ -38,8 +38,8 @@
+[0m # 4. Compilation rapide (Debug)
+ echo -e "\n${YELLOW}[4/5] Compilation en mode Debug...${NC}"
+ if ! cargo build; then
+[31m-    echo -e "${RED}✘ Échec de la compilation !${NC}"
+-    exit 1
+[32m+	echo -e "${RED}✘ Échec de la compilation !${NC}"
++	exit 1
+[0m fi
+ echo -e "${GREEN}✔ Compilation terminée avec succès.${NC}"
+ 
+[36m@@ -46,8 +46,8 @@
+[0m # 5. Build du Frontend (npm run build)
+ echo -e "\n${YELLOW}[5/5] Vérification du Frontend (npm run build)...${NC}"
+ if ! npm run build; then
+[31m-    echo -e "${RED}✘ Échec du build du Frontend !${NC}"
+-    exit 1
+[32m+	echo -e "${RED}✘ Échec du build du Frontend !${NC}"
++	exit 1
+[0m fi
+ echo -e "${GREEN}✔ Build du Frontend terminé avec succès.${NC}"
+ 
+[1mdiff test-local.sh.orig test-local.sh
+--- test-local.sh.orig
++++ test-local.sh
+[36m@@ -15,17 +15,17 @@
+[0m FAILED=0
+ 
+ run_check() {
+[31m-  local name=$1
+-  local cmd=$2
+-  echo ""
+-  echo "👉 Running: $name..."
+-  echo "------------------------------------------"
+-  if eval "$cmd"; then
+-    echo -e "${GREEN}✅ $name passed${NC}"
+-  else
+-    echo -e "${RED}❌ $name failed${NC}"
+-    FAILED=$((FAILED + 1))
+-  fi
+[32m+	local name=$1
++	local cmd=$2
++	echo ""
++	echo "👉 Running: $name..."
++	echo "------------------------------------------"
++	if eval "$cmd"; then
++		echo -e "${GREEN}✅ $name passed${NC}"
++	else
++		echo -e "${RED}❌ $name failed${NC}"
++		FAILED=$((FAILED + 1))
++	fi
+[0m }
+ 
+ # 1. Format check
+[36m@@ -38,11 +38,11 @@
+[0m run_check "Unit & Integration Tests" "cargo test --workspace"
+ 
+ # 4. Security Audit (Optional check)
+[31m-if command -v cargo-audit &> /dev/null; then
+-  run_check "Security Audit" "cargo audit"
+-else
+-  echo ""
+-  echo -e "${YELLOW}⚠️  cargo-audit not installed. Skip security check.${NC}"
+[32m+if command -v cargo-audit &>/dev/null; then
++	run_check "Security Audit" "cargo audit"
++else
++	echo ""
++	echo -e "${YELLOW}⚠️  cargo-audit not installed. Skip security check.${NC}"
+[0m fi
+ 
+ # Summary
+[36m@@ -49,9 +49,9 @@
+[0m echo ""
+ echo "=========================================="
+ if [ "$FAILED" -eq 0 ]; then
+[31m-  echo -e "${GREEN}🎉 All local checks passed successfully! Ready to push.${NC}"
+-  exit 0
+-else
+-  echo -e "${RED}💥 $FAILED check(s) failed. Please review errors above before pushing.${NC}"
+-  exit 1
+[32m+	echo -e "${GREEN}🎉 All local checks passed successfully! Ready to push.${NC}"
++	exit 0
++else
++	echo -e "${RED}💥 $FAILED check(s) failed. Please review errors above before pushing.${NC}"
++	exit 1
+[0m fi
+
+
+[33m⚠️ Linted [BASH] files with [bash-exec]: Found 1 non blocking error(s) and 0 non blocking warning(s) - (0.15s)[0m
+- Using [bash-exec v5.3.3] https://megalinter.io/9.4.0/descriptors/bash_bash_exec
+- MegaLinter key: [BASH_EXEC]
+- Rules config: identified by [bash-exec]
+- Number of files analyzed: [4]
+- CWD: [/tmp/lint]
+- Commands:
+  [bash-exec .github/workflows/scripts/run-tests.sh]
+  [bash-exec local-ci.sh]
+  [bash-exec test-local.sh]
+  [bash-exec ui/docker-entrypoint.sh]
+[31m[bash-exec] ui/docker-entrypoint.sh - ERROR - 1 error(s) and 0 warning(s)[0m
+[31m--Error detail:
+Error: File:[ui/docker-entrypoint.sh] is not executable
+[0m
+
+[32m✅ Linted [BASH] files with [shellcheck] successfully - (0.18s)[0m
+- Using [shellcheck v0.11.0] https://megalinter.io/9.4.0/descriptors/bash_shellcheck
+- MegaLinter key: [BASH_SHELLCHECK]
+- Rules config: identified by [shellcheck]
+- Number of files analyzed: [4]
+- CWD: [/tmp/lint]
+- Command: [shellcheck --color=auto --external-sources .github/workflows/scripts/run-tests.sh local-ci.sh test-local.sh ui/docker-entrypoint.sh]
+
+[32m✅ Linted [DOCKERFILE] files with [hadolint] successfully - (0.26s)[0m
+- Using [hadolint v2.14.0] https://megalinter.io/9.4.0/descriptors/dockerfile_hadolint
+- MegaLinter key: [DOCKERFILE_HADOLINT]
+- Rules config: [.hadolint.yaml]
+- Number of files analyzed: [5]
+- CWD: [/tmp/lint]
+- Command: [hadolint --config /action/lib/.automation/.hadolint.yaml Dockerfile examples/mcp-servers/node/Dockerfile examples/mcp-servers/python/Dockerfile pylos/memory/Dockerfile ui/Dockerfile]
+
+[32m✅ Linted [HTML] files with [htmlhint] successfully - (0.13s)[0m
+- Using [htmlhint v1.9.1] https://megalinter.io/9.4.0/descriptors/html_htmlhint
+- MegaLinter key: [HTML_HTMLHINT]
+- Rules config: [.htmlhintrc]
+- Number of files analyzed: [1]
+- CWD: [/tmp/lint]
+- Command: [htmlhint --config /action/lib/.automation/.htmlhintrc ui/index.html]
+
+[33m⚠️ Linted [MARKDOWN] files with [markdown-table-formatter]: Found 1 non blocking error(s) and 0 non blocking warning(s) - (0.19s)[0m
+- Using [markdown-table-formatter v1.7.0] https://megalinter.io/9.4.0/descriptors/markdown_markdown_table_formatter
+- MegaLinter key: [MARKDOWN_MARKDOWN_TABLE_FORMATTER]
+- Rules config: identified by [markdown-table-formatter]
+- Number of files analyzed: [26]
+- CWD: [/tmp/lint]
+- Command: [markdown-table-formatter --check .agents/skills/find-skills/SKILL.md .bmad-core/agents/architect.md .bmad-core/agents/developer.md .bmad-core/agents/pm.md .bmad-core/agents/scrum-master.md .bmad-core/bmad-project.md .bmad-core/data/adrs/adr-001-bifro...(truncated)]
+--Error detail:
+19 files contain markdown tables to format:
+- .agents/skills/find-skills/SKILL.md
+- .bmad-core/agents/developer.md
+- .bmad-core/agents/scrum-master.md
+- .bmad-core/bmad-project.md
+- .bmad-core/data/adrs/adr-001-bifrost-migration-strategy.md
+- .bmad-core/data/bifrost-analysis.md
+- .bmad-core/data/sprints/sprint-1.md
+- .bmad-core/data/sprints/sprint-2.md
+- .bmad-core/templates/new-provider.md
+- .bmad-core/workflows/main.md
+- README.es.md
+- README.fr.md
+- README.md
+- SECURITY.md
+- docs/pylos-config.md
+- docs/pylos-json-reference.md
+- notebooklm.md
+- presentation_pylos_migration.md
+- pylos_incomplete_features_report.md
+
+
+[33m⚠️ Linted [JSON] files with [prettier]: Found 1 non blocking error(s) and 0 non blocking warning(s) - (0.41s)[0m
+- Using [prettier v3.8.1] https://megalinter.io/9.4.0/descriptors/json_prettier
+- MegaLinter key: [JSON_PRETTIER]
+- Rules config: identified by [prettier]
+- Number of files analyzed: [12]
+- CWD: [/tmp/lint]
+- Command: [prettier --check .stylelintrc.json docker/grafana/provisioning/dashboards/nvidia-dcgm-exporter.json examples/mcp-servers/node/package.json package-lock.json package.json renovate.json skills-lock.json ui/package-lock.json ui/package.json ui/tsconfig....(truncated)]
+--Error detail:
+Checking formatting...
+[[33mwarn[39m] .stylelintrc.json
+[[33mwarn[39m] docker/grafana/provisioning/dashboards/nvidia-dcgm-exporter.json
+[[33mwarn[39m] Code style issues found in 2 files. Run Prettier with --write to fix.
+
+
+[32m✅ Linted [HTML] files with [djlint] successfully - (0.63s)[0m
+- Using [djlint v1.36.4] https://megalinter.io/9.4.0/descriptors/html_djlint
+- MegaLinter key: [HTML_DJLINT]
+- Rules config: identified by [djlint]
+- Number of files analyzed: [1]
+- CWD: [/tmp/lint]
+- Command: [djlint ui/index.html]
+
+[32m✅ Linted [JSON] files with [npm-package-json-lint] successfully - (0.43s)[0m
+- Using [npm-package-json-lint v9.1.0] https://megalinter.io/9.4.0/descriptors/json_npm_package_json_lint
+- MegaLinter key: [JSON_NPM_PACKAGE_JSON_LINT]
+- Rules config: [.npmpackagejsonlintrc.json]
+- CWD: [/tmp/lint]
+- Command: [npmPkgJsonLint --quiet --configFile /action/lib/.automation/.npmpackagejsonlintrc.json .]
+
+[32m✅ Linted [CSS] files with [stylelint] successfully - (0.58s)[0m
+- Using [stylelint v16.26.1] https://megalinter.io/9.4.0/descriptors/css_stylelint
+- MegaLinter key: [CSS_STYLELINT]
+- Rules config: [/.stylelintrc.json]
+- Number of files analyzed: [1]
+- CWD: [/tmp/lint]
+- Command: [stylelint --config /tmp/lint/.stylelintrc.json ui/src/index.css]
+
+Unable to get number of errors with regex_count and \[error\]
+[32m✅ Linted [YAML] files with [yamllint] successfully - (0.26s)[0m
+- Using [yamllint v1.38.0] https://megalinter.io/9.4.0/descriptors/yaml_yamllint
+- MegaLinter key: [YAML_YAMLLINT]
+- Rules config: [.yamllint.yml]
+- Number of files analyzed: [13]
+- CWD: [/tmp/lint]
+- Command: [yamllint --format standard -c /action/lib/.automation/.yamllint.yml .github/workflows/ci.yml .github/workflows/codeql.yml .github/workflows/megalinter.yml .github/workflows/pr-tests.yml .github/workflows/promote.yml .mega-linter.yml .pre-commit-confi...(truncated)]
+
+[33m⚠️ Linted [YAML] files with [prettier]: Found 1 non blocking error(s) and 3 non blocking warning(s) - (0.32s)[0m
+- Using [prettier v3.8.1] https://megalinter.io/9.4.0/descriptors/yaml_prettier
+- MegaLinter key: [YAML_PRETTIER]
+- Rules config: identified by [prettier]
+- Number of files analyzed: [13]
+- CWD: [/tmp/lint]
+- Command: [prettier --check .github/workflows/ci.yml .github/workflows/codeql.yml .github/workflows/megalinter.yml .github/workflows/pr-tests.yml .github/workflows/promote.yml .mega-linter.yml .pre-commit-config.yaml docker-compose.yml docker/grafana/provisioni...(truncated)]
+--Error detail:
+Checking formatting...
+[[33mwarn[39m] .github/workflows/codeql.yml
+[[33mwarn[39m] docker-compose.yml
+[[33mwarn[39m] Code style issues found in 2 files. Run Prettier with --write to fix.
+
+
+[33m⚠️ Linted [MARKDOWN] files with [markdownlint]: Found 417 non blocking error(s) and 0 non blocking warning(s) - (0.73s)[0m
+- Using [markdownlint v0.47.0] https://megalinter.io/9.4.0/descriptors/markdown_markdownlint
+- MegaLinter key: [MARKDOWN_MARKDOWNLINT]
+- Rules config: [.markdownlint.json]
+- Number of files analyzed: [26]
+- CWD: [/tmp/lint]
+- Command: [markdownlint -c /action/lib/.automation/.markdownlint.json .agents/skills/find-skills/SKILL.md .bmad-core/agents/architect.md .bmad-core/agents/developer.md .bmad-core/agents/pm.md .bmad-core/agents/scrum-master.md .bmad-core/bmad-project.md .bmad-co...(truncated)]
+--Error detail:
+.agents/skills/find-skills/SKILL.md:32:23 error MD034/no-bare-urls Bare URL used [Context: "https://skills.sh/"]
+.agents/skills/find-skills/SKILL.md:85 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+.agents/skills/find-skills/SKILL.md:136 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+.bmad-core/agents/developer.md:46:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/agents/developer.md:46:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/agents/developer.md:46:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/agents/developer.md:46:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/agents/scrum-master.md:47 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+.bmad-core/bmad-project.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/bmad-project.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/bmad-project.md:48:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:48:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:48:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/bmad-project.md:48:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/bmad-project.md:83:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:83:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:83:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/bmad-project.md:83:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/bmad-project.md:83:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/bmad-project.md:83:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/adrs/adr-001-bifrost-migration-strategy.md:109:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/adrs/adr-001-bifrost-migration-strategy.md:109:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/adrs/adr-001-bifrost-migration-strategy.md:109:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/adrs/adr-001-bifrost-migration-strategy.md:109:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:24:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:52:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:75:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:91:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:102:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:117:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:127:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/bifrost-analysis.md:140:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/epics/epics-bifrost-migration.md:239 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+.bmad-core/data/sprints/sprint-1.md:18:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:21 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:18:17 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-1.md:107 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Acceptance Criteria"]
+.bmad-core/data/sprints/sprint-1.md:113 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Technical Notes"]
+.bmad-core/data/sprints/sprint-1.md:127 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Acceptance Criteria"]
+.bmad-core/data/sprints/sprint-1.md:133 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Technical Notes"]
+.bmad-core/data/sprints/sprint-1.md:147 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Acceptance Criteria"]
+.bmad-core/data/sprints/sprint-1.md:154 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Technical Notes"]
+.bmad-core/data/sprints/sprint-1.md:187 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "DoD"]
+.bmad-core/data/sprints/sprint-1.md:201 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Acceptance Criteria"]
+.bmad-core/data/sprints/sprint-1.md:208 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Technical Notes"]
+.bmad-core/data/sprints/sprint-1.md:249 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "DoD"]
+.bmad-core/data/sprints/sprint-1.md:262 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Acceptance Criteria"]
+.bmad-core/data/sprints/sprint-1.md:268 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "Technical Notes"]
+.bmad-core/data/sprints/sprint-1.md:292 error MD024/no-duplicate-heading Multiple headings with the same content [Context: "DoD"]
+.bmad-core/data/sprints/sprint-2.md:18:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:21 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/data/sprints/sprint-2.md:18:17 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/templates/adr.md:8 error MD025/single-title/single-h1 Multiple top-level headings in the same document [Context: "ADR-[NNN]: [Short Title]"]
+.bmad-core/templates/new-provider.md:109:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/templates/new-provider.md:109:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/templates/new-provider.md:109:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/templates/new-provider.md:109:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:11:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/workflows/main.md:11:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/workflows/main.md:11:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/workflows/main.md:11:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:11:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:11:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/workflows/main.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/workflows/main.md:20:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+.bmad-core/workflows/main.md:20:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:20:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:20:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+.bmad-core/workflows/main.md:27 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+.bmad-core/workflows/main.md:51 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+.bmad-core/workflows/main.md:65:29 error MD026/no-trailing-punctuation Trailing punctuation in heading [Punctuation: ':']
+.bmad-core/workflows/main.md:70:33 error MD026/no-trailing-punctuation Trailing punctuation in heading [Punctuation: ':']
+.bmad-core/workflows/main.md:75:30 error MD026/no-trailing-punctuation Trailing punctuation in heading [Punctuation: ':']
+.bmad-core/workflows/main.md:80:19 error MD026/no-trailing-punctuation Trailing punctuation in heading [Punctuation: ':']
+.bmad-core/workflows/main.md:116:14 error MD034/no-bare-urls Bare URL used [Context: "https://bmadcode.com/"]
+.gemini/skills/auto_deepseek/SKILL.md:1 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "---"]
+.gemini/skills/auto_deepseek/SKILL.md:44 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+docs/pylos-config.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-config.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-config.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-config.md:38:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-config.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-config.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-config.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-config.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:21:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:21:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:21:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:21:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:21:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:21:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:21:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:21:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:55:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:55:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:55:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:55:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:55:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:55:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:55:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:55:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:72:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:111:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:111:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:111:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:111:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:111:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:111:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:111:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:111:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:133:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:133:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:133:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:133:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:133:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:133:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:133:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:133:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:144:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:144:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:144:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:144:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:144:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:144:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:144:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:144:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:163:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:163:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:163:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:163:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:163:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:163:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:163:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:163:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:183:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:183:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:183:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:183:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:183:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:183:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:183:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:183:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:231:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:231:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:231:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:231:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:231:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:231:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:231:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:231:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:254:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:254:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:254:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:254:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:254:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:254:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:254:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:254:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:273:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:273:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:273:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:273:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:273:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:273:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:273:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:273:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:293:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:293:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:293:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:293:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:293:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:293:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:293:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:293:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:319:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:319:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:319:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:319:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:319:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:319:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:319:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:319:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:331:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:331:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:331:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:331:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:331:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:331:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:351:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:351:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:351:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:351:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:351:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:351:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:351:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:351:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:359:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:359:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:359:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:359:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:359:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:359:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:382:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:382:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:382:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:382:17 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:382:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:382:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:382:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:382:13 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:404:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:404:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+docs/pylos-json-reference.md:404:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+docs/pylos-json-reference.md:404:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:96:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:96:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:96:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:96:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:96:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:96:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:111 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:149 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:205 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:265:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:265:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:265:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:265:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:265:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:265:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:281 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:301 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:320 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:397 error MD058/blanks-around-tables Tables should be surrounded by blank lines [Context: "| Fournisseur | Protocole |"]
+notebooklm.md:398:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:398:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:398:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:398:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:506:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:506:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:506:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:506:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:530 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:627 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+notebooklm.md:650:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:650:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:650:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+notebooklm.md:650:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:650:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+notebooklm.md:650:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+presentation_pylos_migration.md:11:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:12:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:13:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:14:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:18:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:19:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:19:7 error MD037/no-space-in-emphasis Spaces inside emphasis markers [Context: "** d"]
+presentation_pylos_migration.md:59:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:60:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:61:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:62:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:66:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:67:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:68:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:69:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:70:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:82:23 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+presentation_pylos_migration.md:90:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:91:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:92:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:92:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:93:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:93:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:94:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:120:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:121:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:122:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:123:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:124:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:125:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:126:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:127:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 2]
+presentation_pylos_migration.md:128:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:129:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:137:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:138:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:139:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:140:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:140:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:141:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:141:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:142:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:142:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:143:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:144:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:145:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:145:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:146:1 error MD007/ul-indent Unordered list indentation [Expected: 4; Actual: 8]
+presentation_pylos_migration.md:146:9 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:147:1 error MD007/ul-indent Unordered list indentation [Expected: 4; Actual: 8]
+presentation_pylos_migration.md:147:9 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:148:1 error MD007/ul-indent Unordered list indentation [Expected: 2; Actual: 4]
+presentation_pylos_migration.md:148:5 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:149:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+presentation_pylos_migration.md:162:1 error MD030/list-marker-space Spaces after list markers [Expected: 1; Actual: 3]
+pylos_incomplete_features_report.md:210:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:210:21 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:210:43 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:210:59 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:210:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+pylos_incomplete_features_report.md:210:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+pylos_incomplete_features_report.md:210:21 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+pylos_incomplete_features_report.md:210:43 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+pylos_incomplete_features_report.md:232:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:232:16 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:232:23 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+pylos_incomplete_features_report.md:232:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+pylos_incomplete_features_report.md:232:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+pylos_incomplete_features_report.md:232:16 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.es.md:4:43 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 1]
+README.es.md:5:47 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 1]
+README.es.md:9:401 error MD013/line-length Line length [Expected: 400; Actual: 455]
+README.es.md:42 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+README.es.md:113:24 error MD009/no-trailing-spaces Trailing spaces [Expected: 0 or 2; Actual: 1]
+README.es.md:135:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+README.es.md:135:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+README.es.md:135:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+README.es.md:135:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.es.md:135:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.es.md:135:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.es.md:144:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+README.es.md:144:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+README.es.md:144:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+README.es.md:144:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.es.md:144:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.es.md:144:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+README.fr.md:13:401 error MD013/line-length Line length [Expected: 400; Actual: 468]
+README.fr.md:59 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+
+
+[32m✅ Linted [YAML] files with [v8r] successfully - (4.73s)[0m
+- Using [v8r v6.0.0] https://megalinter.io/9.4.0/descriptors/yaml_v8r
+- MegaLinter key: [YAML_V8R]
+- Rules config: identified by [v8r]
+- Number of files analyzed: [13]
+- CWD: [/tmp/lint]
+- Command: [v8r --ignore-errors .github/workflows/ci.yml .github/workflows/codeql.yml .github/workflows/megalinter.yml .github/workflows/pr-tests.yml .github/workflows/promote.yml .mega-linter.yml .pre-commit-config.yaml docker-compose.yml docker/grafana/provisi...(truncated)]
+
+[32m✅ Linted [JSON] files with [v8r] successfully - (9.78s)[0m
+- Using [v8r v6.0.0] https://megalinter.io/9.4.0/descriptors/json_v8r
+- MegaLinter key: [JSON_V8R]
+- Rules config: identified by [v8r]
+- Number of files analyzed: [12]
+- CWD: [/tmp/lint]
+- Command: [v8r --ignore-errors .stylelintrc.json docker/grafana/provisioning/dashboards/nvidia-dcgm-exporter.json examples/mcp-servers/node/package.json package-lock.json package.json renovate.json skills-lock.json ui/package-lock.json ui/package.json ui/tsconf...(truncated)]
+
+[Updated Sources Reporter] copied 11 fixed source files in folder /tmp/lint/megalinter-reports/updated_sources.
+
++----SUMMARY----+--------------------------+---------------+-------+-------+--------+----------+--------------+
+| Descriptor    | Linter                   | Mode          | Files | Fixed | Errors | Warnings | Elapsed time |
++---------------+--------------------------+---------------+-------+-------+--------+----------+--------------+
+| ⚠️ BASH       | bash-exec                | file          |     4 |       |      1 |        0 | 0.15s        |
+| ✅ BASH       | shellcheck               | list_of_files |     4 |       |      0 |        0 | 0.18s        |
+| ⚠️ BASH       | shfmt                    | list_of_files |     4 |       |      3 |        0 | 0.01s        |
+| ✅ CSS        | stylelint                | list_of_files |     1 |       |      0 |        0 | 0.58s        |
+| ✅ DOCKERFILE | hadolint                 | list_of_files |     5 |       |      0 |        0 | 0.26s        |
+| ✅ HTML       | djlint                   | list_of_files |     1 |       |      0 |        0 | 0.63s        |
+| ✅ HTML       | htmlhint                 | list_of_files |     1 |       |      0 |        0 | 0.13s        |
+| ✅ JSON       | npm-package-json-lint    | project       |   n/a |       |      0 |        0 | 0.43s        |
+| ⚠️ JSON       | prettier                 | list_of_files |    12 |       |      1 |        0 | 0.41s        |
+| ✅ JSON       | v8r                      | list_of_files |    12 |       |      0 |        0 | 9.78s        |
+| ⚠️ MARKDOWN   | markdownlint             | list_of_files |    26 |       |    417 |        0 | 0.73s        |
+| ⚠️ MARKDOWN   | markdown-table-formatter | list_of_files |    26 |       |      1 |        0 | 0.19s        |
+| ⚠️ YAML       | prettier                 | list_of_files |    13 |       |      1 |        3 | 0.32s        |
+| ✅ YAML       | v8r                      | list_of_files |    13 |       |      0 |        0 | 4.73s        |
+| ✅ YAML       | yamllint                 | list_of_files |    13 |       |      0 |        0 | 0.26s        |
++---------------+--------------------------+---------------+-------+-------+--------+----------+--------------+
+
+[34mYou could have same capabilities but better runtime performances if you use a MegaLinter flavor:[0m
+- [salesforce] oxsecurity/megalinter/flavors/salesforce@v9 (58 linters) https://megalinter.io/9.4.0/flavors/salesforce/
+- [javascript] oxsecurity/megalinter/flavors/javascript@v9 (61 linters) https://megalinter.io/9.4.0/flavors/javascript/
+- [dotnet] oxsecurity/megalinter/flavors/dotnet@v9 (66 linters) https://megalinter.io/9.4.0/flavors/dotnet/
+[34mYour project could benefit from a custom flavor, which would allow you to run only the linters you need, and thus improve runtime performances. (Skip this info by defining `FLAVOR_SUGGESTIONS: false`)
+[0m- Documentation: https://megalinter.io/9.4.0/custom-flavors/
+- Command: `npx mega-linter-runner@9.4.0 --custom-flavor-setup --custom-flavor-linters BASH_EXEC,BASH_SHELLCHECK,BASH_SHFMT,CSS_STYLELINT,DOCKERFILE_HADOLINT,HTML_DJLINT,HTML_HTMLHINT,JSON_V8R,JSON_PRETTIER,JSON_NPM_PACKAGE_JSON_LINT,MARKDOWN_MARKDOWNLINT,MARKDOWN_MARKDOWN_TABLE_FORMATTER,YAML_PRETTIER,YAML_YAMLLINT,YAML_V8R`
+
+[33m⚠️ Successfully linted all files, but with ignored errors[0m

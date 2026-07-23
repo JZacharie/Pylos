@@ -1,0 +1,223 @@
+Results of shfmt linter (version 3.12.0)
+See documentation on https://megalinter.io/9.4.0/descriptors/bash_shfmt/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+diff .github/workflows/scripts/run-tests.sh.orig .github/workflows/scripts/run-tests.sh
+--- .github/workflows/scripts/run-tests.sh.orig
++++ .github/workflows/scripts/run-tests.sh
+@@ -22,15 +22,15 @@
+ 
+ # Function to report test result
+ report_result() {
+-  local test_name=$1
+-  local result=$2
+-  if [ "$result" -eq 0 ]; then
+-    echo -e "${GREEN}✅ $test_name passed${NC}"
+-    TESTS_PASSED=$((TESTS_PASSED + 1))
+-  else
+-    echo -e "${RED}❌ $test_name failed${NC}"
+-    TESTS_FAILED=$((TESTS_FAILED + 1))
+-  fi
++	local test_name=$1
++	local result=$2
++	if [ "$result" -eq 0 ]; then
++		echo -e "${GREEN}✅ $test_name passed${NC}"
++		TESTS_PASSED=$((TESTS_PASSED + 1))
++	else
++		echo -e "${RED}❌ $test_name failed${NC}"
++		TESTS_FAILED=$((TESTS_FAILED + 1))
++	fi
+ }
+ 
+ # 1. Formatting Check (disabled)
+@@ -48,9 +48,9 @@
+ echo "🔍 2/4 - Running Linting (Clippy)..."
+ echo "-----------------------------------"
+ if cargo clippy --workspace -- -D warnings; then
+-  report_result "Clippy Lints" 0
+-else
+-  report_result "Clippy Lints" 1
++	report_result "Clippy Lints" 0
++else
++	report_result "Clippy Lints" 1
+ fi
+ 
+ # 3. Unit & Integration Tests
+@@ -58,9 +58,9 @@
+ echo "🧪 3/4 - Running Unit & Integration Tests..."
+ echo "-----------------------------------"
+ if cargo test --workspace; then
+-  report_result "Unit & Integration Tests" 0
+-else
+-  report_result "Unit & Integration Tests" 1
++	report_result "Unit & Integration Tests" 0
++else
++	report_result "Unit & Integration Tests" 1
+ fi
+ 
+ # 4. Security Audit
+@@ -68,15 +68,15 @@
+ echo "🛡️  4/4 - Running Security Audit..."
+ echo "-----------------------------------"
+ # We check if cargo-audit is installed, otherwise we skip but warn
+-if command -v cargo-audit &> /dev/null; then
+-  if cargo audit; then
+-    report_result "Security Audit" 0
+-  else
+-    report_result "Security Audit" 1
+-  fi
+-else
+-  echo -e "${YELLOW}⚠️  cargo-audit not found, skipping security check...${NC}"
+-  report_result "Security Audit (Skipped)" 0
++if command -v cargo-audit &>/dev/null; then
++	if cargo audit; then
++		report_result "Security Audit" 0
++	else
++		report_result "Security Audit" 1
++	fi
++else
++	echo -e "${YELLOW}⚠️  cargo-audit not found, skipping security check...${NC}"
++	report_result "Security Audit (Skipped)" 0
+ fi
+ 
+ # Final Summary
+@@ -89,9 +89,9 @@
+ echo ""
+ 
+ if [ "$TESTS_FAILED" -gt 0 ]; then
+-  echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
+-  exit 1
+-else
+-  echo -e "${GREEN}✅ All tests passed successfully!${NC}"
+-  exit 0
++	echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
++	exit 1
++else
++	echo -e "${GREEN}✅ All tests passed successfully!${NC}"
++	exit 0
+ fi
+diff local-ci.sh.orig local-ci.sh
+--- local-ci.sh.orig
++++ local-ci.sh
+@@ -14,8 +14,8 @@
+ # 1. Vérification du formatage
+ echo -e "\n${YELLOW}[1/5] Vérification du formatage (cargo fmt)...${NC}"
+ if ! cargo fmt --all -- --check; then
+-    echo -e "${RED}✘ Erreur de formatage détectée ! Lancez 'cargo fmt --all' pour corriger.${NC}"
+-    exit 1
++	echo -e "${RED}✘ Erreur de formatage détectée ! Lancez 'cargo fmt --all' pour corriger.${NC}"
++	exit 1
+ fi
+ echo -e "${GREEN}✔ Formatage correct.${NC}"
+ 
+@@ -22,8 +22,8 @@
+ # 2. Analyse statique (Clippy)
+ echo -e "\n${YELLOW}[2/5] Analyse statique (cargo clippy)...${NC}"
+ if ! cargo clippy --all-targets -- -D warnings; then
+-    echo -e "${RED}✘ Clippy a trouvé des avertissements ou erreurs !${NC}"
+-    exit 1
++	echo -e "${RED}✘ Clippy a trouvé des avertissements ou erreurs !${NC}"
++	exit 1
+ fi
+ echo -e "${GREEN}✔ L'analyse statique a réussi.${NC}"
+ 
+@@ -30,8 +30,8 @@
+ # 3. Exécution des tests unitaires
+ echo -e "\n${YELLOW}[3/5] Exécution des tests (cargo test)...${NC}"
+ if ! cargo test; then
+-    echo -e "${RED}✘ Des tests ont échoué !${NC}"
+-    exit 1
++	echo -e "${RED}✘ Des tests ont échoué !${NC}"
++	exit 1
+ fi
+ echo -e "${GREEN}✔ Tous les tests sont passés.${NC}"
+ 
+@@ -38,8 +38,8 @@
+ # 4. Compilation rapide (Debug)
+ echo -e "\n${YELLOW}[4/5] Compilation en mode Debug...${NC}"
+ if ! cargo build; then
+-    echo -e "${RED}✘ Échec de la compilation !${NC}"
+-    exit 1
++	echo -e "${RED}✘ Échec de la compilation !${NC}"
++	exit 1
+ fi
+ echo -e "${GREEN}✔ Compilation terminée avec succès.${NC}"
+ 
+@@ -46,8 +46,8 @@
+ # 5. Build du Frontend (npm run build)
+ echo -e "\n${YELLOW}[5/5] Vérification du Frontend (npm run build)...${NC}"
+ if ! npm run build; then
+-    echo -e "${RED}✘ Échec du build du Frontend !${NC}"
+-    exit 1
++	echo -e "${RED}✘ Échec du build du Frontend !${NC}"
++	exit 1
+ fi
+ echo -e "${GREEN}✔ Build du Frontend terminé avec succès.${NC}"
+ 
+diff test-local.sh.orig test-local.sh
+--- test-local.sh.orig
++++ test-local.sh
+@@ -15,17 +15,17 @@
+ FAILED=0
+ 
+ run_check() {
+-  local name=$1
+-  local cmd=$2
+-  echo ""
+-  echo "👉 Running: $name..."
+-  echo "------------------------------------------"
+-  if eval "$cmd"; then
+-    echo -e "${GREEN}✅ $name passed${NC}"
+-  else
+-    echo -e "${RED}❌ $name failed${NC}"
+-    FAILED=$((FAILED + 1))
+-  fi
++	local name=$1
++	local cmd=$2
++	echo ""
++	echo "👉 Running: $name..."
++	echo "------------------------------------------"
++	if eval "$cmd"; then
++		echo -e "${GREEN}✅ $name passed${NC}"
++	else
++		echo -e "${RED}❌ $name failed${NC}"
++		FAILED=$((FAILED + 1))
++	fi
+ }
+ 
+ # 1. Format check
+@@ -38,11 +38,11 @@
+ run_check "Unit & Integration Tests" "cargo test --workspace"
+ 
+ # 4. Security Audit (Optional check)
+-if command -v cargo-audit &> /dev/null; then
+-  run_check "Security Audit" "cargo audit"
+-else
+-  echo ""
+-  echo -e "${YELLOW}⚠️  cargo-audit not installed. Skip security check.${NC}"
++if command -v cargo-audit &>/dev/null; then
++	run_check "Security Audit" "cargo audit"
++else
++	echo ""
++	echo -e "${YELLOW}⚠️  cargo-audit not installed. Skip security check.${NC}"
+ fi
+ 
+ # Summary
+@@ -49,9 +49,9 @@
+ echo ""
+ echo "=========================================="
+ if [ "$FAILED" -eq 0 ]; then
+-  echo -e "${GREEN}🎉 All local checks passed successfully! Ready to push.${NC}"
+-  exit 0
+-else
+-  echo -e "${RED}💥 $FAILED check(s) failed. Please review errors above before pushing.${NC}"
+-  exit 1
++	echo -e "${GREEN}🎉 All local checks passed successfully! Ready to push.${NC}"
++	exit 0
++else
++	echo -e "${RED}💥 $FAILED check(s) failed. Please review errors above before pushing.${NC}"
++	exit 1
+ fi
+

@@ -1,0 +1,11 @@
+---
+# MegaLinter configuration file
+# More info at https://megalinter.io
+
+DISABLE_LINTERS:
+  - JAVASCRIPT_STANDARD
+  - TYPESCRIPT_STANDARD
+  - JSON_JSONLINT
+
+# Exclude files/folders from all linters (using regex matching the full path relative to root)
+FILTER_REGEX_EXCLUDE: (helm/.*templates/.*|docker/grafana/provisioning/datasources/prometheus\.yml)

@@ -1,0 +1,27 @@
+Results of markdown-table-formatter linter (version 1.7.0)
+See documentation on https://megalinter.io/9.4.0/descriptors/markdown_markdown_table_formatter/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+19 files contain markdown tables to format:
+- .agents/skills/find-skills/SKILL.md
+- .bmad-core/agents/developer.md
+- .bmad-core/agents/scrum-master.md
+- .bmad-core/bmad-project.md
+- .bmad-core/data/adrs/adr-001-bifrost-migration-strategy.md
+- .bmad-core/data/bifrost-analysis.md
+- .bmad-core/data/sprints/sprint-1.md
+- .bmad-core/data/sprints/sprint-2.md
+- .bmad-core/templates/new-provider.md
+- .bmad-core/workflows/main.md
+- README.es.md
+- README.fr.md
+- README.md
+- SECURITY.md
+- docs/pylos-config.md
+- docs/pylos-json-reference.md
+- notebooklm.md
+- presentation_pylos_migration.md
+- pylos_incomplete_features_report.md
+

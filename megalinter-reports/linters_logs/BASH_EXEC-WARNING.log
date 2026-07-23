@@ -1,0 +1,10 @@
+Results of bash-exec linter (version 5.3.3)
+See documentation on https://megalinter.io/9.4.0/descriptors/bash_bash_exec/
+-----------------------------------------------
+
+✅ [SUCCESS] .github/workflows/scripts/run-tests.sh
+✅ [SUCCESS] local-ci.sh
+✅ [SUCCESS] test-local.sh
+❌ [ERROR] ui/docker-entrypoint.sh
+    Error: File:[ui/docker-entrypoint.sh] is not executable
+

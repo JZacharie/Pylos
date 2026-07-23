@@ -1,0 +1,18 @@
+Results of djlint linter (version 1.36.4)
+See documentation on https://megalinter.io/9.4.0/descriptors/html_djlint/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+
+Linting 0/1 files ┈┈┈┈┈┈┈┈┈┈ 00:00                                          Linting 1/1 files ━━━━━━━━━━ 00:00    Linting 1/1 files ━━━━━━━━━━ 00:00    
+
+
+ui/index.html
+───────────────────────────────────────────────────────────────────────────────
+H030 2:0 Consider adding a meta description. <html lang="en" clas
+H031 2:0 Consider adding meta keywords. <html lang="en" clas
+
+Linted 1 file, found 2 errors.
+
+

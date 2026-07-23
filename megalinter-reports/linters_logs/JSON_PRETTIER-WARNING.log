@@ -1,0 +1,11 @@
+Results of prettier linter (version 3.8.1)
+See documentation on https://megalinter.io/9.4.0/descriptors/json_prettier/
+-----------------------------------------------
+
+❌ [ERROR] for workspace /tmp/lint
+Linter raw log:
+Checking formatting...
+[warn] .stylelintrc.json
+[warn] docker/grafana/provisioning/dashboards/nvidia-dcgm-exporter.json
+[warn] Code style issues found in 2 files. Run Prettier with --write to fix.
+
