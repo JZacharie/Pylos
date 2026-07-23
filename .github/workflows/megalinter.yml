@@ -17,6 +17,8 @@ jobs:
     permissions:
       contents: read
       statuses: write
+      issues: write
+      pull-requests: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -25,9 +27,19 @@ jobs:
           fetch-depth: 0
 
       - name: Run MegaLinter
-        uses: oxsecurity/megalinter@v8
+        uses: oxsecurity/megalinter@v9
         env:
           # VALIDATE_ALL_CODEBASE: true validates the entire codebase.
           # Set to false to validate only diffs (recommended for PRs to keep it fast).
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENABLE: RUST,JAVASCRIPT,TYPESCRIPT,DOCKERFILE,BASH,YAML,JSON,HTML,CSS,MARKDOWN
+
+      - name: Upload MegaLinter artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MegaLinter reports
+          path: |
+            megalinter-reports
+            mega-linter.log
