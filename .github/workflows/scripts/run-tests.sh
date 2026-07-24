@@ -22,15 +22,15 @@ TESTS_FAILED=0
 
 # Function to report test result
 report_result() {
-  local test_name=$1
-  local result=$2
-  if [ "$result" -eq 0 ]; then
-    echo -e "${GREEN}✅ $test_name passed${NC}"
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-  else
-    echo -e "${RED}❌ $test_name failed${NC}"
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-  fi
+	local test_name=$1
+	local result=$2
+	if [ "$result" -eq 0 ]; then
+		echo -e "${GREEN}✅ $test_name passed${NC}"
+		TESTS_PASSED=$((TESTS_PASSED + 1))
+	else
+		echo -e "${RED}❌ $test_name failed${NC}"
+		TESTS_FAILED=$((TESTS_FAILED + 1))
+	fi
 }
 
 # 1. Formatting Check (disabled)
@@ -48,9 +48,9 @@ echo ""
 echo "🔍 2/4 - Running Linting (Clippy)..."
 echo "-----------------------------------"
 if cargo clippy --workspace -- -D warnings; then
-  report_result "Clippy Lints" 0
+	report_result "Clippy Lints" 0
 else
-  report_result "Clippy Lints" 1
+	report_result "Clippy Lints" 1
 fi
 
 # 3. Unit & Integration Tests
@@ -58,9 +58,9 @@ echo ""
 echo "🧪 3/4 - Running Unit & Integration Tests..."
 echo "-----------------------------------"
 if cargo test --workspace; then
-  report_result "Unit & Integration Tests" 0
+	report_result "Unit & Integration Tests" 0
 else
-  report_result "Unit & Integration Tests" 1
+	report_result "Unit & Integration Tests" 1
 fi
 
 # 4. Security Audit
@@ -68,15 +68,15 @@ echo ""
 echo "🛡️  4/4 - Running Security Audit..."
 echo "-----------------------------------"
 # We check if cargo-audit is installed, otherwise we skip but warn
-if command -v cargo-audit &> /dev/null; then
-  if cargo audit; then
-    report_result "Security Audit" 0
-  else
-    report_result "Security Audit" 1
-  fi
+if command -v cargo-audit &>/dev/null; then
+	if cargo audit; then
+		report_result "Security Audit" 0
+	else
+		report_result "Security Audit" 1
+	fi
 else
-  echo -e "${YELLOW}⚠️  cargo-audit not found, skipping security check...${NC}"
-  report_result "Security Audit (Skipped)" 0
+	echo -e "${YELLOW}⚠️  cargo-audit not found, skipping security check...${NC}"
+	report_result "Security Audit (Skipped)" 0
 fi
 
 # Final Summary
@@ -89,9 +89,9 @@ echo -e "${RED}Failed: $TESTS_FAILED${NC}"
 echo ""
 
 if [ "$TESTS_FAILED" -gt 0 ]; then
-  echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
-  exit 1
+	echo -e "${RED}❌ Some tests failed. Please review the output above.${NC}"
+	exit 1
 else
-  echo -e "${GREEN}✅ All tests passed successfully!${NC}"
-  exit 0
+	echo -e "${GREEN}✅ All tests passed successfully!${NC}"
+	exit 0
 fi

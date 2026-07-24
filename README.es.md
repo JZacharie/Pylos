@@ -1,8 +1,8 @@
 # Pylos — Pasarela LLM y Proxy MCP en Rust (Empresarial)
 
 <p align="center">
-  <a href="README.md"><b>English</b></a> | 
-  <a href="README.fr.md"><b>Français</b></a> | 
+  <a href="README.md"><b>English</b></a> |
+  <a href="README.fr.md"><b>Français</b></a> |
   <a href="README.es.md"><b>Español</b></a>
 </p>
 
@@ -87,6 +87,7 @@ Inicia Pylos, la interfaz de usuario, Prometheus y Grafana con un solo comando:
 ```bash
 docker compose up -d
 ```
+
 Accede a la pasarela en `http://localhost:3000` y al panel de administración en `http://localhost:8080`.
 
 ---
@@ -110,7 +111,7 @@ Pylos incorpora complementos (plugins) para la recuperación dinámica de contex
 
 1. **Grafo de Memoria Cross-Agent (Memgraph):**
    - **Tecnología:** Se conecta a la base de datos de grafos **Memgraph** mediante el protocolo **Bolt** (biblioteca `neo4rs`) y consultas **Cypher**.
-   - **Cómo funciona:** 
+   - **Cómo funciona:**
      - **Pre-hook:** Intercepta los mensajes entrantes, consulta Memgraph en busca de entidades y relaciones asociadas con la `VirtualKey` activa, y las inyecta en el prompt de contexto del sistema.
      - **Post-hook:** Analiza las salidas de los modelos en busca de etiquetas `<memory>EntidadA|RELACIÓN|EntidadB</memory>`, extrae los nuevos datos y los fusiona (`MERGE`) en el grafo de la base de datos.
 2. **Generación Aumentada por Recuperación (RAG):**
@@ -122,6 +123,7 @@ Pylos incorpora complementos (plugins) para la recuperación dinámica de contex
 ## 🛡️ Autenticación y Control de Acceso
 
 Pylos soporta dos métodos de autenticación para la administración:
+
 1. **Google OAuth (SSO):** Conexión a través de cuentas Google corporativas. El primer usuario en iniciar sesión obtiene automáticamente el rol `admin` (bootstrap). Los siguientes se crean con el rol `member`, permitiendo a un administrador asignarlos a Equipos y Organizaciones más tarde.
 2. **Alternativa Clave Admin (Fallback):** Si Google OAuth no está configurado o no está disponible, se puede usar la clave estática `PYLOS_ADMIN_KEY` configurada en las variables de entorno para acceder al panel.
 
@@ -132,7 +134,7 @@ Pylos soporta dos métodos de autenticación para la administración:
 ### Endpoints de Inferencia
 
 | Método | Ruta | Descripción |
-|---|---|---|
+| --- | --- | --- |
 | `POST` | `/v1/chat/completions` | Completions de chat unarias o en streaming |
 | `POST` | `/v1/embeddings` | Generación de vectores de embeddings |
 | `POST` | `/v1/images/generations` | Generación de imágenes |
@@ -141,7 +143,7 @@ Pylos soporta dos métodos de autenticación para la administración:
 ### Endpoints de Gestión (Requiere Autenticación)
 
 | Método | Ruta | Description |
-|---|---|---|
+| --- | --- | --- |
 | `GET/POST` | `/providers` | Registro y gestión de proveedores LLM |
 | `GET/POST` | `/virtual-keys` | Gestión de claves virtuales, límites y presupuestos |
 | `GET` | `/api/logs/stats` | Vista general y métricas de uso del panel |

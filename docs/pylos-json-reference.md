@@ -18,7 +18,7 @@ Ce document décrit tous les champs acceptés dans le fichier de configuration `
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `$schema` | string | — | URL du schema JSON (optionnel, pour la validation IDE) |
 | `version` | number | `2` | Version du format. v2 = `models: []` signifie deny-all |
 | `server` | object | voir ci-dessous | Configuration du serveur HTTP |
@@ -52,7 +52,7 @@ Ce document décrit tous les champs acceptés dans le fichier de configuration `
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `port` | number | `3000` | Port d'écoute |
 | `host` | string | `"0.0.0.0"` | Adresse de bind |
 | `log_level` | string | `"info"` | Niveau de log : error, warn, info, debug, trace |
@@ -69,7 +69,7 @@ Ce document décrit tous les champs acceptés dans le fichier de configuration `
 ### server.queuing
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `max_concurrency` | number | `100` | Requêtes concurrentes max |
 | `max_queue_size` | number | `1000` | Taille max de la file d'attente |
 | `queue_timeout_ms` | number | `30000` | Timeout d'attente en file (ms) |
@@ -108,7 +108,7 @@ Chaque provider a un tableau de clés API :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `name` | string | requis | Identifiant interne de la clé |
 | `value` | string | `""` | Clé API. Supporte `"env.VAR_NAME"` pour résolution dynamique |
 | `models` | string[] | `["*"]` | Modèles autorisés. `["*"]` = tous. `[]` = deny-all (v2) |
@@ -130,7 +130,7 @@ Chaque provider a un tableau de clés API :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `base_url` | string | — | URL de base du provider (requis pour Ollama, vLLM, etc.) |
 | `timeout_secs` | number | `30` | Timeout par requête en secondes |
 | `max_retries` | number | `3` | Nombre de retries sur erreur |
@@ -141,7 +141,7 @@ Chaque provider a un tableau de clés API :
 ### providers.\<name\>.concurrency
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `concurrency` | number | `100` | Workers concurrents max vers ce provider |
 | `buffer_size` | number | `1000` | Taille du buffer de la queue |
 
@@ -160,7 +160,7 @@ Chaque provider a un tableau de clés API :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `access_key_id` | string | — | AWS Access Key. Si absent → chaîne de credentials par défaut |
 | `secret_access_key` | string | — | AWS Secret Key |
 | `session_token` | string | — | STS Session Token (credentials temporaires) |
@@ -180,7 +180,7 @@ Chaque provider a un tableau de clés API :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `resource_name` | string | requis | Nom de la ressource Azure (`{name}.openai.azure.com`) |
 | `deployment_name` | string | requis | Nom du déploiement Azure |
 | `api_version` | string | `"2024-02-01"` | Version de l'API Azure OpenAI |
@@ -228,7 +228,7 @@ Clés virtuelles distribuées aux utilisateurs/équipes :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | requis | Identifiant unique (doit être unique globalement) |
 | `name` | string | requis | Nom lisible |
 | `description` | string | — | Description |
@@ -251,7 +251,7 @@ Clés virtuelles distribuées aux utilisateurs/équipes :
 ### governance.virtual_keys[].provider_configs[]
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `provider` | string | requis | Nom du provider (`"openai"`, `"ollama"`, `"*"`) |
 | `allowed_models` | string[] | `["*"]` | Modèles autorisés pour cette VK sur ce provider |
 | `key_names` | string[] | `["*"]` | Clés provider autorisées |
@@ -270,7 +270,7 @@ Clés virtuelles distribuées aux utilisateurs/équipes :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | requis | Identifiant unique |
 | `max_limit` | number | requis | Budget max en USD |
 | `reset_duration` | string | requis | Période de reset : `"30s"`, `"5m"`, `"1h"`, `"1d"`, `"1w"`, `"1M"`, `"1Y"` |
@@ -290,7 +290,7 @@ Clés virtuelles distribuées aux utilisateurs/équipes :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | requis | Identifiant unique |
 | `token_max_limit` | number | `0` | Tokens max par fenêtre (0 = illimité) |
 | `token_reset_duration` | string | — | Période de reset pour les tokens |
@@ -316,7 +316,7 @@ Règles de routage avancé basées sur des expressions CEL :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | requis | Identifiant unique |
 | `name` | string | requis | Nom lisible |
 | `enabled` | bool | `true` | Actif/désactivé |
@@ -328,7 +328,7 @@ Règles de routage avancé basées sur des expressions CEL :
 #### routing_rules[].targets[]
 
 | Champ | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `provider` | string | Provider cible |
 | `model` | string | Modèle override (null = garder celui de la requête) |
 | `weight` | number | Poids pour routing probabiliste (doit être > 0) |
@@ -348,7 +348,7 @@ Règles de routage avancé basées sur des expressions CEL :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `name` | string | requis | Nom du plugin (voir tableau ci-dessous) |
 | `enabled` | bool | `true` | Actif/désactivé |
 | `config` | object | `{}` | Configuration spécifique au plugin (JSON libre) |
@@ -356,7 +356,7 @@ Règles de routage avancé basées sur des expressions CEL :
 ### Plugins disponibles
 
 | Nom | Dépendance externe | Description |
-|---|---|---|
+| --- | --- | --- |
 | `mem0` | Sidecar Mem0 (port 7577) | Mémoire conversationnelle via Mem0 |
 | `memory` | Memgraph (port 7687) | Graphe de connaissances (triplets entités-relations) |
 | `semantic_cache` | Qdrant (port 6333) | Cache sémantique par similarité vectorielle |
@@ -379,7 +379,7 @@ Règles de routage avancé basées sur des expressions CEL :
 ```
 
 | Champ | Type | Défaut | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `collection_name` | string | `"pylos_semantic_cache"` | Nom de la collection Qdrant |
 | `embedding_model` | string | `"nomic-embed-text-v2-moe-GGUF"` | Modèle d'embedding à utiliser |
 | `similarity_threshold` | number | `0.9` | Seuil de similarité pour un cache hit (0.0 à 1.0) |
@@ -401,7 +401,7 @@ Partout où une valeur supporte `EnvVar`, tu peux écrire :
 Les champs de type Duration acceptent une chaîne avec unité :
 
 | Format | Signification |
-|---|---|
+| --- | --- |
 | `"30s"` | 30 secondes |
 | `"5m"` | 5 minutes |
 | `"1h"` | 1 heure |

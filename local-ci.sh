@@ -14,40 +14,40 @@ echo -e "${BLUE}=== Lancement des vérifications locales (Pipeline Rapide) ===${
 # 1. Vérification du formatage
 echo -e "\n${YELLOW}[1/5] Vérification du formatage (cargo fmt)...${NC}"
 if ! cargo fmt --all -- --check; then
-    echo -e "${RED}✘ Erreur de formatage détectée ! Lancez 'cargo fmt --all' pour corriger.${NC}"
-    exit 1
+	echo -e "${RED}✘ Erreur de formatage détectée ! Lancez 'cargo fmt --all' pour corriger.${NC}"
+	exit 1
 fi
 echo -e "${GREEN}✔ Formatage correct.${NC}"
 
 # 2. Analyse statique (Clippy)
 echo -e "\n${YELLOW}[2/5] Analyse statique (cargo clippy)...${NC}"
 if ! cargo clippy --all-targets -- -D warnings; then
-    echo -e "${RED}✘ Clippy a trouvé des avertissements ou erreurs !${NC}"
-    exit 1
+	echo -e "${RED}✘ Clippy a trouvé des avertissements ou erreurs !${NC}"
+	exit 1
 fi
 echo -e "${GREEN}✔ L'analyse statique a réussi.${NC}"
 
 # 3. Exécution des tests unitaires
 echo -e "\n${YELLOW}[3/5] Exécution des tests (cargo test)...${NC}"
 if ! cargo test; then
-    echo -e "${RED}✘ Des tests ont échoué !${NC}"
-    exit 1
+	echo -e "${RED}✘ Des tests ont échoué !${NC}"
+	exit 1
 fi
 echo -e "${GREEN}✔ Tous les tests sont passés.${NC}"
 
 # 4. Compilation rapide (Debug)
 echo -e "\n${YELLOW}[4/5] Compilation en mode Debug...${NC}"
 if ! cargo build; then
-    echo -e "${RED}✘ Échec de la compilation !${NC}"
-    exit 1
+	echo -e "${RED}✘ Échec de la compilation !${NC}"
+	exit 1
 fi
 echo -e "${GREEN}✔ Compilation terminée avec succès.${NC}"
 
 # 5. Build du Frontend (npm run build)
 echo -e "\n${YELLOW}[5/5] Vérification du Frontend (npm run build)...${NC}"
 if ! npm run build; then
-    echo -e "${RED}✘ Échec du build du Frontend !${NC}"
-    exit 1
+	echo -e "${RED}✘ Échec du build du Frontend !${NC}"
+	exit 1
 fi
 echo -e "${GREEN}✔ Build du Frontend terminé avec succès.${NC}"
 

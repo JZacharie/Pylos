@@ -5,6 +5,7 @@ Pylos is configured via a single, hot-reloadable JSON file (typically `pylos.jso
 ## Schema & Format
 
 The configuration supports:
+
 - **Environment Reference Resolution**: Any string matching `"env.VAR_NAME"` is dynamically resolved to the value of the environment variable `VAR_NAME` (useful for API keys and database credentials).
 - **Human-Readable Durations**: Strings representing time windows (e.g. `30s`, `5m`, `1h`, `1d`, `1w`, `1M`, `1Y`) are parsed into seconds.
 
@@ -35,7 +36,7 @@ The configuration supports:
 Controls the HTTP network interface, logging, database connections, and request queuing behavior.
 
 | Field | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `host` | string | `"0.0.0.0"` | Listen host address. |
 | `port` | integer | `3000` | Listen port. |
 | `log_level` | string | `"info"` | Log level (`error`, `warn`, `info`, `debug`, `trace`). |
@@ -50,6 +51,7 @@ Controls the HTTP network interface, logging, database connections, and request 
 | `queuing` | object | See below | Concurrency and queue timeout policies. |
 
 #### Queuing Configuration (`server.queuing`)
+
 - **`max_concurrency`** (integer, default: `100`): Max concurrent active HTTP requests.
 - **`max_queue_size`** (integer, default: `1000`): Max size of the request queue when concurrency limit is reached.
 - **`queue_timeout_ms`** (integer, default: `30000`): Timeout duration in milliseconds for a request waiting in the queue.
@@ -80,6 +82,7 @@ Maps unique provider IDs to their respective keys, routing weights, and endpoint
 ```
 
 #### Provider Properties
+
 - **`keys`** (array): Upstream API keys.
   - **`name`** (string): Unique identifier for the key.
   - **`value`** (string/EnvRef): Literal API key or an env var reference (`"env.VAR"`).
@@ -99,7 +102,9 @@ Maps unique provider IDs to their respective keys, routing weights, and endpoint
   - **`buffer_size`** (integer, default: `1000`): Worker task queue size.
 
 #### Special Provider: AWS Bedrock (`bedrock_key_config`)
+
 For AWS Bedrock authentication, you can configure access key/secret pairs or default to IAM roles (IRSA) by omitting keys:
+
 ```json
 {
   "access_key_id": "env.AWS_ACCESS_KEY_ID",
@@ -117,7 +122,9 @@ For AWS Bedrock authentication, you can configure access key/secret pairs or def
 Manages Virtual Keys, budgets, rate limiting rules, and routing decisions.
 
 #### Virtual Keys (`governance.virtual_keys`)
+
 Virtual keys (`sk-pylos-*`) partition access.
+
 - **`id`** (string): Unique identifier.
 - **`name`** (string): Friendly name.
 - **`description`** (string, optional): Context description.
@@ -130,14 +137,18 @@ Virtual keys (`sk-pylos-*`) partition access.
   - **`key_names`** (string[]): Upstream key names allowed.
 
 #### Budgets (`governance.budgets`)
+
 Limits USD spend over a specific sliding window.
+
 - **`id`** (string): Budget identifier.
 - **`max_limit`** (float): Max spend allowed in USD.
 - **`reset_duration`** (Duration): Window duration (e.g. `"1d"`, `"1M"`).
 - **`virtual_key_id`** (string, optional): Scope limit to a specific virtual key.
 
 #### Rate Limits (`governance.rate_limits`)
+
 Controls token and request frequencies.
+
 - **`id`** (string): Rate limit identifier.
 - **`token_max_limit`** (integer): Token limit (0 = unlimited).
 - **`token_reset_duration`** (Duration): Token window.
@@ -145,7 +156,9 @@ Controls token and request frequencies.
 - **`request_reset_duration`** (Duration): Request window.
 
 #### Routing Rules (`governance.routing_rules`)
+
 CEL-based dynamic router.
+
 - **`cel_expression`** (string): CEL condition (e.g. `request.model == 'gpt-4'`).
 - **`targets`** (array):
   - **`provider`** (string): Target provider.
@@ -173,6 +186,7 @@ Enables and configures plugins like telemetry, caching, memory graph, and guardr
 ```
 
 Standard Plugins:
+
 - **`telemetry`**: Prometheus/OTel exporter configurations.
 - **`logging`**: Raw request logging config.
 - **`semantic_cache`**: Vector-similarity caching (Cosine similarity).
