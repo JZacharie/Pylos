@@ -69,7 +69,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
   { name: 'ollama', label: 'Ollama (Local)', base_url: 'http://localhost:11434', env_var: null, docs_url: 'https://ollama.ai/download', default_models: ['llama3.2:3b', 'llama3.1:8b', 'mistral:7b'] },
   { name: 'lemonade', label: 'Lemonade', base_url: null, env_var: 'LEMONADE_API_KEY', docs_url: null, default_models: ['lemonade-optimus'] },
   { name: 'deepseek', label: 'DeepSeek', base_url: 'https://api.deepseek.com', env_var: 'DEEPSEEK_API_KEY', docs_url: 'https://platform.deepseek.com/api_keys', default_models: ['deepseek-v4-pro', 'deepseek-v4-flash'] },
-  { name: 'gemini', label: 'Google Gemini', base_url: 'https://generativelanguage.googleapis.com/v1beta', env_var: 'GEMINI_API_KEY', docs_url: 'https://aistudio.google.com/apikey', default_models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
+  { name: 'gemini', label: 'Google Gemini', base_url: 'https://generativelanguage.googleapis.com/v1beta', env_var: 'GEMINI_API_KEY', docs_url: 'https://aistudio.google.com/apikey', default_models: ['gemini-3.5-pro', 'gemini-3.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'] },
   { name: 'groq', label: 'Groq', base_url: 'https://api.groq.com/openai/v1', env_var: 'GROQ_API_KEY', docs_url: 'https://console.groq.com/keys', default_models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
   { name: 'mistral', label: 'Mistral AI', base_url: 'https://api.mistral.ai/v1', env_var: 'MISTRAL_API_KEY', docs_url: 'https://console.mistral.ai/api-keys/', default_models: ['mistral-large-latest', 'mistral-small-latest'] },
   { name: 'openrouter', label: 'OpenRouter', base_url: 'https://openrouter.ai/api/v1', env_var: 'OPENROUTER_API_KEY', docs_url: 'https://openrouter.ai/keys', default_models: [] },

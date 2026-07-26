@@ -784,9 +784,9 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
         }
         "gemini" => {
             if is_pro {
-                "gemini-2.5-pro".to_string()
+                "gemini-3.5-pro".to_string()
             } else {
-                "gemini-2.5-flash".to_string()
+                "gemini-3.5-flash".to_string()
             }
         }
         "groq" => {
@@ -1012,7 +1012,7 @@ mod tests {
 
         // Test fallback to deepseek-v4-pro for a pro model
         assert_eq!(
-            map_model_for_provider("deepseek", "gemini-2.5-pro", &[]),
+            map_model_for_provider("deepseek", "gemini-3.5-pro", &[]),
             "deepseek-v4-pro"
         );
 

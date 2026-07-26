@@ -751,7 +751,7 @@ pub async fn list_provider_defaults() -> impl IntoResponse {
             base_url: Some("https://generativelanguage.googleapis.com/v1beta"),
             env_var: Some("GEMINI_API_KEY"),
             docs_url: Some("https://aistudio.google.com/apikey"),
-            default_models: vec!["gemini-2.5-pro", "gemini-2.5-flash"],
+            default_models: vec!["gemini-3.5-pro", "gemini-3.5-flash", "gemini-2.5-pro", "gemini-2.5-flash"],
         },
         ProviderPreset {
             name: "groq",
