@@ -73,7 +73,7 @@ pub async fn virtual_key_middleware(
             };
 
             // 2. If active key is found in DB or config, register/update it in the in-memory registry
-            let provider_configs = if let Some(ref vk_cfg) = db_vk {
+            let (vk_id, provider_configs) = if let Some(ref vk_cfg) = db_vk {
                 let cfg = state.config_store.get().await;
                 let rate_limit = cfg
                     .governance
@@ -89,7 +89,7 @@ pub async fn virtual_key_middleware(
                 )
                 .with_rpm(rate_limit);
                 state.vk_registry.register(v_key).await;
-                vk_cfg.provider_configs.clone()
+                (vk_cfg.id.clone(), vk_cfg.provider_configs.clone())
             } else {
                 let cfg = state.config_store.get().await;
                 let static_vk = cfg.governance.virtual_keys.iter().find(|v| {
@@ -126,9 +126,9 @@ pub async fn virtual_key_middleware(
                     )
                     .with_rpm(rate_limit);
                     state.vk_registry.register(v_key).await;
-                    vk_cfg.provider_configs.clone()
+                    (vk_cfg.id.clone(), vk_cfg.provider_configs.clone())
                 } else {
-                    Vec::new()
+                    (String::new(), Vec::new())
                 }
             };
 
@@ -137,6 +137,7 @@ pub async fn virtual_key_middleware(
                 Ok(vk) => {
                     // Inject virtual key info into request extensions
                     req.extensions_mut().insert(Some(VirtualKeyInfo {
+                        id: vk_id.clone(),
                         name: vk.name.clone(),
                         key: vk.key.clone(),
                         provider_configs,
@@ -178,6 +179,8 @@ pub async fn virtual_key_middleware(
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct VirtualKeyInfo {
+    /// Identifiant de la Virtual Key (clé de gouvernance : budgets, rate limits).
+    pub id: String,
     pub name: String,
     pub key: String,
     pub provider_configs: Vec<pylos_core::domain::config::VkProviderConfig>,

@@ -452,15 +452,8 @@ impl LlmPlugin for GuardrailsPlugin {
         request: &mut PylosRequest,
         ctx: &mut RequestContext,
     ) -> Result<Option<PylosResponse>, PylosError> {
-        if ctx
-            .headers
-            .get("x-bypass-guardrails")
-            .map(|s| s == "true")
-            .unwrap_or(false)
-        {
-            return Ok(None);
-        }
-
+        // NOTE: aucun en-tête client ne peut désactiver les guardrails.
+        // Ils ne sont contournables que par configuration (plugin désactivé).
         let chat_req = match request {
             PylosRequest::ChatCompletion(ref mut req) => req,
             _ => return Ok(None),
@@ -661,10 +654,8 @@ impl LlmPlugin for GuardrailsPlugin {
                     let original = content.clone();
                     let masked = self.mask_text(&original, &mut pii_map, mask_pii, mask_secrets);
 
-                    info!(
-                        "[Guardrails] Original message:\n{}\n[Guardrails] Obfuscated message:\n{}",
-                        original, masked
-                    );
+                    // Ne jamais journaliser le contenu original : il peut contenir des PII/secrets.
+                    info!("[Guardrails] Obfuscated message:\n{}", masked);
 
                     if (mask_pii || mask_secrets) && masked != original {
                         *content = masked.clone();

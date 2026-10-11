@@ -166,14 +166,11 @@ impl InferenceOrchestrator {
         model: &str,
         ctx: &RequestContext,
     ) -> Vec<(Arc<dyn Provider>, ProviderConfig)> {
-        // 1. Filter providers based on allowed providers in virtual key context or forced provider
-        let allowed_providers: Vec<&(Arc<dyn Provider>, ProviderConfig)> =
-            if let Some(forced_prov) = &ctx.force_provider {
-                providers
-                    .iter()
-                    .filter(|(provider, _)| provider.name() == forced_prov)
-                    .collect()
-            } else if ctx.virtual_key.is_some() {
+        // 1. Périmètre autorisé : les restrictions de la Virtual Key s'appliquent TOUJOURS.
+        //    Les en-têtes x-pylos-force-* ne peuvent jamais élargir les droits d'une clé :
+        //    le provider forcé est appliqué comme un filtre DANS ce périmètre.
+        let mut allowed_providers: Vec<&(Arc<dyn Provider>, ProviderConfig)> =
+            if ctx.virtual_key.is_some() {
                 providers
                     .iter()
                     .filter(|(provider, _config)| {
@@ -191,6 +188,10 @@ impl InferenceOrchestrator {
             } else {
                 providers.iter().collect()
             };
+
+        if let Some(forced_prov) = &ctx.force_provider {
+            allowed_providers.retain(|(provider, _)| provider.name() == forced_prov);
+        }
 
         // 2. Separate into supporting and non-supporting providers
         let mut supporting = Vec::new();
@@ -340,7 +341,8 @@ impl InferenceOrchestrator {
                 Err(e) => {
                     self.record_failure(provider.name());
                     warn!(provider = provider.name(), error = %e, "Embedding failed");
-                    if !matches!(e, PylosError::Timeout(_)) {
+                    // Toute erreur retriable doit déclencher le fallback vers le provider suivant.
+                    if !e.is_retriable() {
                         return Err(e);
                     }
                     last_error = Some(e);
@@ -403,6 +405,11 @@ impl InferenceOrchestrator {
                     return Ok((short_circuit, ctx));
                 }
                 Ok(None) => {}
+                // Une violation de gouvernance (budget, quota, autorisation) doit bloquer la requête.
+                Err(e) if e.is_governance_violation() => {
+                    warn!(plugin = plugin.name(), error = %e, "Pre-hook blocked the request");
+                    return Err(e);
+                }
                 Err(e) => {
                     warn!(plugin = plugin.name(), error = %e, "Pre-hook error (ignored)");
                 }
@@ -527,7 +534,8 @@ impl InferenceOrchestrator {
                         "[Path] Provider '{}' FAILED for model '{}' — error: {}",
                         provider.name(), model, e
                     );
-                    if !matches!(e, PylosError::Timeout(_)) {
+                    // Toute erreur retriable doit déclencher le fallback vers le provider suivant.
+                    if !e.is_retriable() {
                         return Err(e);
                     }
                     last_error = Some(e);
@@ -570,6 +578,11 @@ impl InferenceOrchestrator {
                     return Ok((stream, "short-circuit".into(), ctx));
                 }
                 Ok(None) => {}
+                // Une violation de gouvernance (budget, quota, autorisation) doit bloquer la requête.
+                Err(e) if e.is_governance_violation() => {
+                    warn!(plugin = plugin.name(), error = %e, "Pre-hook blocked the stream request");
+                    return Err(e);
+                }
                 Err(e) => {
                     warn!(plugin = plugin.name(), error = %e, "Pre-hook stream error (ignored)");
                 }
@@ -653,7 +666,8 @@ impl InferenceOrchestrator {
                         "[Path] Stream: Provider '{}' FAILED for model '{}' — error: {}",
                         provider.name(), stream_model, e
                     );
-                    if !matches!(e, PylosError::Timeout(_)) {
+                    // Toute erreur retriable doit déclencher le fallback vers le provider suivant.
+                    if !e.is_retriable() {
                         return Err(e);
                     }
                     last_error = Some(e);
