@@ -38,6 +38,17 @@ impl From<anyhow::Error> for PylosError {
 }
 
 impl PylosError {
+    /// Erreurs de gouvernance : elles doivent interrompre la requête.
+    /// Les pre-hooks de plugins ne doivent JAMAIS les avaler.
+    pub fn is_governance_violation(&self) -> bool {
+        matches!(
+            self,
+            PylosError::BudgetExceeded(_)
+                | PylosError::RateLimitExceeded(_)
+                | PylosError::Unauthorized(_)
+        )
+    }
+
     /// Indique si l'erreur est retriable (fallback possible)
     pub fn is_retriable(&self) -> bool {
         matches!(

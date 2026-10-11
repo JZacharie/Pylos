@@ -1282,3 +1282,221 @@ async fn test_virtual_key_cannot_escape_provider_restrictions() {
         "Forbidden Provider Response"
     );
 }
+
+/// Provider qui échoue toujours avec une erreur retriable (5xx).
+struct FailingMockProvider;
+
+#[async_trait]
+impl Provider for FailingMockProvider {
+    fn name(&self) -> &str {
+        "custom-fail"
+    }
+
+    async fn complete(
+        &self,
+        _request: &PylosRequest,
+        _config: &ProviderConfig,
+    ) -> Result<PylosResponse, PylosError> {
+        Err(PylosError::ProviderError {
+            provider: "custom-fail".into(),
+            message: "upstream 500".into(),
+        })
+    }
+
+    async fn stream(
+        &self,
+        _request: &PylosRequest,
+        _config: &ProviderConfig,
+    ) -> Result<ChunkStream, PylosError> {
+        Err(PylosError::ProviderError {
+            provider: "custom-fail".into(),
+            message: "upstream 500".into(),
+        })
+    }
+}
+
+async fn state_with(
+    providers: Vec<(Arc<dyn Provider>, ProviderConfig)>,
+    plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>>,
+    vk: Option<pylos_core::domain::config::VirtualKeyConfig>,
+    budget_store: Arc<BudgetStore>,
+) -> AppState {
+    let orchestrator = Arc::new(InferenceOrchestrator::new(providers, plugins));
+    let config_store = Arc::new(ConfigStore::load(None).await.unwrap());
+    let metrics = Arc::new(Metrics::new());
+    let vk_registry = Arc::new(pylos_core::domain::virtual_key::VirtualKeyRegistry::new());
+    let log_store = Arc::new(LogStore::new(None, 1, 100));
+    let model_catalog = Arc::new(ModelCatalog::in_memory().await.unwrap());
+    let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
+    let vk_store = Arc::new(
+        pylos_application::VirtualKeyStore::in_memory()
+            .await
+            .unwrap(),
+    );
+
+    if let Some(vk) = vk {
+        vk_store.upsert_key(&vk).await.unwrap();
+    }
+
+    AppState {
+        orchestrator,
+        config_store,
+        metrics,
+        vk_registry,
+        log_store: LogStoreVariant::Sqlite(log_store),
+        model_catalog,
+        budget_store,
+        rate_limit_store,
+        vk_store,
+        system_prompt_store: Arc::new(SystemPromptStore::in_memory().await.unwrap()),
+        org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
+        search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
+        mcp_server_store: Arc::new(
+            pylos_application::McpServerStore::in_memory()
+                .await
+                .unwrap(),
+        ),
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
+        google_client_id: None,
+        google_client_secret: None,
+        google_redirect_uri: None,
+        jwt_secret: "test_secret".to_string(),
+        allowed_origins: vec!["*".into()],
+        inference_semaphore: Arc::new(tokio::sync::Semaphore::new(100)),
+        max_concurrency: 100,
+        max_queue_size: 1000,
+        queue_timeout_ms: 30000,
+    }
+}
+
+/// #118 : une erreur provider retriable (5xx) doit déclencher le fallback.
+#[tokio::test]
+async fn test_fallback_on_retriable_provider_error() {
+    let failing = Arc::new(FailingMockProvider);
+    let backup = Arc::new(CustomMockProvider {
+        name: "custom-ok".into(),
+        response_text: "Fallback OK".into(),
+    });
+
+    let mut cfg_fail = ProviderConfig::new(ProviderKind::Custom("custom-fail".into()), vec![]);
+    cfg_fail.allowed_models = vec!["gpt-4o".into()];
+    cfg_fail.max_retries = 0;
+    let mut cfg_ok = ProviderConfig::new(ProviderKind::Custom("custom-ok".into()), vec![]);
+    cfg_ok.allowed_models = vec!["gpt-4o".into()];
+
+    let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
+    let state = state_with(
+        vec![(failing, cfg_fail), (backup, cfg_ok)],
+        vec![],
+        None,
+        budget_store,
+    )
+    .await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "le provider suivant doit prendre le relais sur une erreur 5xx"
+    );
+    let body = ax_body_to_json(response.into_body()).await;
+    assert_eq!(body["choices"][0]["message"]["content"], "Fallback OK");
+}
+
+/// #117 : le budget est appliqué sur l'identifiant de la Virtual Key, pas sur son alias.
+#[tokio::test]
+async fn test_budget_enforced_on_virtual_key_id() {
+    use pylos_core::domain::config::{EnvVar, VirtualKeyConfig, VkProviderConfig};
+
+    let provider = Arc::new(CustomMockProvider {
+        name: "custom-default".into(),
+        response_text: "Budget OK".into(),
+    });
+    let mut config = ProviderConfig::new(ProviderKind::Custom("custom-default".into()), vec![]);
+    config.allowed_models = vec!["gpt-4o".into()];
+
+    let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
+    budget_store
+        .upsert_budget(
+            "vk-budget",
+            &pylos_core::domain::config::BudgetConfig {
+                id: "budget-vk-budget".into(),
+                max_limit: 0.01,
+                reset_duration: pylos_core::domain::config::Duration("1M".into()),
+                current_usage: 0.0,
+                virtual_key_id: Some("vk-budget".into()),
+            },
+        )
+        .await
+        .unwrap();
+    let plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>> =
+        vec![Arc::new(pylos_application::BudgetPlugin::new(budget_store.clone()))];
+
+    let vk = VirtualKeyConfig {
+        id: "vk-budget".into(),
+        name: "alias-tres-different".into(),
+        description: None,
+        value: Some(EnvVar::Literal("sk-pylos-budget".into())),
+        is_active: true,
+        rate_limit_id: None,
+        provider_configs: vec![VkProviderConfig {
+            provider: "*".into(),
+            allowed_models: vec!["*".into()],
+            key_names: vec!["*".into()],
+            weight: 1.0,
+        }],
+        team_alias: None,
+        team_id: None,
+        organization_id: None,
+        access_group_id: None,
+        user_email: None,
+        user_id: None,
+        created_at: None,
+        created_by: None,
+        updated_at: None,
+        last_active: None,
+        expires_at: None,
+    };
+
+    // Budget volontairement minuscule (0.01 USD) pour l'ID de la clé.
+    let state = state_with(vec![(provider, config)], plugins, Some(vk), budget_store).await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer sk-pylos-budget")
+                .body(Body::from(
+                    json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
+                        .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::PAYMENT_REQUIRED,
+        "un budget dépassé doit renvoyer 402 (preuve que l'identifiant de la VK est utilisé)"
+    );
+}

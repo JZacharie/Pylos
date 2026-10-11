@@ -34,7 +34,7 @@ pub async fn generate_image(
     let request = PylosRequest::Image(payload);
     let mut request_ctx = RequestContext::default();
     if let Some(vk) = &vk_info {
-        request_ctx.virtual_key = Some(vk.name.clone());
+        request_ctx.virtual_key = Some(vk.id.clone());
         request_ctx.provider_configs = vk.provider_configs.clone();
     }
 

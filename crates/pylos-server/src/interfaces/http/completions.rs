@@ -29,7 +29,7 @@ pub async fn text_completions(
     let request = PylosRequest::TextCompletion(payload);
     let mut ctx = RequestContext::default();
     if let Some(vk) = &vk_info {
-        ctx.virtual_key = Some(vk.name.clone());
+        ctx.virtual_key = Some(vk.id.clone());
         ctx.provider_configs = vk.provider_configs.clone();
     }
     let vk_name = vk_info.map(|v| v.name);
