@@ -100,13 +100,28 @@ Pylos utilise un fichier de configuration centralisé `pylos.json` pour la gouve
 
 ### 3. Docker Compose (Stack complète)
 
-Démarrez Pylos, l'interface utilisateur, Prometheus et Grafana en une commande :
+Démarrez Pylos, l'interface utilisateur, Prometheus et Grafana en une commande (partageant le même fichier `.env`) :
 
 ```bash
 docker compose up -d
 ```
 
 Accédez à la passerelle à l'adresse `http://localhost:3000` et à l'interface d'administration sur `http://localhost:8080`.
+
+### 4. Binaire Windows & Installeur MSI
+
+Sous Windows, compilez le binaire exécutable natif ou l'installeur MSI :
+
+```powershell
+# Compiler le binaire release pylos.exe
+.\build-windows.ps1
+
+# Créer l'installeur Windows MSI (target/installer/Pylos.msi)
+.\build-windows.ps1 -Installer
+
+# Lancer directement le binaire avec la configuration .env
+.\build-windows.ps1 -Run
+```
 
 ---
 

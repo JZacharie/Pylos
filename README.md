@@ -100,13 +100,28 @@ Pylos uses a centralized `pylos.json` file for routing, governance, budgets, and
 
 ### 3. Docker Compose (Full Stack)
 
-Start Pylos, the admin UI, Prometheus, and Grafana in one command:
+Start Pylos, the admin UI, Prometheus, and Grafana in one command (sharing the same `.env` file):
 
 ```bash
 docker compose up -d
 ```
 
 Access the gateway at `http://localhost:3000` and the Admin Dashboard at `http://localhost:8080`.
+
+### 4. Windows Binary & MSI Installer
+
+On Windows, build the native standalone executable or enterprise MSI installer:
+
+```powershell
+# Build release binary pylos.exe
+.\build-windows.ps1
+
+# Create Windows MSI installer (target/installer/Pylos.msi)
+.\build-windows.ps1 -Installer
+
+# Run directly with .env configuration
+.\build-windows.ps1 -Run
+```
 
 ---
 

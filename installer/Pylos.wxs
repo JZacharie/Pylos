@@ -2,7 +2,7 @@
     <Package
         Name="Pylos"
         Manufacturer="Pylos"
-        Version="$(version)"
+        Version="$(var.version)"
         UpgradeCode="89abcdef-0123-4567-89ab-cdef01234567"
         Scope="perMachine">
 
@@ -43,7 +43,7 @@
         <!-- Registry for Add/Remove Programs -->
         <Component Id="RegistryEntries" Guid="76543210-fedc-ba98-7654-3210fedcba98">
             <RegistryKey Root="HKLM" Key="Software\Pylos\Pylos">
-                <RegistryValue Name="version" Type="string" Value="$(version)" />
+                <RegistryValue Name="version" Type="string" Value="$(var.version)" />
                 <RegistryValue Name="install_dir" Type="string" Value="[INSTALLDIR]" />
             </RegistryKey>
         </Component>
