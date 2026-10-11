@@ -85,6 +85,68 @@ Le serveur backend Axum démarre avec rechargement automatique si configuré, et
 
 ---
 
+## 🪟 Option 3 : Binaire Natif Windows & Installeur MSI
+
+Si vous êtes sous Windows, vous pouvez compiler le binaire natif `pylos.exe` autonome avec l'interface web intégrée, ou générer un installateur d'entreprise MSI :
+
+### 1. Compiler le binaire release Windows
+
+```powershell
+# Compile l'interface React et le binaire natif target/release/pylos.exe
+.\build-windows.ps1
+```
+
+### 2. Générer l'installateur Windows MSI (WiX Toolset)
+
+```powershell
+# Génère le package installateur target/installer/Pylos.msi
+.\build-windows.ps1 -Installer
+```
+
+> [!NOTE]
+> La création de l'installeur MSI utilise WiX Toolset v4+. Si WiX n'est pas installé sur votre machine, installez-le en une commande : `dotnet tool install --global wix`.
+
+### 3. Exécuter le binaire directement
+
+```powershell
+# Lance immédiatement Pylos avec les variables du fichier .env
+.\build-windows.ps1 -Run
+
+# Ou directement :
+.\target\release\pylos.exe
+```
+
+---
+
+## ⚙️ Harmonisation des Variables d'Environnement (.env)
+
+Que vous lanciez Pylos **directement en binaire** (`pylos.exe`) ou **via conteneur Docker** (`docker compose up -d`), les deux modes exploitent exactement le même fichier `.env` à la racine :
+
+```env
+# Port d'écoute HTTP (3000 par défaut)
+PORT=3000
+
+# Niveau de log (info, debug, trace)
+RUST_LOG=info
+
+# Clé d'administration pour la console d'administration
+PYLOS_ADMIN_KEY=sk-pylos-admin-secret-key-12345
+
+# Fournisseurs d'inférence (OpenAI, Anthropic, Bedrock...)
+OPENAI_API_KEY=sk-proj-...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+* **Affichage du port dans les logs :** Au démarrage, Pylos affiche systématiquement le port actif et les URLs d'écoute dans les logs standard :
+  ```
+  INFO Starting Pylos AI Gateway version=0.1.0 log_level="info"
+  INFO Admin UI available at http://localhost:3000
+  ```
+* **Conteneur Docker Compose :** La directive `env_file: .env` injecte automatiquement l'intégralité de ces variables dans le conteneur et expose le port spécifié sur la machine hôte (`${PORT:-3000}:3000`).
+* **Services externes optionnels :** Pylos fonctionne de manière autonome en mémoire vive ou avec SQLite embarqué (`pylos-logs.db`). Si aucune base externe (PostgreSQL, Qdrant, Memgraph) n'est configurée, Pylos ne bloque aucun démarrage et bascule en stockage local sécurisé.
+
+---
+
 ## 🧪 Tester votre Premier Appel d'Inférence
 
 Envoyez une requête de complétion de chat standard au format OpenAI :

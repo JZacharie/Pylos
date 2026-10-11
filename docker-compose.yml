@@ -25,7 +25,10 @@ services:
     container_name: pylos
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
       PORT: "3000"
       RUST_LOG: "${RUST_LOG:-info}"

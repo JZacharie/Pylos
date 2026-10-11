@@ -37,6 +37,16 @@ build-backend-dev: ## Compile le backend seul en debug (sans rebuild UI)
 	$(call check_tool,cargo)
 	cargo build -p pylos-server
 
+windows-build: ## Compile le binaire natif Windows (pylos.exe)
+	$(call check_tool,cargo)
+	cargo build --release -p pylos-server
+
+windows-installer: windows-build ## Crée l'installeur Windows MSI (requiert WiX)
+	$(call check_tool,wix)
+	@wix eula accept wix7 2>/dev/null || true
+	@mkdir -p target/installer
+	wix build -d version=0.1.0 -d PylosBinary=target/release/pylos.exe -o target/installer/Pylos.msi installer/Pylos.wxs
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 run: ui-build ## Lance le serveur en mode dev (rechargement manuel) avec UI intégrée
 	$(call check_tool,cargo)
