@@ -756,6 +756,12 @@ impl AppState {
         config_path: Option<PathBuf>,
         data_dir: Option<PathBuf>,
     ) -> anyhow::Result<Self> {
+        // Le chiffrement doit être initialisé avant tout accès aux valeurs chiffrées
+        // (Virtual Keys). En production, une clé stable est obligatoire : le serveur
+        // refuse de démarrer plutôt que de générer une clé éphémère.
+        pylos_core::init_encryption()
+            .map_err(|e| anyhow::anyhow!("Encryption initialization failed: {e}"))?;
+
         let config_store = ConfigStore::load(config_path.as_deref()).await?;
         let config_store = Arc::new(config_store);
 
