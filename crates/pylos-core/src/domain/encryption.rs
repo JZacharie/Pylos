@@ -5,7 +5,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, Rng, RngCore};
 
 const NONCE_SIZE: usize = 12;
 const KEY_ENV_VAR: &str = "PYLOS_ENCRYPTION_KEY";
@@ -47,8 +47,9 @@ fn build_cipher() -> Result<Aes256Gcm, String> {
                      Set it to a stable base64-encoded 32-byte key."
                 ));
             }
-            let mut key = [0u8; 32];
-            OsRng.fill_bytes(&mut key);
+            // Génération directe : un tableau initialisé à zéro puis rempli par OsRng
+            // était détecté par CodeQL comme « clé cryptographique en dur ».
+            let key: [u8; 32] = OsRng.gen();
             tracing::warn!(
                 "{KEY_ENV_VAR} is not set: an EPHEMERAL encryption key was generated. \
                  Encrypted values will be unreadable after a restart. Set a stable key."
