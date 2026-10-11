@@ -137,10 +137,10 @@ impl VirtualKeyStore {
                     .and_then(|v| v.resolve())
                     .unwrap_or_default();
                 match key_decrypt(&encrypted) {
-                    Some(plaintext) => Ok(Some(plaintext)),
-                    None => Err(PylosError::Internal(
-                        "Failed to decrypt key value — encryption key may have changed".into(),
-                    )),
+                    Ok(plaintext) => Ok(Some(plaintext)),
+                    Err(e) => Err(PylosError::Internal(format!(
+                        "Failed to decrypt key value — {e}"
+                    ))),
                 }
             }
             None => Ok(None),
@@ -180,7 +180,9 @@ impl VirtualKeyStore {
                 PylosError::InvalidRequest("Virtual key must have a value".into())
             })?;
 
-        let encrypted_value = key_encrypt(&raw_value);
+        let encrypted_value = key_encrypt(&raw_value).map_err(|e| {
+            PylosError::Internal(format!("Failed to encrypt key value: {e}"))
+        })?;
         let value_hash = {
             let mut hasher = Sha256::new();
             hasher.update(raw_value.as_bytes());

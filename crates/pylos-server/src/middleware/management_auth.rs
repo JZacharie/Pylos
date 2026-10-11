@@ -82,8 +82,7 @@ pub async fn management_auth_middleware(
     // 2. Clé d'administration statique globale
     let admin_key_hash_opt = state.admin_key_hash.read().await.clone();
     if let Some(expected_hash) = &admin_key_hash_opt {
-        let provided_hash = crate::state::hash_sha256(&provided_key);
-        if constant_time_eq(provided_hash.as_bytes(), expected_hash.as_bytes()) {
+        if crate::state::verify_admin_secret(&provided_key, expected_hash) {
             return next.run(request).await;
         }
     }
@@ -117,17 +116,6 @@ async fn session_admin(state: &AppState, token: &str) -> Option<InternalUser> {
     users.into_iter().find(|u| {
         u.email.to_lowercase() == email && u.is_active && u.role.eq_ignore_ascii_case("admin")
     })
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut result: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        result |= x ^ y;
-    }
-    result == 0
 }
 
 fn extract_admin_key(headers: &axum::http::HeaderMap) -> Option<&str> {

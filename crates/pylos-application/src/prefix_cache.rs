@@ -9,6 +9,39 @@ use pylos_core::domain::openai::ChatCompletionResponse;
 use pylos_core::domain::request::{PylosRequest, PylosResponse, RequestContext};
 use pylos_core::domain::traits::LlmPlugin;
 use pylos_core::error::PylosError;
+use sha2::{Digest, Sha256};
+
+/// Perimetre de cache : identifiant du locataire (Virtual Key) + empreinte des
+/// parametres qui influencent la reponse. Deux locataires ne partagent JAMAIS
+/// une entree de cache, meme avec un prompt identique.
+fn cache_scope(ctx: &RequestContext, request: &PylosRequest) -> String {
+    let tenant = ctx
+        .virtual_key
+        .clone()
+        .unwrap_or_else(|| "anonymous".to_string());
+
+    let mut hasher = Sha256::new();
+    if let PylosRequest::ChatCompletion(req) = request {
+        hasher.update(format!("{:?}", req.temperature).as_bytes());
+        hasher.update(format!("{:?}", req.top_p).as_bytes());
+        hasher.update(format!("{:?}", req.max_tokens).as_bytes());
+        hasher.update(format!("{:?}", req.max_completion_tokens).as_bytes());
+        hasher.update(format!("{:?}", req.n).as_bytes());
+        hasher.update(format!("{:?}", req.stop).as_bytes());
+        hasher.update(format!("{:?}", req.seed).as_bytes());
+        hasher.update(format!("{:?}", req.presence_penalty).as_bytes());
+        hasher.update(format!("{:?}", req.frequency_penalty).as_bytes());
+        hasher.update(format!("{:?}", req.top_k).as_bytes());
+        hasher.update(format!("{:?}", req.min_p).as_bytes());
+        hasher.update(format!("{:?}", req.repetition_penalty).as_bytes());
+        hasher.update(serde_json::to_vec(&req.tools).unwrap_or_default());
+        hasher.update(serde_json::to_vec(&req.tool_choice).unwrap_or_default());
+        hasher.update(serde_json::to_vec(&req.response_format).unwrap_or_default());
+        hasher.update(req.user.as_deref().unwrap_or("").as_bytes());
+    }
+
+    format!("{tenant}#{:x}", hasher.finalize())
+}
 
 pub struct PrefixCachePlugin {
     cache: Cache<String, Arc<ChatCompletionResponse>>,
@@ -27,7 +60,7 @@ impl PrefixCachePlugin {
         }
     }
 
-    fn compute_prefix_keys(&self, request: &PylosRequest) -> Vec<(usize, String)> {
+    fn compute_prefix_keys(&self, request: &PylosRequest, scope: &str) -> Vec<(usize, String)> {
         let chat_req = match request {
             PylosRequest::ChatCompletion(ref req) => req,
             _ => return vec![],
@@ -36,6 +69,9 @@ impl PrefixCachePlugin {
         let model = request.model();
         let mut keys: Vec<(usize, String)> = Vec::with_capacity(chat_req.messages.len());
         let mut rolling = String::with_capacity(256);
+        // Le perimetre (locataire + parametres) fait partie de la cle de cache.
+        rolling.push_str(scope);
+        rolling.push('|');
         rolling.push_str(model);
         rolling.push('|');
 
@@ -68,7 +104,8 @@ impl LlmPlugin for PrefixCachePlugin {
             }
         }
 
-        let keys = self.compute_prefix_keys(request);
+        let scope = cache_scope(ctx, request);
+        let keys = self.compute_prefix_keys(request, &scope);
         if keys.is_empty() {
             return Ok(None);
         }
@@ -124,7 +161,8 @@ impl LlmPlugin for PrefixCachePlugin {
             _ => return Ok(()),
         };
 
-        let keys = self.compute_prefix_keys(request);
+        let scope = cache_scope(ctx, request);
+        let keys = self.compute_prefix_keys(request, &scope);
         if keys.is_empty() {
             return Ok(());
         }
@@ -342,10 +380,87 @@ mod tests {
         let plugin = PrefixCachePlugin::new(60, 100, 3);
         let req = make_request(vec![("user", "Hi")]);
 
-        let keys = plugin.compute_prefix_keys(&req);
+        let keys = plugin.compute_prefix_keys(&req, "test-scope");
         assert!(
             keys.is_empty(),
             "should not generate keys below min_prefix_len"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_is_scoped_per_tenant() {
+        let plugin = PrefixCachePlugin::new(60, 100, 1);
+        let req = make_request(vec![("user", "Hello")]);
+
+        // Locataire A : miss puis stockage
+        let mut ctx_a = RequestContext {
+            virtual_key: Some("vk-a".into()),
+            ..Default::default()
+        };
+        assert!(plugin
+            .pre_hook(&mut req.clone(), &mut ctx_a)
+            .await
+            .unwrap()
+            .is_none());
+        let mut resp = make_response("reponse A");
+        plugin.post_hook(&req, &mut resp, &mut ctx_a).await.unwrap();
+
+        // Locataire A : hit
+        let mut ctx_a2 = RequestContext {
+            virtual_key: Some("vk-a".into()),
+            ..Default::default()
+        };
+        assert!(plugin
+            .pre_hook(&mut req.clone(), &mut ctx_a2)
+            .await
+            .unwrap()
+            .is_some());
+
+        // Locataire B : prompt identique, mais cache cloisonne
+        let mut ctx_b = RequestContext {
+            virtual_key: Some("vk-b".into()),
+            ..Default::default()
+        };
+        assert!(
+            plugin
+                .pre_hook(&mut req.clone(), &mut ctx_b)
+                .await
+                .unwrap()
+                .is_none(),
+            "un autre locataire ne doit jamais recevoir une reponse en cache"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_is_scoped_per_parameters() {
+        let plugin = PrefixCachePlugin::new(60, 100, 1);
+        let mut req = make_request(vec![("user", "Hello")]);
+        if let PylosRequest::ChatCompletion(ref mut r) = req {
+            r.temperature = Some(0.0);
+        }
+
+        let mut ctx = RequestContext::default();
+        assert!(plugin
+            .pre_hook(&mut req.clone(), &mut ctx)
+            .await
+            .unwrap()
+            .is_none());
+        let mut resp = make_response("deterministe");
+        plugin.post_hook(&req, &mut resp, &mut ctx).await.unwrap();
+
+        // Meme prompt mais temperature differente -> pas de hit
+        let mut req_hot = make_request(vec![("user", "Hello")]);
+        if let PylosRequest::ChatCompletion(ref mut r) = req_hot {
+            r.temperature = Some(1.5);
+        }
+        let mut ctx2 = RequestContext::default();
+        assert!(
+            plugin
+                .pre_hook(&mut req_hot.clone(), &mut ctx2)
+                .await
+                .unwrap()
+                .is_none(),
+            "des parametres differents ne doivent pas partager le cache"
         );
     }
 }

@@ -503,8 +503,10 @@ export const configApi = {
 export const authApi = {
   getConfig: () =>
     api.get<{ google_auth_enabled: boolean; google_client_id: string | null; google_redirect_uri: string | null }>('/api/auth/config').then(r => r.data),
-  googleCallback: (code: string, redirectUri?: string) =>
-    api.post<{ token: string; user: { email: string; name: string; role: string } }>('/api/auth/google/callback', { code, redirect_uri: redirectUri }).then(r => r.data),
+  googleStart: () =>
+    api.get<{ state: string }>('/api/auth/google/start').then(r => r.data),
+  googleCallback: (code: string, redirectUri?: string, state?: string) =>
+    api.post<{ token: string; user: { email: string; name: string; role: string } }>('/api/auth/google/callback', { code, redirect_uri: redirectUri, state }).then(r => r.data),
   logout: () =>
     api.post<{ status: string; message: string }>('/api/auth/logout').then(r => r.data),
 }

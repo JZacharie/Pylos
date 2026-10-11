@@ -408,15 +408,11 @@ impl AppState {
             }
         }
 
-        let has_rl = cfg
-            .governance
-            .rate_limits
-            .iter()
-            .any(|r| r.request_max_limit > 0 || r.token_max_limit > 0);
-        if has_rl {
-            plugins.push(Arc::new(RateLimitPlugin::new(Arc::clone(rate_limit_store))));
-            tracing::info!("Rate limit plugin enabled");
-        }
+        // Toujours enregistre : l'application des quotas ne doit pas dependre d'une
+        // heuristique de configuration, et le store persistant est partage entre
+        // repliques (contrairement a l'ancien compteur en memoire).
+        plugins.push(Arc::new(RateLimitPlugin::new(Arc::clone(rate_limit_store))));
+        tracing::info!("Rate limit plugin enabled");
 
         for plugin_cfg in &cfg.plugins {
             if !plugin_cfg.enabled {
@@ -756,6 +752,12 @@ impl AppState {
         config_path: Option<PathBuf>,
         data_dir: Option<PathBuf>,
     ) -> anyhow::Result<Self> {
+        // Le chiffrement doit être initialisé avant tout accès aux valeurs chiffrées
+        // (Virtual Keys). En production, une clé stable est obligatoire : le serveur
+        // refuse de démarrer plutôt que de générer une clé éphémère.
+        pylos_core::init_encryption()
+            .map_err(|e| anyhow::anyhow!("Encryption initialization failed: {e}"))?;
+
         let config_store = ConfigStore::load(config_path.as_deref()).await?;
         let config_store = Arc::new(config_store);
 
@@ -818,7 +820,7 @@ impl AppState {
         let env_key = std::env::var("PYLOS_ADMIN_KEY").ok();
         let (resolved_hash, resolved_setup) = if let Some(key) = env_key {
             if !key.trim().is_empty() {
-                (Some(hash_sha256(&key)), false)
+                (Some(hash_admin_secret(&key)), false)
             } else {
                 match config_store.get_admin_key_hash().await.unwrap_or(None) {
                     Some(hash) => (Some(hash), false),
@@ -876,4 +878,53 @@ pub fn hash_sha256(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+/// Hache un secret d'administration (mot de passe du setup ou `PYLOS_ADMIN_KEY`)
+/// avec Argon2id et un sel aléatoire. La valeur produite est une chaîne PHC (`$argon2id$...`).
+pub fn hash_admin_secret(secret: &str) -> String {
+    use argon2::{
+        password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+        Argon2,
+    };
+
+    let salt = SaltString::generate(&mut OsRng);
+    Argon2::default()
+        .hash_password(secret.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .unwrap_or_default()
+}
+
+/// Vérifie un secret d'administration contre un hash stocké.
+///
+/// Accepte les deux formats pour permettre une migration transparente :
+/// - Argon2id (préfixe `$argon2`) ;
+/// - legacy SHA-256 non salé (base existante), à re-hacher au prochain setup.
+pub fn verify_admin_secret(secret: &str, stored: &str) -> bool {
+    if stored.starts_with("$argon2") {
+        use argon2::{password_hash::PasswordHash, password_hash::PasswordVerifier, Argon2};
+
+        return PasswordHash::new(stored)
+            .ok()
+            .map(|parsed| {
+                Argon2::default()
+                    .verify_password(secret.as_bytes(), &parsed)
+                    .is_ok()
+            })
+            .unwrap_or(false);
+    }
+
+    constant_time_eq(hash_sha256(secret).as_bytes(), stored.as_bytes())
+}
+
+/// Comparaison en temps constant (évite une fuite par timing).
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut result: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        result |= x ^ y;
+    }
+    result == 0
 }

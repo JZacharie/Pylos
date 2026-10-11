@@ -20,8 +20,7 @@ pub async fn playgroup_check_middleware(
     let mut is_management = false;
     if let Some(v) = provided_key {
         if let Some(expected_hash) = &*state.admin_key_hash.read().await {
-            let provided_hash = crate::state::hash_sha256(v);
-            is_management = provided_hash == *expected_hash;
+            is_management = crate::state::verify_admin_secret(v, expected_hash);
         }
     }
 
