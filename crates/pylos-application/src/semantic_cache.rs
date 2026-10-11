@@ -117,6 +117,36 @@ impl SemanticCachePlugin {
             }
         }
     }
+
+    /// Corps de recherche Qdrant : filtre sur le locataire ET le modele.
+    /// Sans ce filtre, une reponse mise en cache pour un locataire pourrait etre
+    /// servie a un autre (fuite inter-locataires).
+    fn build_search_body(
+        &self,
+        query_vector: &[f32],
+        tenant: &str,
+        model: &str,
+    ) -> serde_json::Value {
+        json!({
+            "vector": query_vector,
+            "limit": 1,
+            "with_payload": true,
+            "score_threshold": self.similarity_threshold,
+            "filter": {
+                "must": [
+                    { "key": "scope", "match": { "value": tenant } },
+                    { "key": "model", "match": { "value": model } }
+                ]
+            }
+        })
+    }
+}
+
+/// Locataire du cache : identifiant de Virtual Key, ou "anonymous".
+fn tenant_scope(ctx: &RequestContext) -> String {
+    ctx.virtual_key
+        .clone()
+        .unwrap_or_else(|| "anonymous".to_string())
 }
 
 #[async_trait]
@@ -130,6 +160,9 @@ impl LlmPlugin for SemanticCachePlugin {
         request: &mut PylosRequest,
         ctx: &mut RequestContext,
     ) -> Result<Option<PylosResponse>, PylosError> {
+        // Perimetre de cache : locataire + modele (jamais partage entre locataires).
+        let tenant = tenant_scope(ctx);
+        let model = request.model().to_string();
         let chat_req = match request {
             PylosRequest::ChatCompletion(ref req) => req,
             _ => return Ok(None),
@@ -174,12 +207,7 @@ impl LlmPlugin for SemanticCachePlugin {
             self.qdrant_url.trim_end_matches('/'),
             self.collection_name
         );
-        let search_body = json!({
-            "vector": query_vector,
-            "limit": 1,
-            "with_payload": true,
-            "score_threshold": self.similarity_threshold
-        });
+        let search_body = self.build_search_body(&query_vector, &tenant, &model);
 
         let search_resp = match self
             .client
@@ -272,6 +300,8 @@ impl LlmPlugin for SemanticCachePlugin {
             return Ok(());
         }
 
+        let tenant = tenant_scope(ctx);
+
         let chat_resp = match response {
             PylosResponse::ChatCompletion(ref resp) => resp,
             _ => return Ok(()),
@@ -314,6 +344,7 @@ impl LlmPlugin for SemanticCachePlugin {
                         "query": user_query,
                         "response": serialized_response,
                         "model": request.model(),
+                        "scope": tenant,
                         "created_at": now
                     }
                 }
@@ -346,5 +377,42 @@ impl LlmPlugin for SemanticCachePlugin {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plugin() -> SemanticCachePlugin {
+        SemanticCachePlugin::new(
+            "http://localhost:6333".into(),
+            "pylos-cache".into(),
+            "nomic-embed".into(),
+            0.9,
+            60,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_tenant_scope_defaults_to_anonymous() {
+        let ctx = RequestContext::default();
+        assert_eq!(tenant_scope(&ctx), "anonymous");
+
+        let ctx2 = RequestContext {
+            virtual_key: Some("vk-1".into()),
+            ..Default::default()
+        };
+        assert_eq!(tenant_scope(&ctx2), "vk-1");
+    }
+
+    #[test]
+    fn test_search_body_is_filtered_by_tenant_and_model() {
+        let body = plugin().build_search_body(&[0.1, 0.2], "vk-1", "gpt-4o");
+        assert_eq!(body["filter"]["must"][0]["key"], "scope");
+        assert_eq!(body["filter"]["must"][0]["match"]["value"], "vk-1");
+        assert_eq!(body["filter"]["must"][1]["key"], "model");
+        assert_eq!(body["filter"]["must"][1]["match"]["value"], "gpt-4o");
     }
 }
