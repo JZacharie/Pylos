@@ -2,6 +2,7 @@
 layout: default
 title: Caching & Mémoire
 description: Stratégies d'optimisation des jetons par cache TinyLFU, cache sémantique vectoriel Qdrant et graphe de mémoire Memgraph.
+permalink: /caching-memoire/
 ---
 
 # Caching & Mémoire Cross-Agent

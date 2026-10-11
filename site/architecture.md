@@ -2,6 +2,7 @@
 layout: default
 title: Architecture Système
 description: Découverte de l'architecture hexagonale en Rust, des flux de requêtes d'inférence et des mécanismes de résilience de Pylos.
+permalink: /architecture/
 ---
 
 # Architecture & Principes de Conception

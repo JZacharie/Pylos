@@ -2,6 +2,7 @@
 layout: default
 title: Gouvernance & Sécurité
 description: Gestion multi-tenant, clés virtuelles, contrôle budgétaire en USD, authentification Google OAuth et audit de sécurité.
+permalink: /gouvernance/
 ---
 
 # Gouvernance & Sécurité d'Entreprise

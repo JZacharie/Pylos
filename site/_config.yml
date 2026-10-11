@@ -22,6 +22,7 @@ timezone: Europe/Paris
 
 url: https://jzacharie.github.io
 baseurl: /Pylos
+permalink: pretty
 
 markdown: kramdown
 kramdown:

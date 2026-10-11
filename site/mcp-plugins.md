@@ -2,6 +2,7 @@
 layout: default
 title: MCP & Plugins
 description: Proxy Model Context Protocol dynamique et architecture de plugins pré/post-traitement dans Pylos.
+permalink: /mcp-plugins/
 ---
 
 # Proxy Model Context Protocol (MCP) & Plugins

@@ -2,6 +2,7 @@
 layout: default
 title: Démarrage Rapide
 description: Guide d'installation et de mise en route de Pylos en développement local et avec Docker Compose.
+permalink: /demarrage/
 ---
 
 # Guide de Démarrage Rapide

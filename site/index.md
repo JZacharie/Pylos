@@ -2,6 +2,7 @@
 layout: default
 title: Passerelle LLM & Proxy MCP d'Entreprise
 description: Pylos est une passerelle IA haute performance et ultra-faible latence (<2ms) écrite en Rust, unifiant OpenAI, Anthropic, AWS Bedrock, avec gouvernance stricte et cache vectoriel.
+permalink: /
 ---
 
 <div class="hero">

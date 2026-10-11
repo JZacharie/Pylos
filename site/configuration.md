@@ -2,6 +2,7 @@
 layout: default
 title: Configuration (pylos.json)
 description: Guide de référence complet du fichier de configuration centralisé pylos.json.
+permalink: /configuration/
 ---
 
 # Guide de Configuration (`pylos.json`)

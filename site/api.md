@@ -2,6 +2,7 @@
 layout: default
 title: Référence API
 description: Spécification technique des endpoints d'inférence OpenAI-compatibles et des routes d'administration de Pylos.
+permalink: /api/
 ---
 
 # Spécification Technique de l'API
