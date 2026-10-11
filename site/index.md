@@ -106,10 +106,10 @@ Le proxy analyse la clé `sk-pylos-*`, valide les quotas et le débit de requêt
 
 ## 📚 Explorer la Documentation
 
-* **[Guide de Démarrage Rapide](demarrage.md)** : Installation locale, Makefile et Docker Compose.
-* **[Architecture Système](architecture.md)** : Plongée au cœur de la Clean Architecture hexagonale en Rust.
-* **[Configuration `pylos.json`](configuration.md)** : Guide exhaustif de chaque paramètre du fichier de configuration.
-* **[Caching & Graphe de Mémoire](caching-memoire.md)** : Détails sur l'éviction TinyLFU, Qdrant et Memgraph.
-* **[Proxy MCP & Écosystème Plugins](mcp-plugins.md)** : Extension des capacités des agents et serveurs d'outils.
-* **[Gouvernance & Sécurité](gouvernance.md)** : Clés virtuelles, contrôle budgétaire et isolation multi-tenant.
-* **[Référence Complète de l'API](api.md)** : Spécifications des endpoints d'inférence et d'administration.
+* **[Guide de Démarrage Rapide]({{ '/demarrage/' | relative_url }})** : Installation locale, Makefile et Docker Compose.
+* **[Architecture Système]({{ '/architecture/' | relative_url }})** : Plongée au cœur de la Clean Architecture hexagonale en Rust.
+* **[Configuration `pylos.json`]({{ '/configuration/' | relative_url }})** : Guide exhaustif de chaque paramètre du fichier de configuration.
+* **[Caching & Graphe de Mémoire]({{ '/caching-memoire/' | relative_url }})** : Détails sur l'éviction TinyLFU, Qdrant et Memgraph.
+* **[Proxy MCP & Écosystème Plugins]({{ '/mcp-plugins/' | relative_url }})** : Extension des capacités des agents et serveurs d'outils.
+* **[Gouvernance & Sécurité]({{ '/gouvernance/' | relative_url }})** : Clés virtuelles, contrôle budgétaire et isolation multi-tenant.
+* **[Référence Complète de l'API]({{ '/api/' | relative_url }})** : Spécifications des endpoints d'inférence et d'administration.

@@ -179,4 +179,4 @@ make audit        # Run security vulnerability audit on dependencies
 
 ## 📄 License
 
-TBD
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
