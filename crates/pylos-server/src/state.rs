@@ -408,15 +408,11 @@ impl AppState {
             }
         }
 
-        let has_rl = cfg
-            .governance
-            .rate_limits
-            .iter()
-            .any(|r| r.request_max_limit > 0 || r.token_max_limit > 0);
-        if has_rl {
-            plugins.push(Arc::new(RateLimitPlugin::new(Arc::clone(rate_limit_store))));
-            tracing::info!("Rate limit plugin enabled");
-        }
+        // Toujours enregistre : l'application des quotas ne doit pas dependre d'une
+        // heuristique de configuration, et le store persistant est partage entre
+        // repliques (contrairement a l'ancien compteur en memoire).
+        plugins.push(Arc::new(RateLimitPlugin::new(Arc::clone(rate_limit_store))));
+        tracing::info!("Rate limit plugin enabled");
 
         for plugin_cfg in &cfg.plugins {
             if !plugin_cfg.enabled {

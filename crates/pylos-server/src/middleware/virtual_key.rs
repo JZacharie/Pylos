@@ -58,13 +58,16 @@ pub async fn virtual_key_middleware(
     next: Next,
 ) -> Response {
     // Extraction du Bearer token depuis Authorization header
-    let auth_header = req
+    // Token possede : evite de garder un emprunt immuable de `req` pendant qu'on
+    // enrichit ses extensions.
+    let auth_token = req
         .headers()
         .get("authorization")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|value| value.to_string());
 
-    match auth_header {
+    match auth_token.as_deref() {
         Some(token) if token.starts_with(VIRTUAL_KEY_PREFIX) => {
             // 1. Check in the database for absolute configuration freshness
             let db_vk = match state.vk_store.get_key_by_value(token).await {
@@ -109,7 +112,7 @@ pub async fn virtual_key_middleware(
             };
 
             // 2. If active key is found in DB or config, register/update it in the in-memory registry
-            let (vk_id, provider_configs) = if let Some(ref vk_cfg) = db_vk {
+            let (vk_id, vk_name, provider_configs) = if let Some(ref vk_cfg) = db_vk {
                 let cfg = state.config_store.get().await;
                 let rate_limit = cfg
                     .governance
@@ -125,7 +128,11 @@ pub async fn virtual_key_middleware(
                 )
                 .with_rpm(rate_limit);
                 state.vk_registry.register(v_key).await;
-                (vk_cfg.id.clone(), vk_cfg.provider_configs.clone())
+                (
+                    vk_cfg.id.clone(),
+                    vk_cfg.name.clone(),
+                    vk_cfg.provider_configs.clone(),
+                )
             } else {
                 let cfg = state.config_store.get().await;
                 let static_vk = cfg.governance.virtual_keys.iter().find(|v| {
@@ -167,46 +174,41 @@ pub async fn virtual_key_middleware(
                     )
                     .with_rpm(rate_limit);
                     state.vk_registry.register(v_key).await;
-                    (vk_cfg.id.clone(), vk_cfg.provider_configs.clone())
+                    (
+                        vk_cfg.id.clone(),
+                        vk_cfg.name.clone(),
+                        vk_cfg.provider_configs.clone(),
+                    )
                 } else {
-                    (String::new(), Vec::new())
+                    (String::new(), String::new(), Vec::new())
                 }
             };
 
-            // 3. Verify in memory registry (for RPM rate limiting check & increment)
-            match state.vk_registry.check_and_increment(token).await {
-                Ok(vk) => {
-                    // Inject virtual key info into request extensions
-                    req.extensions_mut().insert(Some(VirtualKeyInfo {
-                        id: vk_id.clone(),
-                        name: vk.name.clone(),
-                        key: vk.key.clone(),
-                        provider_configs,
-                    }));
-                    next.run(req).await
-                }
-                Err(reason) => {
-                    let status = if reason.contains("Rate limit") {
-                        StatusCode::TOO_MANY_REQUESTS
-                    } else if reason.contains("not found") {
-                        StatusCode::UNAUTHORIZED
-                    } else {
-                        StatusCode::FORBIDDEN
-                    };
-
-                    (
-                        status,
-                        Json(json!({
-                            "error": {
-                                        "message": reason,
-                                        "type": "governance_error",
-                                        "code": status.as_u16()
-                            }
-                        })),
-                    )
-                        .into_response()
-                }
+            // 3. La cle doit exister (base de donnees ou configuration statique)
+            if vk_id.is_empty() {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({
+                        "error": {
+                            "message": "Virtual key not found",
+                            "type": "governance_error",
+                            "code": 401
+                        }
+                    })),
+                )
+                    .into_response();
             }
+
+            // Le quota de requetes (RPM/TPM) est applique par le RateLimitPlugin sur le
+            // store persistant, partage entre repliques et conserve au redemarrage.
+            // L'ancien compteur en memoire (par processus) est volontairement abandonne.
+            req.extensions_mut().insert(Some(VirtualKeyInfo {
+                id: vk_id,
+                name: vk_name,
+                key: token.to_string(),
+                provider_configs,
+            }));
+            next.run(req).await
         }
         _ => {
             // No virtual key or direct provider key -> insert None for extractor

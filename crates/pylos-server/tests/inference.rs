@@ -1320,6 +1320,7 @@ async fn state_with(
     plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>>,
     vk: Option<pylos_core::domain::config::VirtualKeyConfig>,
     budget_store: Arc<BudgetStore>,
+    rate_limit_store: Option<Arc<RateLimitStore>>,
 ) -> AppState {
     let orchestrator = Arc::new(InferenceOrchestrator::new(providers, plugins));
     let config_store = Arc::new(ConfigStore::load(None).await.unwrap());
@@ -1327,7 +1328,10 @@ async fn state_with(
     let vk_registry = Arc::new(pylos_core::domain::virtual_key::VirtualKeyRegistry::new());
     let log_store = Arc::new(LogStore::new(None, 1, 100));
     let model_catalog = Arc::new(ModelCatalog::in_memory().await.unwrap());
-    let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
+    let rate_limit_store = match rate_limit_store {
+        Some(store) => store,
+        None => Arc::new(RateLimitStore::in_memory().await.unwrap()),
+    };
     let vk_store = Arc::new(
         pylos_application::VirtualKeyStore::in_memory()
             .await
@@ -1391,6 +1395,7 @@ async fn test_fallback_on_retriable_provider_error() {
         vec![],
         None,
         budget_store,
+        None,
     )
     .await;
     let app = create_router(state);
@@ -1475,7 +1480,7 @@ async fn test_budget_enforced_on_virtual_key_id() {
     };
 
     // Budget volontairement minuscule (0.01 USD) pour l'ID de la clé.
-    let state = state_with(vec![(provider, config)], plugins, Some(vk), budget_store).await;
+    let state = state_with(vec![(provider, config)], plugins, Some(vk), budget_store, None).await;
     let app = create_router(state);
 
     let response = app
@@ -1549,7 +1554,7 @@ async fn test_expired_virtual_key_is_rejected() {
         let mut config = ProviderConfig::new(ProviderKind::Custom("custom-default".into()), vec![]);
         config.allowed_models = vec!["gpt-4o".into()];
         let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
-        state_with(vec![(provider, config)], vec![], Some(vk), budget_store).await
+        state_with(vec![(provider, config)], vec![], Some(vk), budget_store, None).await
     };
 
     let payload = || {
@@ -1594,4 +1599,111 @@ async fn test_expired_virtual_key_is_rejected() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
+}
+/// #126 : le quota de requetes est applique via le store persistant (partage entre
+/// repliques et conserve au redemarrage), et une Virtual Key inconnue reste refusee.
+#[tokio::test]
+async fn test_rate_limit_uses_shared_store() {
+    use pylos_core::domain::config::{
+        Duration, EnvVar, RateLimitConfig, VirtualKeyConfig, VkProviderConfig,
+    };
+
+    let provider = Arc::new(CustomMockProvider {
+        name: "custom-default".into(),
+        response_text: "OK".into(),
+    });
+    let mut config = ProviderConfig::new(ProviderKind::Custom("custom-default".into()), vec![]);
+    config.allowed_models = vec!["gpt-4o".into()];
+
+    let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
+    rate_limit_store
+        .upsert_rate_limit(
+            "vk-rl",
+            &RateLimitConfig {
+                id: "rl-1".into(),
+                token_max_limit: 0,
+                token_reset_duration: None,
+                request_max_limit: 2,
+                request_reset_duration: Some(Duration("1m".into())),
+            },
+        )
+        .await
+        .unwrap();
+
+    let plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>> = vec![Arc::new(
+        pylos_application::RateLimitPlugin::new(rate_limit_store.clone()),
+    )];
+
+    let vk = VirtualKeyConfig {
+        id: "vk-rl".into(),
+        name: "rl".into(),
+        description: None,
+        value: Some(EnvVar::Literal("sk-pylos-rl".into())),
+        is_active: true,
+        rate_limit_id: Some("rl-1".into()),
+        provider_configs: vec![VkProviderConfig {
+            provider: "*".into(),
+            allowed_models: vec!["*".into()],
+            key_names: vec!["*".into()],
+            weight: 1.0,
+        }],
+        team_alias: None,
+        team_id: None,
+        organization_id: None,
+        access_group_id: None,
+        user_email: None,
+        user_id: None,
+        created_at: None,
+        created_by: None,
+        updated_at: None,
+        last_active: None,
+        expires_at: None,
+    };
+
+    let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
+    let state = state_with(
+        vec![(provider, config)],
+        plugins,
+        Some(vk),
+        budget_store,
+        Some(rate_limit_store),
+    )
+    .await;
+    let app = create_router(state);
+
+    let payload = || {
+        Body::from(
+            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
+                .to_string(),
+        )
+    };
+
+    let call = |app: axum::Router, token: &'static str| async move {
+        app.oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
+                .body(payload())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .status()
+    };
+
+    assert_eq!(call(app.clone(), "sk-pylos-rl").await, StatusCode::OK);
+    assert_eq!(call(app.clone(), "sk-pylos-rl").await, StatusCode::OK);
+    assert_eq!(
+        call(app.clone(), "sk-pylos-rl").await,
+        StatusCode::TOO_MANY_REQUESTS,
+        "la 3e requete doit etre limitee (quota = 2)"
+    );
+
+    // Cle inconnue : refusee explicitement (le middleware ne s'appuie plus sur le registre memoire)
+    assert_eq!(
+        call(app, "sk-pylos-unknown").await,
+        StatusCode::UNAUTHORIZED
+    );
 }
