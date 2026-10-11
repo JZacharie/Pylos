@@ -166,14 +166,11 @@ impl InferenceOrchestrator {
         model: &str,
         ctx: &RequestContext,
     ) -> Vec<(Arc<dyn Provider>, ProviderConfig)> {
-        // 1. Filter providers based on allowed providers in virtual key context or forced provider
-        let allowed_providers: Vec<&(Arc<dyn Provider>, ProviderConfig)> =
-            if let Some(forced_prov) = &ctx.force_provider {
-                providers
-                    .iter()
-                    .filter(|(provider, _)| provider.name() == forced_prov)
-                    .collect()
-            } else if ctx.virtual_key.is_some() {
+        // 1. Périmètre autorisé : les restrictions de la Virtual Key s'appliquent TOUJOURS.
+        //    Les en-têtes x-pylos-force-* ne peuvent jamais élargir les droits d'une clé :
+        //    le provider forcé est appliqué comme un filtre DANS ce périmètre.
+        let mut allowed_providers: Vec<&(Arc<dyn Provider>, ProviderConfig)> =
+            if ctx.virtual_key.is_some() {
                 providers
                     .iter()
                     .filter(|(provider, _config)| {
@@ -191,6 +188,10 @@ impl InferenceOrchestrator {
             } else {
                 providers.iter().collect()
             };
+
+        if let Some(forced_prov) = &ctx.force_provider {
+            allowed_providers.retain(|(provider, _)| provider.name() == forced_prov);
+        }
 
         // 2. Separate into supporting and non-supporting providers
         let mut supporting = Vec::new();

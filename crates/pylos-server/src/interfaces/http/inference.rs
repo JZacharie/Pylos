@@ -116,6 +116,32 @@ pub async fn chat_completions(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
 
+    // Les en-têtes de forçage ne peuvent pas élargir les droits d'une Virtual Key.
+    if let Some(vk) = &vk_info {
+        if let Some(forced) = &force_provider {
+            let allowed = vk
+                .provider_configs
+                .iter()
+                .any(|cfg| cfg.provider == "*" || cfg.provider == *forced);
+            if !allowed {
+                return error_response(&PylosError::Unauthorized(format!(
+                    "Provider '{forced}' is not allowed for this virtual key"
+                )));
+            }
+        }
+        if let Some(forced) = &force_model {
+            let allowed = vk
+                .provider_configs
+                .iter()
+                .any(|cfg| cfg.allowed_models.iter().any(|m| m == "*" || m == forced));
+            if !allowed {
+                return error_response(&PylosError::Unauthorized(format!(
+                    "Model '{forced}' is not allowed for this virtual key"
+                )));
+            }
+        }
+    }
+
     let request = PylosRequest::ChatCompletion(payload);
     let mut ctx = RequestContext {
         trace_id: Some(request_id.clone()),

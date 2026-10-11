@@ -452,15 +452,8 @@ impl LlmPlugin for GuardrailsPlugin {
         request: &mut PylosRequest,
         ctx: &mut RequestContext,
     ) -> Result<Option<PylosResponse>, PylosError> {
-        if ctx
-            .headers
-            .get("x-bypass-guardrails")
-            .map(|s| s == "true")
-            .unwrap_or(false)
-        {
-            return Ok(None);
-        }
-
+        // NOTE: aucun en-tête client ne peut désactiver les guardrails.
+        // Ils ne sont contournables que par configuration (plugin désactivé).
         let chat_req = match request {
             PylosRequest::ChatCompletion(ref mut req) => req,
             _ => return Ok(None),
