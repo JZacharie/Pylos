@@ -253,6 +253,7 @@ pub fn create_router(state: AppState) -> Router {
 
     let auth_routes = Router::new()
         .route("/api/auth/config", get(auth::get_auth_config))
+        .route("/api/auth/google/start", get(auth::google_start))
         .route("/api/auth/google/callback", post(auth::google_callback))
         .route("/api/auth/logout", post(auth::logout));
 

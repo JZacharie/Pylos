@@ -10,14 +10,19 @@ export default function Callback() {
 
   useEffect(() => {
     const code = searchParams.get('code')
+    const state = searchParams.get('state')
     if (!code) {
       setError("No authorization code found in URL.")
+      return
+    }
+    if (!state) {
+      setError("Missing OAuth state (CSRF protection).")
       return
     }
 
     // Call backend callback endpoint to exchange code for session token
     const redirectUri = `${window.location.origin}/callback`
-    authApi.googleCallback(code, redirectUri)
+    authApi.googleCallback(code, redirectUri, state)
       .then(res => {
         localStorage.setItem('pylos_admin_key', res.token)
         localStorage.setItem('pylos_user', JSON.stringify(res.user))

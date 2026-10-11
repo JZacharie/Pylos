@@ -42,20 +42,27 @@ export default function Login() {
     navigate('/dashboard')
   }
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     if (!googleClientId) return
     setError(null)
     setLoading(true)
 
-    const redirectUri = googleRedirectUri || `${window.location.origin}/callback`
-    const targetUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
-      `client_id=${encodeURIComponent(googleClientId)}&` + 
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` + 
-      `response_type=code&` + 
-      `scope=${encodeURIComponent('openid email profile')}&` + 
-      `state=${encodeURIComponent('pylos-auth-state')}`
+    try {
+      // L'état anti-CSRF est émis par le serveur et posé en cookie HttpOnly.
+      const { state } = await authApi.googleStart()
+      const redirectUri = googleRedirectUri || `${window.location.origin}/callback`
+      const targetUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(googleClientId)}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+        `response_type=code&` +
+        `scope=${encodeURIComponent('openid email profile')}&` +
+        `state=${encodeURIComponent(state)}`
 
-    window.location.href = targetUrl
+      window.location.href = targetUrl
+    } catch (err: any) {
+      setLoading(false)
+      setError(err.response?.data?.error || 'Failed to start Google sign-in.')
+    }
   }
 
   return (
