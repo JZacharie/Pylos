@@ -21,8 +21,7 @@ pub async fn admin_guard_middleware(
     let mut is_admin = false;
     if let Some(v) = provided_key {
         if let Some(expected_hash) = &*state.admin_key_hash.read().await {
-            let provided_hash = crate::state::hash_sha256(v);
-            is_admin = provided_hash == *expected_hash;
+            is_admin = crate::state::verify_admin_secret(v, expected_hash);
         }
     }
 
@@ -38,8 +37,7 @@ pub async fn admin_guard_middleware(
     if let Some(token) = auth_header {
         // First check if the token matches the admin key directly (raw key as Bearer)
         if let Some(expected_hash) = &*state.admin_key_hash.read().await {
-            let provided_hash = crate::state::hash_sha256(token);
-            if provided_hash == *expected_hash {
+            if crate::state::verify_admin_secret(token, expected_hash) {
                 return next.run(request).await;
             }
         }

@@ -6,7 +6,7 @@ use pylos_core::domain::config::{EnvVar, VirtualKeyConfig};
 use pylos_core::domain::organization::InternalUser;
 use pylos_server::interfaces::http::auth::PylosSessionClaims;
 use pylos_server::routes::create_router;
-use pylos_server::state::{hash_sha256, AppState};
+use pylos_server::state::{hash_admin_secret, AppState};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -20,7 +20,7 @@ async fn test_state(dir: &std::path::Path) -> AppState {
         .await
         .unwrap();
     let mut s = state.clone();
-    s.admin_key_hash = Arc::new(tokio::sync::RwLock::new(Some(hash_sha256(ADMIN_KEY))));
+    s.admin_key_hash = Arc::new(tokio::sync::RwLock::new(Some(hash_admin_secret(ADMIN_KEY))));
     s.setup_required = Arc::new(tokio::sync::RwLock::new(false));
     s
 }
@@ -287,4 +287,26 @@ async fn test_mcp_status_requires_admin() {
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+/// #119 : le secret d'administration est haché en Argon2id (format PHC) avec sel
+/// aléatoire, et l'ancien hash SHA-256 non salé reste accepté (migration transparente).
+#[tokio::test]
+async fn test_admin_secret_hashing() {
+    use pylos_server::state::{hash_admin_secret, hash_sha256, verify_admin_secret};
+
+    let hashed = hash_admin_secret("s3cret-admin");
+    assert!(
+        hashed.starts_with("$argon2"),
+        "format PHC Argon2id attendu, obtenu: {hashed}"
+    );
+    assert!(verify_admin_secret("s3cret-admin", &hashed));
+    assert!(!verify_admin_secret("mauvais-secret", &hashed));
+
+    // Sel aléatoire : deux hachages du même secret diffèrent
+    assert_ne!(hash_admin_secret("s3cret-admin"), hash_admin_secret("s3cret-admin"));
+
+    // Compatibilité legacy SHA-256
+    let legacy = hash_sha256("legacy-admin");
+    assert!(verify_admin_secret("legacy-admin", &legacy));
+    assert!(!verify_admin_secret("nope", &legacy));
 }

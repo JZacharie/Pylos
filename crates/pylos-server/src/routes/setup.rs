@@ -1,4 +1,4 @@
-use crate::state::hash_sha256;
+use crate::state::hash_admin_secret;
 use crate::state::AppState;
 use axum::{
     extract::State,
@@ -77,7 +77,8 @@ async fn run_setup(
     }
 
     info!("Setting up Pylos admin password...");
-    let hash = hash_sha256(&payload.password);
+    // Argon2id + sel aléatoire (et non plus SHA-256 non salé).
+    let hash = hash_admin_secret(&payload.password);
 
     // Save to SQLite via config_store
     if let Err(e) = state.config_store.save_admin_key_hash(&hash).await {

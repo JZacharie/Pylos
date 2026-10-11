@@ -41,6 +41,8 @@ jsonwebtoken = { version = "10.0", default-features = false, features = ["use_pe
 moka = { version = "0.12", features = ["future"] }
 ring = "0.17"
 dotenvy = "0.15"
+# Hachage des secrets d'administration (Argon2id, sel aleatoire)
+argon2 = "0.5"
 
 [profile.release]
 opt-level = "z"
