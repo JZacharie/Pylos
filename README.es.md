@@ -161,4 +161,4 @@ make audit        # Analizar vulnerabilidades en las dependencias
 
 ## 📄 Licencia
 
-TBD
+Este proyecto está bajo la Licencia MIT — consulte el archivo [LICENSE](LICENSE) para más detalles.

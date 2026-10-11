@@ -1,4 +1,5 @@
 version: "0.1.0"
+license: "MIT"
 rust_edition: "2021"
 status: "Active Development (Non-Production Ready)"
 github_repo: "https://github.com/JZacharie/Pylos"

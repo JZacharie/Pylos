@@ -179,4 +179,4 @@ make audit        # Analyser les vulnérabilités des dépendances
 
 ## 📄 Licence
 
-À déterminer.
+Ce projet est sous licence MIT — consultez le fichier [LICENSE](LICENSE) pour plus de détails.
