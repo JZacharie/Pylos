@@ -74,7 +74,10 @@ jobs:
       - name: Build and push Frontend Docker image
         uses: docker/build-push-action@v7
         with:
-          context: ./ui
+          # ui/Dockerfile cible la racine du dépôt (package.json racine + ui/),
+          # comme docker-compose.yml. Un contexte './ui' casse les COPY ui/nginx.conf
+          # et ui/docker-entrypoint.sh (build CI rouge).
+          context: .
           file: ./ui/Dockerfile
           platforms: linux/${{ matrix.arch }}
           provenance: false
