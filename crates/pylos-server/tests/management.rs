@@ -264,3 +264,27 @@ async fn test_provider_management() {
     let resp = app.clone().oneshot(req).await.unwrap();
     assert!(resp.status() == StatusCode::BAD_REQUEST || resp.status() == StatusCode::OK);
 }
+/// #124 : le statut d'un serveur MCP est reserve aux administrateurs.
+#[tokio::test]
+async fn test_mcp_status_requires_admin() {
+    let tdir = tempdir().unwrap();
+    let state = test_state(tdir.path()).await;
+    let app = create_router(state);
+
+    // Sans identite admin -> 401
+    let req = Request::builder()
+        .uri("/mcp/whatever")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+    // Avec la cle admin -> l'authentification passe (404 : serveur inconnu)
+    let req = Request::builder()
+        .uri("/mcp/whatever")
+        .header("X-Admin-Key", ADMIN_KEY)
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}

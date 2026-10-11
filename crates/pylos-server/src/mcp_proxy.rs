@@ -93,11 +93,13 @@ pub async fn mcp_proxy_handler(
         reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET);
     let mut proxy_req = client.request(reqwest_method, &full_url);
 
-    // Copier les headers via conversion string (pour éviter le conflit http 0.2 vs 1.0)
+    // Copier les en-têtes en excluant ceux qui portent les credentials de l'appelant
+    // ou un contexte de proxy : un serveur MCP amont ne doit jamais recevoir le
+    // Bearer/Virtual Key du client.
     for (key, value) in headers.iter() {
         let key_str = key.as_str().to_string();
         if let Ok(val_str) = value.to_str() {
-            if key_str != "host" {
+            if forwardable_header(&key_str) {
                 proxy_req = proxy_req.header(&key_str, val_str);
             }
         }
@@ -120,7 +122,10 @@ pub async fn mcp_proxy_handler(
 
             for (key, value) in resp_headers.iter() {
                 let key_lower = key.as_str().to_lowercase();
-                if key_lower != "transfer-encoding" && key_lower != "content-length" {
+                if key_lower != "transfer-encoding"
+                    && key_lower != "content-length"
+                    && key_lower != "set-cookie"
+                {
                     if let Ok(val_str) = value.to_str() {
                         if let Ok(header_name) =
                             axum::http::HeaderName::from_bytes(key.as_str().as_bytes())
@@ -175,5 +180,56 @@ pub async fn mcp_server_status(
             Json(json!({"error": format!("MCP server '{server_name}' not found")})),
         )
             .into_response(),
+    }
+}
+/// En-têtes qui ne doivent JAMAIS être transmis à un serveur MCP amont :
+/// credentials de l'appelant, contexte de proxy, cookies et en-têtes de connexion.
+pub fn forwardable_header(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    !matches!(
+        lower.as_str(),
+        "host"
+            | "authorization"
+            | "x-admin-key"
+            | "x-team-id"
+            | "cookie"
+            | "proxy-authorization"
+            | "proxy-authenticate"
+            | "x-forwarded-for"
+            | "x-forwarded-host"
+            | "x-forwarded-proto"
+            | "x-real-ip"
+            | "connection"
+            | "keep-alive"
+            | "transfer-encoding"
+            | "upgrade"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::forwardable_header;
+
+    #[test]
+    fn test_sensitive_headers_are_not_forwarded() {
+        for header in [
+            "Authorization",
+            "authorization",
+            "X-Admin-Key",
+            "X-Team-Id",
+            "Cookie",
+            "Host",
+            "Proxy-Authorization",
+            "X-Forwarded-For",
+        ] {
+            assert!(!forwardable_header(header), "{header} ne doit pas etre transmis");
+        }
+    }
+
+    #[test]
+    fn test_safe_headers_are_forwarded() {
+        for header in ["content-type", "accept", "user-agent", "mcp-session-id"] {
+            assert!(forwardable_header(header), "{header} doit etre transmis");
+        }
     }
 }

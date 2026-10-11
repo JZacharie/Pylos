@@ -256,13 +256,19 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/auth/google/callback", post(auth::google_callback))
         .route("/api/auth/logout", post(auth::logout));
 
-    // MCP proxy routes — accessibles via Virtual Key (Authorization) ou Team (X-Team-Id)
-    let mcp_proxy_routes = Router::new()
+    // Statut MCP : reserve aux administrateurs (expose target_url et la topologie interne).
+    let mcp_status_routes = Router::new()
         .route("/mcp/{server_name}", get(mcp_proxy::mcp_server_status))
-        .route(
-            "/mcp/{server_name}/{*path}",
-            axum::routing::any(mcp_proxy::mcp_proxy_handler),
-        );
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            management_auth_middleware,
+        ));
+
+    // MCP proxy — authentifie par Virtual Key (Authorization) ou Team (X-Team-Id).
+    let mcp_proxy_routes = Router::new().route(
+        "/mcp/{server_name}/{*path}",
+        axum::routing::any(mcp_proxy::mcp_proxy_handler),
+    );
 
     Router::new()
         .route("/health", get(health::health_check))
@@ -272,6 +278,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(inference_routes)
         .merge(management_routes)
         .merge(guardrails_admin_routes)
+        .merge(mcp_status_routes)
         .merge(mcp_proxy_routes)
         .merge(setup::setup_router())
         // Middleware global
