@@ -1,4 +1,4 @@
-name: PR Tests (Requires Approval)
+name: PR Tests
 
 on:
   workflow_dispatch:
@@ -10,6 +10,7 @@ on:
   pull_request:
     branches: [main, master]
 
+# Une nouvelle poussee annule le run precedent : on ne teste jamais deux fois le meme diff.
 concurrency:
   group: pr-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -20,17 +21,46 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
-  check-skip:
+  # ───────────────────────────────────────────────────────────────────────────
+  # 1. Quels perimetres ont change ? (evite de relancer Rust pour une PR docs/UI)
+  #    Gere aussi l'echappatoire historique "--skip-ci".
+  # ───────────────────────────────────────────────────────────────────────────
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
     outputs:
-      should-skip: ${{ steps.check.outputs.should-skip }}
+      rust: ${{ steps.filter.outputs.rust }}
+      ui: ${{ steps.filter.outputs.ui }}
+      should-skip: ${{ steps.skip.outputs.should-skip }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Detect changed perimeters
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/pr-tests.yml'
+              - '.github/workflows/scripts/**'
+            ui:
+              - 'ui/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/pr-tests.yml'
+
       - name: Check if pipeline should be skipped
-        id: check
+        id: skip
         run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
           if [[ "$COMMIT_MESSAGE" == *"--skip-ci"* ]]; then
@@ -39,70 +69,161 @@ jobs:
             echo "should-skip=false" >> $GITHUB_OUTPUT
           fi
 
-  run-tests:
-    needs: [check-skip]
-    if: needs.check-skip.outputs.should-skip != 'true'
-    name: Run Tests
+  # ───────────────────────────────────────────────────────────────────────────
+  # 2. Lint Rust (rapide, parallele aux tests)
+  # ───────────────────────────────────────────────────────────────────────────
+  rust-lint:
+    name: Rust Lint
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.should-skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
         with:
           egress-policy: audit
-
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
-
-      - name: Rust Cache
+          components: clippy
+      - name: Rust Cache (partage entre jobs)
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: pylos-rust
+          cache-on-failure: true
+      - name: Create UI stub for rust-embed
+        run: mkdir -p ui/dist
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # 3. Tests Rust (parallele au lint, meme cache)
+  # ───────────────────────────────────────────────────────────────────────────
+  rust-tests:
+    name: Rust Tests
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.should-skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust Cache (partage entre jobs)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: pylos-rust
+          cache-on-failure: true
+      - name: Create UI stub for rust-embed
+        run: mkdir -p ui/dist
+      - name: Tests
+        run: cargo test --workspace --locked
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 4. Audit de securite (ne compile rien : job tres court, en parallele)
+  # ───────────────────────────────────────────────────────────────────────────
+  security-audit:
+    name: Security Audit
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.should-skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
+      - name: Audit
+        run: cargo audit
 
-      - name: Add comment to PR
-        if: github.event.pull_request.number
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # ───────────────────────────────────────────────────────────────────────────
+  # 5. UI : build bloque, lint encore en observation (48 erreurs historiques)
+  # ───────────────────────────────────────────────────────────────────────────
+  ui-build:
+    name: UI Build
+    needs: [changes]
+    if: needs.changes.outputs.ui == 'true' && needs.changes.outputs.should-skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install dependencies
+        run: npm ci --prefix ui
+      - name: Build
+        run: npm run build --prefix ui
+      - name: Lint (observation)
+        continue-on-error: true
+        run: npm run lint --prefix ui
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 6. Agregateur : c'est CE job (nom "Run Tests") qui est exige par la
+  #    protection de branche. Il tourne toujours, meme si les jobs ci-dessus
+  #    sont ignores (PR docs uniquement), et echoue si l'un d'eux echoue.
+  # ───────────────────────────────────────────────────────────────────────────
+  run-tests:
+    name: Run Tests
+    needs: [changes, rust-lint, rust-tests, security-audit, ui-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
+        id: eval
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "🧪 **Test run starting for Pylos...**
+          set -euo pipefail
+          echo "perimetres : rust=${{ needs.changes.outputs.rust }} ui=${{ needs.changes.outputs.ui }} skip=${{ needs.changes.outputs.should-skip }}"
 
-          **Test Suite Includes:**
-          - 🔍 Clippy Lints
-          - 🧪 Unit & Integration Tests
-          - 🛡️ Security Audit
+          if [[ "${{ needs.changes.result }}" != "success" ]]; then
+            echo "::error::la detection des changements a echoue"
+            exit 1
+          fi
+          if [[ "${{ needs.changes.outputs.should-skip }}" == "true" ]]; then
+            echo "Pipeline ignore (--skip-ci)"
+            exit 0
+          fi
 
-          [View workflow run →](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          for result in \
+            "${{ needs.rust-lint.result }}" \
+            "${{ needs.rust-tests.result }}" \
+            "${{ needs.security-audit.result }}" \
+            "${{ needs.ui-build.result }}"; do
+            case "$result" in
+              failure|cancelled)
+                echo "::error::un job requis a echoue ($result)"
+                exit 1
+                ;;
+            esac
+          done
+          echo "Tous les jobs applicables sont verts."
 
-      - name: Make test script executable
-        run: chmod +x .github/workflows/scripts/run-tests.sh
-
-      - name: Run tests
-        run: ./.github/workflows/scripts/run-tests.sh
-
-      - name: Report test results
+      - name: Comment PR
         if: always() && github.event.pull_request.number
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            gh pr comment ${{ github.event.pull_request.number }} --body "✅ **All Pylos tests passed successfully!**
-
-            All test suites have completed without errors.
-
-            [View detailed results →](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ "${{ steps.eval.outcome }}" == "success" ]]; then
+            body="✅ **Pylos — tests OK** (rust=${{ needs.changes.outputs.rust }}, ui=${{ needs.changes.outputs.ui }})"
           else
-            gh pr comment ${{ github.event.pull_request.number }} --body "❌ **Pylos tests failed**
-
-            One or more test suites failed. Please review the failures.
-
-            [View detailed results →](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            body="❌ **Pylos — tests en échec** — voir le run : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
+          gh pr comment ${{ github.event.pull_request.number }} --body "$body"
