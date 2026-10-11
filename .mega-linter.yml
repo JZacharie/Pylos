@@ -8,4 +8,12 @@ DISABLE_LINTERS:
   - JSON_JSONLINT
 
 # Exclude files/folders from all linters (using regex matching the full path relative to root)
-FILTER_REGEX_EXCLUDE: (helm/.*templates/.*|docker/grafana/provisioning/datasources/prometheus\.yml)
+# - helm/**/templates : fichiers templates Helm (non YAML valide avant rendu)
+# - docker/.../prometheus.yml : datasource Grafana provisionnee automatiquement
+# - site/ : site de documentation Jekyll publie sur GitHub Pages. Il contient du contenu
+#   redactionnel (Markdown/HTML/CSS) et de gros assets binaires (PDF/images) qui ne
+#   relevent pas du lint applicatif. Depuis l'ajout de ce dossier, MegaLinter (qui
+#   analyse TOUT le depot sur un push, contrairement aux PR ou seul le diff est
+#   analyse) echouait sur main sans rapport avec le code du gateway.
+# - megalinter-reports/ : rapports generes par MegaLinter lui-meme (artefacts).
+FILTER_REGEX_EXCLUDE: (helm/.*templates/.*|docker/grafana/provisioning/datasources/prometheus\.yml|site/.*|megalinter-reports/.*)
