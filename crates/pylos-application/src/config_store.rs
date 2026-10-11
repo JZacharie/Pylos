@@ -358,6 +358,8 @@ impl ConfigStore {
 
         if let Some(cfg_str) = db_config {
             if let Ok(mut new_cfg) = serde_json::from_str::<PylosConfig>(&cfg_str) {
+                // Les secrets providers sont chiffrés en base : les déchiffrer avant usage.
+                decrypt_config_secrets(&mut new_cfg);
                 info!("Loaded configuration from database; merging missing items from file config");
                 let mut merged = false;
 
@@ -392,7 +394,7 @@ impl ConfigStore {
 
                 // If merged, we write it back to the database so that it's persisted there
                 if merged {
-                    let json = serde_json::to_string(&new_cfg).unwrap_or_default();
+                    let json = serialize_config_for_db(&new_cfg);
                     match &pool {
                         Pool::Sqlite(p) => {
                             let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
@@ -423,7 +425,7 @@ impl ConfigStore {
             }
         } else {
             info!("No configuration found in database, inserting bootstrap configuration");
-            let json = serde_json::to_string(&state.config).unwrap_or_default();
+            let json = serialize_config_for_db(&state.config);
             match &pool {
                 Pool::Sqlite(p) => {
                     let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
@@ -690,28 +692,117 @@ impl std::fmt::Debug for ReloadSummary {
 // Persistance sur disque
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Chiffrement des secrets providers au repos (copie en base de données)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Marqueur des valeurs chiffrées stockées en base.
+const ENCRYPTED_PREFIX: &str = "enc:v1:";
+
+/// Chiffre une valeur littérale. Les références `env.*`, les valeurs vides et les
+/// valeurs déjà chiffrées sont laissées telles quelles.
+fn encrypt_envvar_secret(value: &EnvVar) -> EnvVar {
+    match value {
+        EnvVar::Literal(literal) => {
+            if literal.is_empty()
+                || literal.starts_with("env.")
+                || literal.starts_with(ENCRYPTED_PREFIX)
+            {
+                return value.clone();
+            }
+            match pylos_core::key_encrypt(literal) {
+                Ok(encrypted) => EnvVar::Literal(format!("{ENCRYPTED_PREFIX}{encrypted}")),
+                Err(e) => {
+                    warn!(error = %e, "Failed to encrypt provider secret before persistence");
+                    value.clone()
+                }
+            }
+        }
+        EnvVar::EnvRef(_) => value.clone(),
+    }
+}
+
+fn decrypt_envvar_secret(value: &EnvVar) -> EnvVar {
+    match value {
+        EnvVar::Literal(literal) => match literal.strip_prefix(ENCRYPTED_PREFIX) {
+            Some(encrypted) => match pylos_core::key_decrypt(encrypted) {
+                Ok(plain) => EnvVar::Literal(plain),
+                Err(e) => {
+                    warn!(error = %e, "Failed to decrypt provider secret from database");
+                    value.clone()
+                }
+            },
+            None => value.clone(),
+        },
+        EnvVar::EnvRef(_) => value.clone(),
+    }
+}
+
+/// Copie de la configuration avec les secrets providers chiffrés (base uniquement).
+fn encrypt_config_secrets(cfg: &PylosConfig) -> PylosConfig {
+    let mut encrypted = cfg.clone();
+    for provider in encrypted.providers.values_mut() {
+        for key in provider.keys.iter_mut() {
+            key.value = encrypt_envvar_secret(&key.value);
+            if let Some(bedrock) = key.bedrock_key_config.as_mut() {
+                bedrock.access_key_id = bedrock.access_key_id.as_ref().map(encrypt_envvar_secret);
+                bedrock.secret_access_key =
+                    bedrock.secret_access_key.as_ref().map(encrypt_envvar_secret);
+                bedrock.session_token = bedrock.session_token.as_ref().map(encrypt_envvar_secret);
+                bedrock.external_id = bedrock.external_id.as_ref().map(encrypt_envvar_secret);
+            }
+        }
+    }
+    encrypted
+}
+
+/// Déchiffre les secrets providers après lecture depuis la base.
+fn decrypt_config_secrets(cfg: &mut PylosConfig) {
+    for provider in cfg.providers.values_mut() {
+        for key in provider.keys.iter_mut() {
+            key.value = decrypt_envvar_secret(&key.value);
+            if let Some(bedrock) = key.bedrock_key_config.as_mut() {
+                bedrock.access_key_id = bedrock.access_key_id.as_ref().map(decrypt_envvar_secret);
+                bedrock.secret_access_key =
+                    bedrock.secret_access_key.as_ref().map(decrypt_envvar_secret);
+                bedrock.session_token = bedrock.session_token.as_ref().map(decrypt_envvar_secret);
+                bedrock.external_id = bedrock.external_id.as_ref().map(decrypt_envvar_secret);
+            }
+        }
+    }
+}
+
+/// Sérialise la configuration destinée à la base (secrets chiffrés).
+fn serialize_config_for_db(cfg: &PylosConfig) -> String {
+    serde_json::to_string(&encrypt_config_secrets(cfg)).unwrap_or_default()
+}
+
 /// Persiste la config actuelle sur disque.
 /// Appelé avec le write-lock déjà tenu — donc prend une ref sur ConfigState.
 /// En cas d'échec (pas de fichier configuré, erreur I/O), log un warning et continue.
 async fn persist_config_locked(state: &ConfigState) {
-    let json = match serde_json::to_string_pretty(&state.config) {
+    // Le fichier de configuration reste en clair : il est édité par l'opérateur et
+    // protégé par les permissions du système de fichiers. Seule la copie en base est chiffrée.
+    let file_json = match serde_json::to_string_pretty(&state.config) {
         Ok(j) => j,
         Err(e) => {
             warn!(error = %e, "Failed to serialize config for persistence");
             return;
         }
     };
+    let db_json = serialize_config_for_db(&state.config);
 
     if let Some(pool) = &state.db_pool {
         match pool {
             Pool::Sqlite(p) => {
                 let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                    .bind(&json)
+                    .bind(&db_json)
                     .execute(p)
                     .await;
             }
             Pool::Postgres(p) => {
-                let val: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+                let val: serde_json::Value =
+                    serde_json::from_str(&db_json).unwrap_or_default();
                 let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
                     .bind(&val)
                     .execute(p)
@@ -726,7 +817,7 @@ async fn persist_config_locked(state: &ConfigState) {
         return;
     };
 
-    if let Err(e) = tokio::fs::write(path, json.as_bytes()).await {
+    if let Err(e) = tokio::fs::write(path, file_json.as_bytes()).await {
         warn!(path = %path.display(), error = %e, "Failed to persist config to disk");
     } else {
         debug!(path = %path.display(), "Config persisted to disk");
@@ -1284,5 +1375,36 @@ mod tests {
             h1, h2,
             "Hash should be identical regardless of current_usage"
         );
+    }
+
+    /// #122 : un secret provider ne doit jamais apparaitre en clair dans la base.
+    #[test]
+    fn test_provider_secret_is_encrypted_and_restored() {
+        let secret = EnvVar::Literal("sk-super-secret-value".into());
+        let encrypted = encrypt_envvar_secret(&secret);
+
+        match &encrypted {
+            EnvVar::Literal(value) => {
+                assert!(value.starts_with(ENCRYPTED_PREFIX));
+                assert!(!value.contains("sk-super-secret-value"));
+            }
+            other => panic!("type inattendu: {other:?}"),
+        }
+
+        assert_eq!(decrypt_envvar_secret(&encrypted), secret);
+    }
+
+    /// Les references d'environnement, valeurs vides et valeurs deja chiffrees ne
+    /// doivent pas etre re-chiffrees (idempotence).
+    #[test]
+    fn test_non_secret_values_are_left_untouched() {
+        let reference = EnvVar::Literal("env.OPENAI_API_KEY".into());
+        assert_eq!(encrypt_envvar_secret(&reference), reference);
+
+        let empty = EnvVar::Literal(String::new());
+        assert_eq!(encrypt_envvar_secret(&empty), empty);
+
+        let once = encrypt_envvar_secret(&EnvVar::Literal("sk-x".into()));
+        assert_eq!(encrypt_envvar_secret(&once), once);
     }
 }
