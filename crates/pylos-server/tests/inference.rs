@@ -1494,9 +1494,104 @@ async fn test_budget_enforced_on_virtual_key_id() {
         .await
         .unwrap();
 
+    let status = response.status();
+    let body = ax_body_to_json(response.into_body()).await;
     assert_eq!(
-        response.status(),
+        status,
         StatusCode::PAYMENT_REQUIRED,
-        "un budget dépassé doit renvoyer 402 (preuve que l'identifiant de la VK est utilisé)"
+        "un budget dépassé doit renvoyer 402 (preuve que l'identifiant de la VK est utilisé) — corps: {body}"
     );
+}
+/// #121 : une Virtual Key expirée doit être refusée (401), une clé valide passe.
+#[tokio::test]
+async fn test_expired_virtual_key_is_rejected() {
+    use pylos_core::domain::config::{EnvVar, VirtualKeyConfig, VkProviderConfig};
+
+    #[allow(clippy::too_many_arguments)]
+    fn make_vk(id: &str, value: &str, expires_at: i64) -> VirtualKeyConfig {
+        VirtualKeyConfig {
+            id: id.into(),
+            name: id.into(),
+            description: None,
+            value: Some(EnvVar::Literal(value.into())),
+            is_active: true,
+            rate_limit_id: None,
+            provider_configs: vec![VkProviderConfig {
+                provider: "*".into(),
+                allowed_models: vec!["*".into()],
+                key_names: vec!["*".into()],
+                weight: 1.0,
+            }],
+            team_alias: None,
+            team_id: None,
+            organization_id: None,
+            access_group_id: None,
+            user_email: None,
+            user_id: None,
+            created_at: None,
+            created_by: None,
+            updated_at: None,
+            last_active: None,
+            expires_at: Some(expires_at),
+        }
+    }
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let make_state = |vk: VirtualKeyConfig| async move {
+        let provider = Arc::new(CustomMockProvider {
+            name: "custom-default".into(),
+            response_text: "OK".into(),
+        });
+        let mut config = ProviderConfig::new(ProviderKind::Custom("custom-default".into()), vec![]);
+        config.allowed_models = vec!["gpt-4o".into()];
+        let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
+        state_with(vec![(provider, config)], vec![], Some(vk), budget_store).await
+    };
+
+    let payload = || {
+        Body::from(
+            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
+                .to_string(),
+        )
+    };
+
+    // 1. Cle expiree
+    let app = create_router(make_state(make_vk("vk-old", "sk-pylos-old", now_ms - 60_000)).await);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer sk-pylos-old")
+                .body(payload())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        StatusCode::UNAUTHORIZED,
+        "une Virtual Key expiree doit etre refusee"
+    );
+
+    // 2. Cle valide (expire dans une heure)
+    let app = create_router(make_state(make_vk("vk-new", "sk-pylos-new", now_ms + 3_600_000)).await);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer sk-pylos-new")
+                .body(payload())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
 }

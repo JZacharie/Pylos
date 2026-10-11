@@ -12,6 +12,37 @@ use pylos_core::domain::virtual_key::VIRTUAL_KEY_PREFIX;
 
 use crate::state::AppState;
 
+/// Horodatage courant en millisecondes (les `expires_at` sont stockes en ms epoch).
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Une Virtual Key est expiree si son `expires_at` (ms epoch) est dans le passe.
+///
+/// `None`, `Some(0)` et les valeurs negatives sont traites comme "pas d'expiration" :
+/// la couche de persistance relit une colonne NULL comme `0`, ce qui ne doit pas
+/// invalider toutes les cles existantes.
+fn is_expired(expires_at: Option<i64>) -> bool {
+    matches!(expires_at, Some(ts) if ts > 0 && now_ms() > ts)
+}
+
+fn expired_response() -> axum::response::Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(json!({
+            "error": {
+                "message": "Virtual key is expired",
+                "type": "governance_error",
+                "code": 401
+            }
+        })),
+    )
+        .into_response()
+}
+
 /// Middleware Axum de vérification des Virtual Keys
 ///
 /// Si le header Authorization est présent avec un sk-pylos-* :
@@ -52,6 +83,11 @@ pub async fn virtual_key_middleware(
                             })),
                         )
                             .into_response();
+                    }
+                    if is_expired(vk_cfg.expires_at) {
+                        // Cle expiree -> retiree du registre memoire et refusee
+                        state.vk_registry.deregister(token).await;
+                        return expired_response();
                     }
                     Some(vk_cfg)
                 }
@@ -110,6 +146,11 @@ pub async fn virtual_key_middleware(
                             })),
                         )
                             .into_response();
+                    }
+
+                    if is_expired(vk_cfg.expires_at) {
+                        state.vk_registry.deregister(token).await;
+                        return expired_response();
                     }
 
                     let rate_limit = cfg
