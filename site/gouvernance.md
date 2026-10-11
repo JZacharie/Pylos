@@ -20,6 +20,8 @@ Plutôt que de distribuer vos clés d'API directes (OpenAI, Anthropic) aux déve
 * **Contrôle de Débit (Rate Limiting)** :
   * **RPM (Requests Per Minute)** : Plafonne le nombre de requêtes par minute pour éviter les boucles infinies de code.
   * **TPM (Tokens Per Minute)** : Plafonne le débit de jetons consommés par minute.
+  * **Partagé et persistant** : les compteurs sont conservés dans le store (PostgreSQL recommandé dès qu'il y a plusieurs répliques) et survivent aux redémarrages.
+* **Expiration (`expires_at`)** : une clé dont la date d'expiration est dépassée est refusée (`HTTP 401 key_expired`) et retirée du registre.
 * **Plafond Budgétaire en USD** : Fixe une limite de dépenses infranchissable sur une période glissante ou calendaire.
 
 ---
@@ -40,7 +42,7 @@ Le moteur de budget de Pylos calcule le coût réel de chaque requête en temps 
           [OUI]                           [NON]
             │                               │
             ▼                               ▼
-    HTTP 429 Too Many Requests      Requête autorisée
+    HTTP 402 Payment Required       Requête autorisée
     {"error": "Budget exceeded"}    Comptabilisation des tokens
 ```
 
@@ -55,17 +57,24 @@ La console d'administration et les APIs de gestion supportent deux niveaux de co
 
 ### 1. Google OAuth (SSO Entreprise)
 * Connexion sécurisée avec vos comptes professionnels Google Workspace.
-* **Bootstrap automatique** : Le premier utilisateur qui se connecte sur une instance vierge est automatiquement promu `admin`.
-* Les utilisateurs suivants reçoivent le rôle `member` et peuvent être affectés à des Équipes et Organisations par l'administrateur.
+* **Anti-CSRF** : l'état OAuth est émis par le serveur (`GET /api/auth/google/start`) et vérifié au callback ; aucun état fixe côté client n'est accepté.
+* **Administrateurs explicites** : le rôle `admin` est accordé aux emails listés dans la variable `ADMIN_EMAILS`. La promotion automatique du premier inscrit a été **supprimée**.
+* Les autres utilisateurs reçoivent le rôle `member` (groupe `playgroup`) et doivent être approuvés par un administrateur.
 
 ### 2. Clé Admin Statique (`PYLOS_ADMIN_KEY`)
 * Utilisée pour l'automatisation CI/CD, les scripts Terraform/Ansible ou comme secours si le fournisseur OAuth est indisponible.
+* Le mot de passe défini via l'écran de setup est haché en **Argon2id** (sel aléatoire, format PHC).
+
+### 3. Périmètre des Virtual Keys
+* Les clés `sk-pylos-*` sont strictement limitées au **plan de données** : elles n'ouvrent jamais l'API de management ni la révélation de clés.
+* Détail du modèle d'autorisation : voir [Sécurité & Exploitation](/securite/).
 
 ---
 
 ## 📊 4. Observabilité & Conformité RGPD
 
 * **Métriques Prometheus (`/metrics`)** :
+  * Protection optionnelle par jeton : définir `PYLOS_METRICS_TOKEN` pour exiger `Authorization: Bearer <jeton>`.
   * Compteurs de requêtes par modèle, statut HTTP et clé virtuelle.
   * Histogrammes de latence totale et latence premier token (TTFT).
   * Histogrammes d'usage de tokens d'entrée et de sortie.

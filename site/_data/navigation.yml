@@ -12,5 +12,7 @@
   url: /mcp-plugins/
 - title: Gouvernance
   url: /gouvernance/
+- title: Sécurité & Exploitation
+  url: /securite/
 - title: API
   url: /api/
