@@ -1,0 +1,59 @@
+name: Documentation (GitHub Pages)
+
+# Construit le dossier `site/` avec Jekyll et le publie sur GitHub Pages.
+#
+# À activer une fois dans le dépôt GitHub :
+#   Settings > Pages > Build and deployment > Source = « GitHub Actions »
+#
+# L'URL publique correspond au nom du dépôt (baseurl dans site/_config.yml) :
+#   https://jzacharie.github.io/Pylos/
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  ACTIONS_RUNNER_FORCE_NODE24: "true"
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configuration de Pages
+        uses: actions/configure-pages@v5
+
+      - name: Construction du site (Jekyll)
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./_site
+
+      - name: Archive du site
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publication
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -22,6 +22,7 @@ Pylos est une passerelle IA haute performance et à ultra-faible latence écrite
 
 ## 📖 Ressources & Documentation
 
+* **[Site de Documentation Officiel (GitHub Pages)](https://jzacharie.github.io/Pylos/)**
 * **[Présentation Pylos AI Gateway (PDF)](Pylos_AI_Gateway.pdf)**
 * **[Plan d'architecture Pylos AI Gateway (PDF)](docs/Pylos_AI_Gateway_Blueprint.pdf)**
 

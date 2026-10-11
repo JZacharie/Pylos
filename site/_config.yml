@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# Documentation Pylos - Site statique publié sur GitHub Pages.
+#
+# Publication : .github/workflows/pages.yml construit ce dossier avec
+# actions/jekyll-build-pages, puis le déploie sur GitHub Pages.
+# Prérequis sur le dépôt GitHub :
+#   Settings > Pages > Build and deployment > Source = « GitHub Actions »
+#
+# baseurl : chemin du site de projet. Pour https://jzacharie.github.io/Pylos/
+# la valeur est "/Pylos".
+# ---------------------------------------------------------------------------
+
+title: Pylos
+tagline: Passerelle LLM & Proxy MCP d'Entreprise en Rust
+description: >-
+  Documentation officielle de Pylos : passerelle IA ultra-rapide (<2ms) en Rust,
+  proxy unifié multi-fournisseurs (OpenAI, Anthropic, AWS Bedrock, Gemini, DeepSeek),
+  gouvernance stricte des coûts et budgets, cache sémantique vectoriel et mémoire d'agents.
+
+lang: fr
+timezone: Europe/Paris
+
+url: https://jzacharie.github.io
+baseurl: /Pylos
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+
+exclude:
+  - Gemfile
+  - vendor

@@ -1,0 +1,16 @@
+- title: Accueil
+  url: /
+- title: Démarrage
+  url: /demarrage/
+- title: Architecture
+  url: /architecture/
+- title: Configuration
+  url: /configuration/
+- title: Caching & Mémoire
+  url: /caching-memoire/
+- title: MCP & Plugins
+  url: /mcp-plugins/
+- title: Gouvernance
+  url: /gouvernance/
+- title: API
+  url: /api/
