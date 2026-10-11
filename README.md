@@ -23,6 +23,7 @@ Pylos is a high-performance, ultra-low latency AI gateway written in Rust. It se
 ## 📖 Resources & Documentation
 
 * **[Official Documentation Website (GitHub Pages)](https://jzacharie.github.io/Pylos/)**
+* **[Developer handover guide (fresh IDE setup)](docs/DEVELOPPEMENT.md)** — prerequisites, environment, known pitfalls, CI/CD, roadmap state
 * **[Pylos AI Gateway Presentation (PDF)](Pylos_AI_Gateway.pdf)**
 * **[Pylos AI Gateway Architecture Blueprint (PDF)](docs/Pylos_AI_Gateway_Blueprint.pdf)**
 
