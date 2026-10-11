@@ -654,10 +654,8 @@ impl LlmPlugin for GuardrailsPlugin {
                     let original = content.clone();
                     let masked = self.mask_text(&original, &mut pii_map, mask_pii, mask_secrets);
 
-                    info!(
-                        "[Guardrails] Original message:\n{}\n[Guardrails] Obfuscated message:\n{}",
-                        original, masked
-                    );
+                    // Ne jamais journaliser le contenu original : il peut contenir des PII/secrets.
+                    info!("[Guardrails] Obfuscated message:\n{}", masked);
 
                     if (mask_pii || mask_secrets) && masked != original {
                         *content = masked.clone();

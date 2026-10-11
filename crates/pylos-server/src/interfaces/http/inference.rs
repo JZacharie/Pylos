@@ -150,7 +150,8 @@ pub async fn chat_completions(
         ..Default::default()
     };
     if let Some(vk) = &vk_info {
-        ctx.virtual_key = Some(vk.name.clone());
+        // L'identifiant (et non l'alias) est la clé de gouvernance : budgets, rate limits.
+        ctx.virtual_key = Some(vk.id.clone());
         ctx.provider_configs = vk.provider_configs.clone();
     }
 
@@ -247,7 +248,10 @@ async fn complete_response(
             );
 
             let obfuscated_input = final_ctx.headers.get("x-obfuscated-input").cloned();
-            let pii_mapping = final_ctx.headers.get("x-pii-mapping").cloned();
+            // Le mapping placeholder -> valeur reelle ne doit JAMAIS etre persiste.
+            let pii_mapping: Option<String> = None;
+            // Si un masquage a eu lieu, ne journaliser que la version masquee.
+            let logged_input = obfuscated_input.clone().or(input_preview);
 
             let entry = build_log_entry_full(
                 &provider,
@@ -258,7 +262,7 @@ async fn complete_response(
                 resp.usage.as_ref(),
                 finish_reason,
                 None,
-                input_preview,
+                logged_input,
                 output_preview,
                 vk_name,
                 saved_bytes,
@@ -559,7 +563,9 @@ async fn stream_response(
                         guardrails_info_from_response(&finish, &output_preview, &final_ctx_clone);
                     let obfuscated_input =
                         final_ctx_clone.headers.get("x-obfuscated-input").cloned();
-                    let pii_mapping = final_ctx_clone.headers.get("x-pii-mapping").cloned();
+                    // Le mapping placeholder -> valeur reelle ne doit JAMAIS etre persiste.
+                    let pii_mapping: Option<String> = None;
+                    let logged_input = obfuscated_input.clone().or(input_prev);
 
                     let entry = build_log_entry_full(
                         &provider_clone,
@@ -570,7 +576,7 @@ async fn stream_response(
                         Some(&pseudo_usage),
                         finish,
                         None,
-                        input_prev,
+                        logged_input,
                         output_preview,
                         vk_name,
                         saved_bytes,
