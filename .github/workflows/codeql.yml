@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: "30 18 * * 0"
 
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   CARGO_TARGET_DIR: "${{ github.workspace }}/target"
@@ -33,9 +37,17 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # Sans cache, cette pre-compilation complete du workspace representait
+      # l'essentiel des ~8 minutes du job CodeQL.
+      - name: Rust Cache (cle partagee avec les workflows PR et CI)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: pylos-rust
+          cache-on-failure: true
+
       - name: Pre-build dependencies and resolve targets
         run: |
-          cargo check --all-targets --all-features --workspace
+          cargo check --all-targets --all-features --workspace --locked
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3

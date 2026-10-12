@@ -3,6 +3,18 @@ name: CI
 on:
   push:
     branches: [main, master]
+    # Un commit purement documentaire ne doit declencher ni tests ni reconstruction
+    # des images Docker (les workflows PR et MegaLinter restent, eux, declenches).
+    paths-ignore:
+      - 'site/**'
+      - 'docs/**'
+      - 'megalinter-reports/**'
+      - '**/*.md'
+
+# Une nouvelle poussee sur la meme branche annule le run precedent.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,17 +29,18 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
-      - name: Rust Cache
+          components: clippy
+      - name: Rust Cache (cle partagee avec les workflows PR)
         uses: Swatinem/rust-cache@v2
-      # - name: Format check
-      #   run: cargo fmt --all -- --check
+        with:
+          shared-key: pylos-rust
+          cache-on-failure: true
       - name: Create UI stub for rust-embed
         run: mkdir -p ui/dist
       - name: Lint with clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --workspace --locked
 
   build-and-push:
     name: Build & Push (${{ matrix.arch }})
