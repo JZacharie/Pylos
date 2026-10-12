@@ -17,6 +17,6 @@ tokio = { workspace = true }
 jsonwebtoken = { workspace = true }
 ring = { workspace = true }
 aes-gcm = "0.11"
-base64 = "0.22"
-rand = "0.8"
+base64 = "0.23"
+rand = "0.10"
 

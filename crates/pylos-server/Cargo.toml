@@ -22,7 +22,7 @@ pylos-infrastructure = { path = "../pylos-infrastructure" }
 axum = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-tower-http = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
@@ -39,7 +39,7 @@ opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 jsonwebtoken = { workspace = true }
 dotenvy = { workspace = true }
-sha2 = "0.10"
+sha2 = "0.11"
 argon2 = { workspace = true }
 rust-embed = { version = "8.5", features = ["interpolate-folder-path"] }
 mime_guess = "2"
