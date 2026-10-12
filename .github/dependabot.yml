@@ -9,7 +9,7 @@ updates:
         patterns:
           - "*"
     ignore:
-      - dependency-name: "tailwindcss"
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "cargo"
@@ -20,3 +20,6 @@ updates:
       cargo:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
