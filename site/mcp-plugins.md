@@ -77,6 +77,15 @@ Les plugins sont activés et configurés directement dans la section `"plugins"`
     }
   },
   {
+    "name": "guardrails",
+    "enabled": true,
+    "config": {
+      "mode": "block",
+      "blocked_keywords": ["internal_secret", "confidential"],
+      "moderation_threshold": 0.7
+    }
+  },
+  {
     "type": "mcp_proxy",
     "enabled": true,
     "servers": [
@@ -89,3 +98,6 @@ Les plugins sont activés et configurés directement dans la section `"plugins"`
   }
 ]
 ```
+
+> ℹ️ **Mode Bloquant & Codes HTTP** : En mode `"block"`, toute violation (mot-clé interdit, injection de prompt, score de modération dépassé) renvoie immédiatement un code **HTTP 400 Bad Request** (`content_policy_violation`). Une normalisation Unicode anti-évasion (espaces et séparateurs invisibles) est appliquée. Les règles statiques de filtrage restent heuristiques et complémentaires d'une solution ML dédiée.
+

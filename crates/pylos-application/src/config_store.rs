@@ -140,6 +140,23 @@ impl ConfigStore {
         })
     }
 
+    /// Crée un store directement à partir d'une configuration en mémoire (utile pour les tests)
+    pub fn from_config(config: PylosConfig) -> Self {
+        let config_hash = hash_config(&config);
+        let runtime_providers = build_runtime_providers(&config);
+        let state = ConfigState {
+            config,
+            config_hash,
+            provider_hashes: HashMap::new(),
+            runtime_providers,
+            file_path: None,
+            db_pool: None,
+        };
+        Self {
+            state: Arc::new(RwLock::new(state)),
+        }
+    }
+
     /// Retourne le port configuré de façon async (remplace get_sync_port).
     /// blocking_read() est dangereux dans un contexte async Tokio (C-4 fix).
     pub async fn get_port(&self) -> u16 {
@@ -746,8 +763,10 @@ fn encrypt_config_secrets(cfg: &PylosConfig) -> PylosConfig {
             key.value = encrypt_envvar_secret(&key.value);
             if let Some(bedrock) = key.bedrock_key_config.as_mut() {
                 bedrock.access_key_id = bedrock.access_key_id.as_ref().map(encrypt_envvar_secret);
-                bedrock.secret_access_key =
-                    bedrock.secret_access_key.as_ref().map(encrypt_envvar_secret);
+                bedrock.secret_access_key = bedrock
+                    .secret_access_key
+                    .as_ref()
+                    .map(encrypt_envvar_secret);
                 bedrock.session_token = bedrock.session_token.as_ref().map(encrypt_envvar_secret);
                 bedrock.external_id = bedrock.external_id.as_ref().map(encrypt_envvar_secret);
             }
@@ -763,8 +782,10 @@ fn decrypt_config_secrets(cfg: &mut PylosConfig) {
             key.value = decrypt_envvar_secret(&key.value);
             if let Some(bedrock) = key.bedrock_key_config.as_mut() {
                 bedrock.access_key_id = bedrock.access_key_id.as_ref().map(decrypt_envvar_secret);
-                bedrock.secret_access_key =
-                    bedrock.secret_access_key.as_ref().map(decrypt_envvar_secret);
+                bedrock.secret_access_key = bedrock
+                    .secret_access_key
+                    .as_ref()
+                    .map(decrypt_envvar_secret);
                 bedrock.session_token = bedrock.session_token.as_ref().map(decrypt_envvar_secret);
                 bedrock.external_id = bedrock.external_id.as_ref().map(decrypt_envvar_secret);
             }
@@ -801,8 +822,7 @@ async fn persist_config_locked(state: &ConfigState) {
                     .await;
             }
             Pool::Postgres(p) => {
-                let val: serde_json::Value =
-                    serde_json::from_str(&db_json).unwrap_or_default();
+                let val: serde_json::Value = serde_json::from_str(&db_json).unwrap_or_default();
                 let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
                     .bind(&val)
                     .execute(p)

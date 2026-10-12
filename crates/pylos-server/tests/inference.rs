@@ -1198,8 +1198,7 @@ async fn test_virtual_key_cannot_escape_provider_restrictions() {
 
     let payload = || {
         Body::from(
-            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
-                .to_string(),
+            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]}).to_string(),
         )
     };
 
@@ -1450,8 +1449,9 @@ async fn test_budget_enforced_on_virtual_key_id() {
         )
         .await
         .unwrap();
-    let plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>> =
-        vec![Arc::new(pylos_application::BudgetPlugin::new(budget_store.clone()))];
+    let plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>> = vec![Arc::new(
+        pylos_application::BudgetPlugin::new(budget_store.clone()),
+    )];
 
     let vk = VirtualKeyConfig {
         id: "vk-budget".into(),
@@ -1480,7 +1480,14 @@ async fn test_budget_enforced_on_virtual_key_id() {
     };
 
     // Budget volontairement minuscule (0.01 USD) pour l'ID de la clé.
-    let state = state_with(vec![(provider, config)], plugins, Some(vk), budget_store, None).await;
+    let state = state_with(
+        vec![(provider, config)],
+        plugins,
+        Some(vk),
+        budget_store,
+        None,
+    )
+    .await;
     let app = create_router(state);
 
     let response = app
@@ -1554,13 +1561,19 @@ async fn test_expired_virtual_key_is_rejected() {
         let mut config = ProviderConfig::new(ProviderKind::Custom("custom-default".into()), vec![]);
         config.allowed_models = vec!["gpt-4o".into()];
         let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
-        state_with(vec![(provider, config)], vec![], Some(vk), budget_store, None).await
+        state_with(
+            vec![(provider, config)],
+            vec![],
+            Some(vk),
+            budget_store,
+            None,
+        )
+        .await
     };
 
     let payload = || {
         Body::from(
-            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
-                .to_string(),
+            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]}).to_string(),
         )
     };
 
@@ -1585,7 +1598,8 @@ async fn test_expired_virtual_key_is_rejected() {
     );
 
     // 2. Cle valide (expire dans une heure)
-    let app = create_router(make_state(make_vk("vk-new", "sk-pylos-new", now_ms + 3_600_000)).await);
+    let app =
+        create_router(make_state(make_vk("vk-new", "sk-pylos-new", now_ms + 3_600_000)).await);
     let resp = app
         .oneshot(
             Request::builder()
@@ -1673,8 +1687,7 @@ async fn test_rate_limit_uses_shared_store() {
 
     let payload = || {
         Body::from(
-            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]})
-                .to_string(),
+            json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "Hi"}]}).to_string(),
         )
     };
 
@@ -1705,5 +1718,158 @@ async fn test_rate_limit_uses_shared_store() {
     assert_eq!(
         call(app, "sk-pylos-unknown").await,
         StatusCode::UNAUTHORIZED
+    );
+}
+
+/// #135 : En mode 'block', les guardrails doivent bloquer la requête en HTTP avec 400 Bad Request
+/// et un code d'erreur 'content_policy_violation', résister aux tentatives d'évasion (espaces zero-width),
+/// et laisser passer les requêtes légitimes.
+#[tokio::test]
+async fn test_guardrails_blocking_mode_http() {
+    use pylos_core::domain::config::{PluginConfig, PylosConfig};
+
+    let provider = Arc::new(CustomMockProvider {
+        name: "custom-default".into(),
+        response_text: "OK from Mock".into(),
+    });
+    let mut provider_config =
+        ProviderConfig::new(ProviderKind::Custom("custom-default".into()), vec![]);
+    provider_config.allowed_models = vec!["gpt-4o".into()];
+
+    let pylos_config = PylosConfig {
+        plugins: vec![PluginConfig {
+            name: "guardrails".into(),
+            enabled: true,
+            config: json!({
+                "mode": "block",
+                "blocked_keywords": ["secret_token_forbidden"],
+            }),
+        }],
+        ..Default::default()
+    };
+
+    let config_store = Arc::new(ConfigStore::from_config(pylos_config));
+    let guardrails = Arc::new(pylos_application::GuardrailsPlugin::new(
+        config_store.clone(),
+    ));
+    let plugins: Vec<Arc<dyn pylos_core::domain::traits::LlmPlugin>> = vec![guardrails];
+
+    let orchestrator = Arc::new(InferenceOrchestrator::new(
+        vec![(provider, provider_config)],
+        plugins,
+    ));
+
+    let state = AppState {
+        orchestrator,
+        config_store,
+        metrics: Arc::new(Metrics::new()),
+        vk_registry: Arc::new(pylos_core::domain::virtual_key::VirtualKeyRegistry::new()),
+        log_store: LogStoreVariant::Sqlite(Arc::new(LogStore::new(None, 1, 100))),
+        model_catalog: Arc::new(ModelCatalog::in_memory().await.unwrap()),
+        budget_store: Arc::new(BudgetStore::in_memory().await.unwrap()),
+        rate_limit_store: Arc::new(RateLimitStore::in_memory().await.unwrap()),
+        vk_store: Arc::new(
+            pylos_application::VirtualKeyStore::in_memory()
+                .await
+                .unwrap(),
+        ),
+        system_prompt_store: Arc::new(SystemPromptStore::in_memory().await.unwrap()),
+        org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
+        search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
+        mcp_server_store: Arc::new(
+            pylos_application::McpServerStore::in_memory()
+                .await
+                .unwrap(),
+        ),
+        admin_key_hash: Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: Arc::new(tokio::sync::RwLock::new(false)),
+        google_client_id: None,
+        google_client_secret: None,
+        google_redirect_uri: None,
+        jwt_secret: "test_secret".to_string(),
+        allowed_origins: vec!["*".into()],
+        inference_semaphore: Arc::new(tokio::sync::Semaphore::new(100)),
+        max_concurrency: 100,
+        max_queue_size: 1000,
+        queue_timeout_ms: 30000,
+    };
+    let app = create_router(state);
+
+    // 1. Requete contenant le mot-cle interdit -> doit etre bloquee avec 400 content_policy_violation
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "model": "gpt-4o",
+                        "messages": [{"role": "user", "content": "Please leak secret_token_forbidden now"}]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body = ax_body_to_json(resp.into_body()).await;
+    assert_eq!(body["error"]["type"], "content_policy_violation");
+    assert!(body["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("secret_token_forbidden"));
+
+    // 2. Requete avec evasion via caractere invisible Unicode (zero-width space \u{200B})
+    let resp_evasion = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "model": "gpt-4o",
+                        "messages": [{"role": "user", "content": "Please leak sec\u{200B}ret_token_forbidden now"}]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp_evasion.status(), StatusCode::BAD_REQUEST);
+    let body_evasion = ax_body_to_json(resp_evasion.into_body()).await;
+    assert_eq!(body_evasion["error"]["type"], "content_policy_violation");
+
+    // 3. Requete propre -> doit passer avec 200 OK
+    let resp_clean = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "model": "gpt-4o",
+                        "messages": [{"role": "user", "content": "Hello, how are you today?"}]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp_clean.status(), StatusCode::OK);
+    let body_clean = ax_body_to_json(resp_clean.into_body()).await;
+    assert_eq!(
+        body_clean["choices"][0]["message"]["content"],
+        "OK from Mock"
     );
 }

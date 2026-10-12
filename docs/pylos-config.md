@@ -218,4 +218,5 @@ Standard Plugins:
 - **`logging`**: Raw request logging config.
 - **`semantic_cache`**: Vector-similarity caching (Cosine similarity).
 - **`mem0`**: Memory graph storage.
-- **`guardrails`**: PII masking and safety keywords.
+- **`guardrails`**: PII masking, sensitive content filtering, and prompt injection detection. Supports `mode: "block"` (rejects with HTTP 400 `content_policy_violation`) or `mode: "monitor"` (logs only). Includes anti-evasion normalization for zero-width Unicode characters.
+

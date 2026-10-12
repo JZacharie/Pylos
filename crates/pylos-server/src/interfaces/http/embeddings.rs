@@ -106,6 +106,7 @@ fn embedding_error_response(error: &PylosError) -> axum::response::Response {
         PylosError::Timeout(_) => (StatusCode::GATEWAY_TIMEOUT, "timeout"),
         PylosError::Unsupported(_) => (StatusCode::NOT_IMPLEMENTED, "not_implemented"),
         PylosError::BudgetExceeded(_) => (StatusCode::PAYMENT_REQUIRED, "budget_exceeded"),
+        PylosError::GuardrailViolation(_) => (StatusCode::BAD_REQUEST, "content_policy_violation"),
         PylosError::AllProvidersFailed(_) | PylosError::ProviderError { .. } => {
             (StatusCode::BAD_GATEWAY, "provider_error")
         }

@@ -409,7 +409,32 @@ Règles de routage avancé basées sur des expressions CEL :
 | `similarity_threshold` | number | `0.9` | Seuil de similarité pour un cache hit (0.0 à 1.0) |
 | `ttl_secs` | number | `86400` | Durée de vie des entrées en cache (secondes) |
 
+### Config spécifique : guardrails
+
+```json
+{
+  "name": "guardrails",
+  "enabled": true,
+  "config": {
+    "mode": "block",
+    "blocked_keywords": ["confidential_project_x", "secret_token"],
+    "moderation_threshold": 0.7
+  }
+}
+```
+
+| Champ | Type | Défaut | Description |
+| --- | --- | --- | --- |
+| `mode` | string | `"monitor"` | `"block"` (rejette la requête en HTTP 400 `content_policy_violation`) ou `"monitor"` (journalise uniquement sans bloquer). Alias supportés : `action: "block" \| "log"` ou `block_on_violations: true \| false`. |
+| `blocked_keywords` | string[] | `[]` | Liste de mots-clés ou fragments interdits (insensible à la casse, résistant aux espaces et caractères invisibles Unicode zero-width). |
+| `moderation_threshold` | number | `0.7` | Seuil de score de modération heuristique (0.0 à 1.0) au-delà duquel la requête est considérée en violation. |
+
+> [!NOTE]
+> **Résistance à l'évasion & Limites heuristiques** : Le plugin guardrails applique une normalisation anti-évasion supprimant les caractères Unicode invisibles (zero-width spaces `\u{200B}`, joiners `\u{200C}`/`\u{200D}`, BOM `\u{FEFF}`, soft hyphens `\u{00AD}`, etc.) et condensant les espacements.
+> Cependant, la détection repose sur des expressions régulières et règles statiques de mots-clés, et **ne remplace pas un modèle de classification sémantique ou ML dédié** (ex. Llama Guard, NeMo Guardrails, Azure AI Content Safety) pour des attaques complexes de jailbreak ou de reformulation.
+
 ---
+
 
 ## Syntaxe EnvVar
 

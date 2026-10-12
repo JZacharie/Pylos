@@ -29,6 +29,9 @@ pub enum PylosError {
 
     #[error("Budget exceeded: {0}")]
     BudgetExceeded(String),
+
+    #[error("Guardrail violation: {0}")]
+    GuardrailViolation(String),
 }
 
 impl From<anyhow::Error> for PylosError {
@@ -46,6 +49,7 @@ impl PylosError {
             PylosError::BudgetExceeded(_)
                 | PylosError::RateLimitExceeded(_)
                 | PylosError::Unauthorized(_)
+                | PylosError::GuardrailViolation(_)
         )
     }
 
@@ -72,6 +76,7 @@ impl PylosError {
             PylosError::Timeout(_) => "timeout",
             PylosError::Unsupported(_) => "unsupported",
             PylosError::BudgetExceeded(_) => "budget_exceeded",
+            PylosError::GuardrailViolation(_) => "guardrail_violation",
         }
     }
 }
