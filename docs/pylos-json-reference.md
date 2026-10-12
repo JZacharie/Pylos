@@ -185,6 +185,30 @@ Chaque provider a un tableau de clés API :
 | `deployment_name` | string | requis | Nom du déploiement Azure |
 | `api_version` | string | `"2024-02-01"` | Version de l'API Azure OpenAI |
 
+### Passerelles externes et compatibles OpenAI (LiteLLM, Ollama, vLLM, Groq...)
+
+Tout provider dont le nom n'est pas un adaptateur natif (`anthropic`, `gemini`, `bedrock`, `azure`, `cohere`) est automatiquement instancié comme provider **compatible OpenAI**. Il suffit de renseigner `network.base_url` pour cibler une passerelle externe (ex. LiteLLM) ou un moteur local :
+
+```json
+"providers": {
+  "litellm": {
+    "keys": [
+      {
+        "name": "default",
+        "value": "env.LITELLM_API_KEY",
+        "models": ["*"],
+        "weight": 1.0
+      }
+    ],
+    "network": {
+      "base_url": "http://localhost:4000/v1",
+      "timeout_secs": 60,
+      "max_retries": 2
+    }
+  }
+}
+```
+
 ---
 
 ## governance

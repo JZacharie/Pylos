@@ -115,6 +115,33 @@ For AWS Bedrock authentication, you can configure access key/secret pairs or def
 }
 ```
 
+#### External Proxies & Gateways: LiteLLM, Ollama, vLLM, Groq
+
+Any provider identifier other than the specialized native adapters (`anthropic`, `gemini`, `bedrock`, `azure`, `cohere`) automatically instantiates the OpenAI-compatible adapter. You can route to external proxies (e.g. **LiteLLM**), local engines (**Ollama**, **vLLM**, **LocalAI**) or OpenAI-compatible platforms (**Groq**, **Mistral**, **Together**, **DeepSeek**) by setting `network.base_url`:
+
+```json
+"providers": {
+  "litellm": {
+    "keys": [
+      {
+        "name": "proxy-key",
+        "value": "env.LITELLM_API_KEY",
+        "models": ["*"],
+        "weight": 1.0
+      }
+    ],
+    "network": {
+      "base_url": "http://localhost:4000/v1",
+      "timeout_secs": 60,
+      "max_retries": 2,
+      "extra_headers": {
+        "x-litellm-metadata": "{\"source\": \"pylos\"}"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ### 4. Governance Configuration (`governance`)

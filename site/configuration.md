@@ -128,9 +128,26 @@ Définit les clés d'API sources, la pondération pour la répartition de charge
         "weight": 0.5
       }
     ]
+  },
+  "litellm": {
+    "keys": [
+      {
+        "name": "proxy",
+        "value": "env.LITELLM_API_KEY",
+        "models": ["*"],
+        "weight": 1.0
+      }
+    ],
+    "network": {
+      "base_url": "http://localhost:4000/v1",
+      "timeout_secs": 60,
+      "max_retries": 2
+    }
   }
 }
 ```
+
+> **Note Passerelles externes (LiteLLM, Ollama, vLLM, Groq)** : Tout nom de fournisseur autre que les adaptateurs natifs (`anthropic`, `gemini`, `bedrock`, `azure`, `cohere`) active l'adaptateur universel compatible OpenAI et s'interface directement avec n'importe quelle URL spécifiée dans `network.base_url`.
 
 ---
 
