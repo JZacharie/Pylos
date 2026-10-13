@@ -1,0 +1,310 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Untitled animation</title>
+<style>
+  html,body{margin:0;background:#1b1917;display:grid;place-items:center;height:100vh}
+  canvas{width:min(100vw,100vh);height:auto;max-height:100vh}
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// Starter for a zero-asset, code-drawn animation. Every pixel is computed; nothing is loaded.
+// Contract (render.mjs relies on it): draw(frame) is a pure function of the frame number,
+// so any frame can be rendered alone, in any order. Never use Math.random or Date here:
+// use rng(seed) / hash2() so the same frame always looks the same.
+const W = 1920, H = 1080, FPS = 30, DUR = 6, FRAMES = FPS * DUR;
+const cv = document.getElementById('c');
+cv.width = W; cv.height = H;
+let ctx = cv.getContext('2d');
+
+// LOOK: every value here is a choice for THIS piece, not a default to keep. Decide each one from the
+// subject and the audience (references/techniques.md); don't carry choices over from
+// a previous piece. The palette below is deliberately grey: it is not a palette, only names to replace.
+// Choose real colours for this piece (3-5, one lead) and rename them.
+const PAPER = '#f2f2f2', INK = '#1a1a1a', RED = '#8c8c8c', BLUE = '#5c5c5c',
+      YELLOW = '#b8b8b8', SHADOW = 'rgba(0,0,0,0.16)';
+const LOOK = {
+  ground: 'flat',      // background: 'flat' (clean colour) | 'grain' (colour + fine noise) | 'paper' (grain, fibres, vignette)
+  wobble: 0,           // edge wobble: 0 = steady lines; a hand-drawn film sets 1 = pen, 2+ = loose sketch
+  boil: 0,             // redraw the wobble every N frames (line boil); 0 = steady, 4 = ~7.5x/sec like hand animation
+  font: '600 {s}px -apple-system, "Helvetica Neue", Arial, sans-serif',   // choose a family that fits: serif, rounded, mono, condensed, script...
+  labelStyle: 'plain', // 'plain' (text) | 'pill' (rounded box) | 'tag' (paper tape) | 'underline'
+  guideColor: INK,     // construction-line colour (blue only if the piece is a blueprint)
+};
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const easeOut = t => 1 - Math.pow(1 - clamp(t), 3);
+const back = t => { t = clamp(t); const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+
+function hash2(a, b) {
+  let n = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  return lerp(lerp(hash2(xi, yi), hash2(xi + 1, yi), u), lerp(hash2(xi, yi + 1), hash2(xi + 1, yi + 1), u), v);
+}
+function rng(seed) { let a = seed | 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------- hand-drawn primitives ----------
+let BOIL = 0;          // changes every LOOK.boil frames -> "line boil" (0 = steady)
+let SHADOWING = false; // when true, primitives paint the drop shadow color
+
+function jit(x, y, seed, amp) {
+  const s = seed * 13.37;
+  return [
+    x + (vnoise(x * .012 + s, y * .012) - .5) * 2 * amp + (vnoise(x * .09 + s, y * .09 + 7) - .5) * amp * .6,
+    y + (vnoise(x * .012, y * .012 + s + 50) - .5) * 2 * amp + (vnoise(x * .09 + 3, y * .09 + s) - .5) * amp * .6,
+  ];
+}
+function resample(pts, step = 9, closed = false) {
+  const out = [], P = closed ? [...pts, pts[0]] : pts;
+  for (let i = 0; i < P.length - 1; i++) {
+    const [x0, y0] = P[i], [x1, y1] = P[i + 1], n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / step));
+    for (let k = 0; k < n; k++) out.push([lerp(x0, x1, k / n), lerp(y0, y1, k / n)]);
+  }
+  if (!closed) out.push(P[P.length - 1]);
+  return out;
+}
+function tracePath(pts, closed) {
+  ctx.beginPath();
+  if (pts.length < 3) { ctx.moveTo(...pts[0]); pts.slice(1).forEach(p => ctx.lineTo(...p)); if (closed) ctx.closePath(); return; }
+  const P = closed ? [...pts, pts[0], pts[1]] : pts;
+  ctx.moveTo(...(closed ? [(P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2] : P[0]));
+  for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2);
+  if (!closed) ctx.lineTo(...P[P.length - 1]); else ctx.closePath();
+}
+const J = (pts, seed, amp) => pts.map(([x, y]) => jit(x, y, BOIL + seed, amp * LOOK.wobble));
+
+function ink(pts, o = {}) {
+  const { w = 4, col = INK, closed = false, amp = 2, seed = 0, passes = LOOK.wobble ? 2 : 1, alpha = 1 } = o;   // 2 = pen, 1 = a steady line
+  ctx.save(); ctx.lineCap = ctx.lineJoin = 'round';
+  for (let p = 0; p < passes; p++) {
+    ctx.globalAlpha = alpha * (p ? .45 : 1);
+    ctx.strokeStyle = SHADOWING ? SHADOW : col;
+    ctx.lineWidth = w * (p ? .55 : 1);
+    tracePath(J(pts, seed + p * .41, amp * (p ? 1.4 : 1)), closed);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function fill(pts, col, o = {}) {
+  const { amp = 1.6, seed = 0, alpha = 1 } = o;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = SHADOWING ? SHADOW : col;
+  tracePath(J(pts, seed + .2, amp), true); ctx.fill(); ctx.restore();
+}
+function hatch(pts, o = {}) {
+  if (SHADOWING) return;
+  const { angle = -0.9, gap = 11, col = INK, w = 1.6, alpha = .35, seed = 0 } = o;
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const R = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 2 + 10;
+  ctx.save(); tracePath(J(pts, seed, 1.5), true); ctx.clip();
+  ctx.translate(cx, cy); ctx.rotate(angle);
+  ctx.strokeStyle = col; ctx.lineWidth = w; ctx.globalAlpha = alpha; ctx.lineCap = 'round';
+  for (let y = -R, i = 0; y < R; y += gap, i++) {
+    const a = hash2(i, BOIL + seed * 7) * 4 - 2, b = hash2(i + 99, BOIL + seed * 7) * 4 - 2;
+    ctx.beginPath(); ctx.moveTo(-R, y + a); ctx.quadraticCurveTo(0, y + (a + b), R, y + b); ctx.stroke();
+  }
+  ctx.restore();
+}
+function withShadow(fn, dx = 9, dy = 9) {
+  ctx.save(); ctx.translate(dx, dy); SHADOWING = true; fn(); SHADOWING = false; ctx.restore(); fn();
+}
+
+// shapes
+const circle = (cx, cy, r, ry = r, rot = 0) => {
+  const n = Math.max(20, Math.round(Math.max(r, ry) * .45)), out = [];
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, x = Math.cos(a) * r, y = Math.sin(a) * ry;
+    out.push([cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]); }
+  return out;
+};
+const rect = (x, y, w, h) => resample([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], 12, true);
+const line = (x0, y0, x1, y1) => resample([[x0, y0], [x1, y1]], 10);
+const arc = (cx, cy, r, a0, a1, ry = r) => { const n = Math.max(8, Math.round(Math.abs(a1 - a0) * r / 9)), o = [];
+  for (let i = 0; i <= n; i++) { const a = lerp(a0, a1, i / n); o.push([cx + Math.cos(a) * r, cy + Math.sin(a) * ry]); } return o; };
+const roundRect = (x, y, w, h, r) => resample([
+  ...arc(x + w - r, y + r, r, -Math.PI / 2, 0), ...arc(x + w - r, y + h - r, r, 0, Math.PI / 2),
+  ...arc(x + r, y + h - r, r, Math.PI / 2, Math.PI), ...arc(x + r, y + r, r, Math.PI, Math.PI * 1.5)], 10, true);
+
+// labels, typed on; their look comes from LOOK.labelStyle and LOOK.font
+const FONT = LOOK.font;
+function label(text, x, y, o = {}) {
+  const { size = 40, bg = BLUE, fg = PAPER, p = 1, align = 'left', rot = LOOK.labelStyle === 'tag' ? -0.015 : 0, seed = 3, style = LOOK.labelStyle } = o;
+  if (p <= 0) return;
+  ctx.save(); ctx.font = FONT.replace('{s}', size);
+  const n = Math.round(text.length * clamp((p - .1) / .9)), shown = text.slice(0, n);
+  const full = ctx.measureText(text).width, padX = size * .45, h = size * 1.45;
+  const w = Math.max(size, ctx.measureText(shown).width) + padX * 2;
+  const x0 = align === 'center' ? x - (full + padX * 2) / 2 : align === 'right' ? x - w : x;
+  ctx.translate(x0 + w / 2, y); ctx.rotate(rot); ctx.translate(-(x0 + w / 2), -y);
+  const sc = easeOut(p * 3);
+  ctx.translate(x0, y); ctx.scale(1, sc); ctx.translate(-x0, -y);
+  if (style === 'tag') { const box = rect(x0, y - h / 2, w, h); withShadow(() => fill(box, bg, { seed }), 6, 6); }
+  else if (style === 'pill') { ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(x0, y - h / 2, w, h, h / 2); ctx.fill(); }
+  else if (style === 'underline') { ctx.fillStyle = bg; ctx.fillRect(x0 + padX, y + size * .55, w - padX * 2, Math.max(2, size * .08)); }
+  ctx.fillStyle = style === 'plain' || style === 'underline' ? (o.fg || INK) : fg; ctx.textBaseline = 'middle';
+  ctx.fillText(shown, x0 + padX, y + 1);
+  ctx.restore();
+}
+function note(text, x, y, o = {}) { // plain handwritten-ish ink text
+  const { size = 26, col = INK, align = 'center', alpha = 1 } = o;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.font = FONT.replace('{s}', size); ctx.fillStyle = col;
+  ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y); ctx.restore();
+}
+
+
+// reveal a stroke progressively (0..1): hand-drawing a line onto the page
+function drawOn(pts, p, o = {}) {
+  const n = Math.max(2, Math.round(pts.length * clamp(p)));
+  if (p > 0) ink(pts.slice(0, n), o);
+}
+
+// ---------- illustration primitives (a second look; use these OR the ink ones, per concept) ----------
+// Picture-book shapes: outline in a darker tint of the fill (not black), inner shade, brush texture.
+const rgbOf = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+const tint = (h, k) => `rgb(${rgbOf(h).map(v => Math.round(k < 1 ? v * k : v + (255 - v) * (k - 1))).join(',')})`; // k<1 darker, k>1 toward white
+const bbox = pts => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
+function shape(pts, col, o = {}) {
+  const { line = tint(col, .6), lw = 3.5, seed = 0, tex = true, shade = true, shadow = false, alpha = 1 } = o;
+  if (shadow) { ctx.save(); ctx.translate(8, 10); fill(pts, 'rgba(90,60,40,.12)', { seed, amp: 1 }); ctx.restore(); }
+  fill(pts, col, { seed, amp: 1, alpha });
+  if (tex || shade) {
+    const [x0, y0, x1, y1] = bbox(pts), bw = x1 - x0, bh = y1 - y0;
+    ctx.save(); tracePath(J(pts, seed + .2, 1), true); ctx.clip(); ctx.globalAlpha = alpha;
+    if (shade) { // darker rim toward bottom-right: fill dark, then the shape again nudged up-left
+      ctx.fillStyle = tint(col, .8); ctx.fillRect(x0 - 5, y0 - 5, bw + 10, bh + 10);
+      ctx.translate(-bw * .07, -bh * .09); fill(pts, col, { seed, amp: 1 }); ctx.translate(bw * .07, bh * .09);
+    }
+    if (tex) { // a few translucent lighter brush strokes
+      const r = rng((Math.abs(seed * 97) | 0) + 1); ctx.lineCap = 'round'; ctx.strokeStyle = tint(col, 1.35);
+      for (let i = 0; i < 10; i++) { ctx.globalAlpha = .1 + r() * .1; ctx.lineWidth = 6 + r() * 10; const y = y0 + r() * bh, x = x0 + r() * bw * .5;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + bw * (.2 + r() * .4), y - bh * .1 * r()); ctx.stroke(); }
+    }
+    ctx.restore();
+  }
+  if (lw) ink(pts, { closed: true, w: lw, col: line, seed, amp: 1, passes: 1, alpha });
+}
+function blush(x, y, rx, ry, a = .5) { // soft radial cheek / glow
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx); // gradient is built in the transformed space
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+  g.addColorStop(0, `rgba(236,130,115,${a})`); g.addColorStop(1, 'rgba(236,130,115,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rx, 0, 7); ctx.fill(); ctx.restore();
+}
+
+// ---------- flat / blueprint primitives (the "cinematic flat" look; no outlines, value does the work) ----------
+function flatMass(pts, col, o = {}) {           // a flat shape with a shadow side, no outline
+  const { alpha = 1, shade = .18 } = o;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(...pts[0]); for (const p of pts.slice(1)) ctx.lineTo(...p); ctx.closePath(); ctx.fill();
+  if (shade) { const [x0, y0, x1, y1] = bbox(pts); ctx.clip(); ctx.fillStyle = `rgba(10,12,30,${shade})`; ctx.fillRect(x0 + (x1 - x0) * .7, y0, (x1 - x0) * .32, y1 - y0); }
+  ctx.restore();
+}
+function guide(pts, t0, t, o = {}) {            // dashed construction line that fades as the real thing fills in
+  const a = (o.alpha ?? .7) * (1 - prog(t, t0 + .25, t0 + .6)); if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = o.col || LOOK.guideColor; ctx.lineWidth = 1.4 * PX; ctx.setLineDash([6 * PX, 5 * PX]);
+  ctx.beginPath(); ctx.moveTo(...pts[0]); for (const p of pts.slice(1)) ctx.lineTo(...p); if (o.closed !== false) ctx.closePath(); ctx.stroke(); ctx.restore();
+}
+function glow(x, y, r, rgb, a) {                 // soft light: rgb as [r, g, b]
+  ctx.save(); const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); ctx.restore();
+}
+
+// ---------- one world, many cameras ----------
+let PX = 1;                                      // world units per screen pixel under the current camera: multiply line widths by it
+function withCamera(cam, fn) {                   // cam = { cx, cy, k }: world point at the screen centre, and zoom
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(cam.k, cam.k); ctx.translate(-cam.cx, -cam.cy); const px = PX; PX = 1 / cam.k;
+  fn(); PX = px; ctx.restore();
+}
+
+// ---------- layout registry: claim what must not collide (read by scripts/layout-check.mjs) ----------
+let LAYOUT = [];
+function claim(id, kind, x, y, w, h) {           // kind: 'text' | 'keep'; box in the current transform
+  const m = ctx.getTransform(), P = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map(([a, c]) => [m.a * a + m.c * c + m.e, m.b * a + m.d * c + m.f]);
+  const xs = P.map(p => p[0]), ys = P.map(p => p[1]); LAYOUT.push({ id, kind, x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+}
+function placeFree(w, h, candidates) {           // first candidate box [x, y] that overlaps nothing claimed so far this frame
+  const free = ([x, y]) => LAYOUT.every(o => x + w <= o.x || o.x + o.w <= x || y + h <= o.y || o.y + o.h <= y);
+  return candidates.find(free) || candidates[0];
+}
+
+// ---------- paper ----------
+const paper = document.createElement('canvas'); paper.width = W; paper.height = H;
+(() => {
+  const p = paper.getContext('2d'), r = rng(7);
+  p.fillStyle = PAPER; p.fillRect(0, 0, W, H);
+  if (LOOK.ground === 'flat') return;
+  for (let i = 0; i < 90000; i++) { p.fillStyle = r() < .5 ? 'rgba(90,70,50,0.05)' : 'rgba(255,255,255,0.08)';
+    p.fillRect(r() * W, r() * H, 1 + r() * 1.5, 1 + r() * 1.5); }
+  if (LOOK.ground === 'grain') return;
+  p.strokeStyle = 'rgba(120,95,70,0.06)'; p.lineWidth = 1;
+  for (let i = 0; i < 260; i++) { const x = r() * W, y = r() * H, a = r() * 6.28, l = 6 + r() * 22;
+    p.beginPath(); p.moveTo(x, y); p.quadraticCurveTo(x + Math.cos(a) * l / 2 + 3, y + Math.sin(a) * l / 2, x + Math.cos(a) * l, y + Math.sin(a) * l); p.stroke(); }
+  const g = p.createRadialGradient(W / 2, H / 2, W * .35, W / 2, H / 2, W * .75);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(60,40,20,0.13)'); p.fillStyle = g; p.fillRect(0, 0, W, H);
+})();
+
+// offscreen layer for filtered (blurred / desaturated) drawing
+const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+function drawLayer(fn, filter, clip) {
+  const main = ctx, l = layer.getContext('2d');
+  l.clearRect(0, 0, W, H); ctx = l; fn(); ctx = main;
+  ctx.save(); if (clip) { ctx.beginPath(); ctx.rect(...clip); ctx.clip(); }
+  ctx.filter = filter || 'none'; ctx.drawImage(layer, 0, 0); ctx.restore();
+}
+
+// ---------- storyboard: the single source of truth ----------
+// Beat grid first, then shots and blocking, then code. Scenes, camera and soundtrack all read these.
+const BPM = 120, BEAT = 60 / BPM, b = n => n * BEAT;            // b(8) = the 8th beat, in seconds
+const SECTIONS = [[0, 1, ['pad']], [1, 2, ['pad', 'hat8']], [2, 3, ['pad', 'hat8', 'kick2']], [3, 4, ['pad', 'kick4', 'hat8', 'clap']]];   // bars -> music layers; add one or two layers per bar
+const SHOTS = [                                                  // one world, many cameras; every cut on a beat
+  { from: 0, to: b(8), cam: t => ({ cx: 0, cy: -120, k: 1 + .06 * prog(t, 0, b(8)) }) },          // wide, slow push
+  { from: b(8), to: DUR, cam: t => ({ cx: 0, cy: -60, k: 2.4 }) },                                 // close-up
+];
+const BOX = { x: -40, drop: b(4), bounce: b(9) };                 // blocking: where the actor is, and when
+const EVENTS = [[b(4) + .3, 'thud'], [b(9), 'boing'], [b(10), 'ding']];   // [seconds, sfx]: one sound per visible action
+
+// ---------- the world, drawn in world coordinates ----------
+function world(t) {
+  ctx.fillStyle = '#d9d2c3'; ctx.fillRect(-2000, 0, 4000, 2000);                                   // floor
+  guide(boxR(BOX.x, -80, 80, 80), BOX.drop - .4, t);                                                // where it will land
+  const land = back(prog(t, BOX.drop, BOX.drop + .3)), hop = t > BOX.bounce ? Math.sin(prog(t, BOX.bounce, BOX.bounce + .5) * Math.PI) * 40 : 0;
+  if (t > BOX.drop) { const y = lerp(-900, -80, land) - hop; flatMass(box(BOX.x, y, 80, 80), RED); claim('box', 'keep', BOX.x, y, 80, 80); }
+}
+const box = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+const boxR = (x, y, w, h) => resample(box(x, y, w, h), 10, true);
+
+function draw(frame) {
+  const t = frame / FPS;
+  BOIL = LOOK.boil ? Math.floor(frame / LOOK.boil) : 0; LAYOUT = [];   // LOOK.boil 4 = wobble redrawn ~7.5x/sec, like hand animation
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.filter = 'none'; ctx.globalAlpha = 1;
+  ctx.drawImage(paper, 0, 0);
+  const shot = SHOTS.find(s => t >= s.from && t < s.to) || SHOTS[SHOTS.length - 1];
+  withCamera(shot.cam(t), () => world(t));
+  if (t > b(10)) { const w = 360, h = 64, [x, y] = placeFree(w, h, [[W / 2 - w / 2, 160], [W / 2 - w / 2, 820]]);   // text steps aside from claimed things
+    label('landed.', x + 20, y + h / 2, { size: 44, p: prog(t, b(10), b(10) + .6) }); claim('caption', 'text', x, y, w, h); }
+  window.LAYOUT = LAYOUT;
+}
+window.draw = draw; window.FRAMES = FRAMES; window.FPS = FPS;
+window.CUES = SHOTS.slice(1).map(s => s.from);                     // cuts, read by render.mjs -> soundtrack and sync-check
+// Optional soundtrack: paste skills/soundtrack/templates/groove.js right here, then:
+// window.SCORE = ac => buildGroove(ac, { dur: DUR, bpm: BPM, sections: SECTIONS, events: EVENTS });
+
+// live preview when opened directly in a browser (render.mjs loads the page with ?render)
+if (!new URLSearchParams(location.search).has('render')) {
+  let start = performance.now();
+  const loop = () => { draw(Math.floor((performance.now() - start) / 1000 * FPS) % FRAMES); requestAnimationFrame(loop); };
+  loop();
+  // browsers only allow sound after a user gesture: click restarts from 0 with the score playing
+  addEventListener('click', () => { if (!window.SCORE) return; const ac = new AudioContext(); window.SCORE(ac); start = performance.now() + 50; }, { once: true });
+}
+</script>
+</body>
+</html>

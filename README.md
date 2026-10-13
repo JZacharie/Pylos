@@ -16,6 +16,12 @@ Pylos is a high-performance, ultra-low latency AI gateway written in Rust. It se
   <img src="docs/image.png" alt="AI Gateway Overview" width="800" />
 </p>
 
+<p align="center">
+  <img src="docs/pylos-architecture.gif" alt="Pylos Architecture & Request Lifecycle Animation" width="800" />
+  <br>
+  <em>Dynamic request lifecycle, TinyLFU cache hit & multi-provider routing (zero-asset canvas animation).</em>
+</p>
+
 > [!WARNING]
 > **Project Status: Not Production Ready**
 > While technical tests (unit and component-level integration tests) are fully implemented and passing, **System Integration Tests (SIT)** have not yet been carried out. Pylos is currently considered **non-production ready**. Once the test features stabilize, a complete test campaign will be executed to fully validate the project for production use.
@@ -24,6 +30,7 @@ Pylos is a high-performance, ultra-low latency AI gateway written in Rust. It se
 
 * **[Official Documentation Website (GitHub Pages)](https://jzacharie.github.io/Pylos/)**
 * **[Developer handover guide (fresh IDE setup)](docs/DEVELOPPEMENT.md)** — prerequisites, environment, known pitfalls, CI/CD, roadmap state
+* **[Zero-Asset Canvas Animations Guide](docs/ANIMATIONS_GUIDE.md)** — Opus 5.5 technique, agent skills & headless render pipeline
 * **[Pylos AI Gateway Presentation (PDF)](Pylos_AI_Gateway.pdf)**
 * **[Pylos AI Gateway Architecture Blueprint (PDF)](docs/Pylos_AI_Gateway_Blueprint.pdf)**
 

@@ -8,6 +8,13 @@
     "build": "npm --prefix ui run build",
     "dev": "npm --prefix ui run dev",
     "start": "npm --prefix ui start",
-    "test": "npm --prefix ui test"
+    "test": "npm --prefix ui test",
+    "anim:render": "node .agents/skills/javascript-animation/scripts/render.mjs animations/pylos-architecture/pylos-architecture.html docs/pylos-architecture.mp4",
+    "anim:gif": "ffmpeg -y -i docs/pylos-architecture.mp4 -vf \"fps=12,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" -loop 0 docs/pylos-architecture.gif",
+    "anim:audit": "node .agents/skills/javascript-animation/scripts/asset-audit.mjs animations/pylos-architecture/pylos-architecture.html",
+    "anim:stills": "node .agents/skills/javascript-animation/scripts/render.mjs animations/pylos-architecture/pylos-architecture.html animations/pylos-architecture/shot --stills 30,150,300,450"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.0"
   }
 }

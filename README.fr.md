@@ -16,6 +16,12 @@ Pylos est une passerelle IA haute performance et à ultra-faible latence écrite
   <img src="docs/image.png" alt="Aperçu d'AI Gateway" width="800" />
 </p>
 
+<p align="center">
+  <img src="docs/pylos-architecture.gif" alt="Animation du Cycle de Vie et Architecture Pylos" width="800" />
+  <br>
+  <em>Flux animé du cycle de vie d'une requête, hit de cache TinyLFU et routage multi-fournisseurs (technique pure canvas zero-asset).</em>
+</p>
+
 > [!WARNING]
 > **Statut du projet : Non prêt pour la production (Non-Production Ready)**
 > Bien que les tests techniques (tests unitaires et d'intégration technique) soient fonctionnels, les **tests d'intégration système (SIT - System Integration Tests)** n'ont pas encore été réalisés. Pylos est actuellement considéré comme **non prêt pour la production**. Une fois les fonctionnalités de test stabilisées, une campagne de tests complète sera menée pour valider définitivement le projet.
@@ -23,6 +29,7 @@ Pylos est une passerelle IA haute performance et à ultra-faible latence écrite
 ## 📖 Ressources & Documentation
 
 * **[Site de Documentation Officiel (GitHub Pages)](https://jzacharie.github.io/Pylos/)**
+* **[Guide des Animations Canvas Zero-Asset](docs/ANIMATIONS_GUIDE.md)** — Technique Opus 5.5, skills d'agent et pipeline de rendu headless
 * **[Présentation Pylos AI Gateway (PDF)](Pylos_AI_Gateway.pdf)**
 * **[Plan d'architecture Pylos AI Gateway (PDF)](docs/Pylos_AI_Gateway_Blueprint.pdf)**
 

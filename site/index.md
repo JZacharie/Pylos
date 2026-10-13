@@ -44,6 +44,11 @@ permalink: /
   <figcaption>Console d'Administration Pylos (React 19 & Vite 8) — Gestion des clés virtuelles, métriques temps réel et gouvernance budgétaire.</figcaption>
 </figure>
 
+<figure class="img-frame">
+  <img src="{{ '/assets/images/pylos-architecture.gif' | relative_url }}" alt="Passerelle Pylos en action" loading="lazy" />
+  <figcaption>Passerelle Pylos en action : Routage temps réel, cache TinyLFU et gouvernance budgétaire (<a href="{{ '/assets/animations/pylos-architecture.html' | relative_url }}" target="_blank">Lecteur interactif HD ↗</a>).</figcaption>
+</figure>
+
 ---
 
 ## 🎯 Proposition de Valeur

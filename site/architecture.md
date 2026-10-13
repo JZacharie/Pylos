@@ -68,6 +68,11 @@ Le workspace Rust de Pylos est découpé en 4 sous-crates autonomes :
 
 Chaque appel HTTP traverse une chaîne optimisée conçue pour court-circuiter le réseau dès que possible :
 
+<figure class="img-frame">
+  <img src="{{ '/assets/images/pylos-architecture.gif' | relative_url }}" alt="Animation Dynamique du Cycle de Vie d'une Requête Pylos" loading="lazy" />
+  <figcaption>Flux animé du cycle de vie d'une requête Pylos (<a href="{{ '/assets/animations/pylos-architecture.html' | relative_url }}" target="_blank">Ouvrir le lecteur interactif HD avec bande-son ↗</a>).</figcaption>
+</figure>
+
 ```
 Requête Client (ex. /v1/chat/completions)
   │

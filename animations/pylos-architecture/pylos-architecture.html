@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pylos — Architecture & Cycle de Vie d'une Requête (Animation Canvas)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #090d16;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  #wrapper {
+    position: relative;
+    width: min(100vw, 177.78vh);
+    aspect-ratio: 16 / 9;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(249, 115, 22, 0.15);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #060911;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .controls {
+    position: absolute;
+    bottom: 12px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 16px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 30px;
+    z-index: 10;
+    transition: opacity 0.3s;
+  }
+  .controls:hover {
+    background: rgba(15, 23, 42, 0.92);
+  }
+  .btn {
+    background: #f97316;
+    border: none;
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .btn:hover {
+    background: #ea580c;
+    transform: scale(1.04);
+  }
+  .btn-ghost {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .time-slider {
+    flex: 1;
+    accent-color: #f97316;
+    cursor: pointer;
+  }
+  .time-display {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: #94a3b8;
+    min-width: 80px;
+  }
+</style>
+</head>
+<body>
+
+<div id="wrapper">
+  <canvas id="c" width="1920" height="1080"></canvas>
+  <div class="controls" id="ui-controls">
+    <button class="btn" id="btn-play">▶ Play / Pause</button>
+    <button class="btn btn-ghost" id="btn-audio">🔊 Audio: Off</button>
+    <input type="range" class="time-slider" id="scrubber" min="0" max="540" value="0">
+    <span class="time-display" id="time-txt">00.0s / 18.0s</span>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// PYLOS ZERO-ASSET CANVAS ANIMATION (Claude Opus 5.5 / iArt standard)
+// Every single pixel is computed deterministically in JavaScript.
+// No external images, no CSS transitions, no accumulated state.
+// ============================================================================
+
+const W = 1920, H = 1080, FPS = 30, DUR = 18, FRAMES = FPS * DUR;
+window.W = W; window.H = H; window.FPS = FPS; window.FRAMES = FRAMES;
+
+// Storyboard Beat Grid & Cues
+const CUES = [
+  0.0,   // Shot 1: Requête Entrante & Ingress Axum Rust (<2ms)
+  4.5,   // Shot 2: Gouvernance Budget & Cache TinyLFU (Hit immédiat 0-token)
+  9.0,   // Shot 3: Cache Miss, Masquage PII & Routage Intelligent Multi-Fournisseur
+  13.5,  // Shot 4: Streaming SSE, Graph Memgraph, Métriques Prometheus & Synthèse
+];
+window.CUES = CUES;
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// --- Palette Pylos ---
+const C = {
+  bg: '#070b14',
+  card: '#0e1626',
+  cardBorder: '#1e293b',
+  text: '#f8fafc',
+  textMuted: '#94a3b8',
+  orange: '#f97316',      // Pylos Lead / Rust
+  orangeGlow: 'rgba(249, 115, 22, 0.4)',
+  cyan: '#06b6d4',        // High speed / Axum
+  cyanGlow: 'rgba(6, 182, 212, 0.4)',
+  green: '#10b981',       // Cache Hit / Healthy
+  greenGlow: 'rgba(16, 185, 129, 0.4)',
+  purple: '#a855f7',      // Intelligence / Semantic
+  purpleGlow: 'rgba(168, 85, 247, 0.4)',
+  red: '#ef4444',
+  line: 'rgba(148, 163, 184, 0.18)'
+};
+
+// --- Math & Interpolations ---
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeInOut = t => { t = clamp(t); return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; };
+const easeOutCubic = t => 1 - Math.pow(1 - clamp(t), 3);
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+
+// Seeded PRNG for deterministic noise without flickering
+function hash2(a, b) {
+  let n = Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263);
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+}
+
+// Draw Rounded Rectangle
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// Glowing Node Card
+function drawNode(ctx, x, y, w, h, title, subtitle, accentCol, glowCol, activeRatio = 0) {
+  ctx.save();
+  // Ambient Glow if active
+  if (activeRatio > 0.05) {
+    ctx.shadowColor = glowCol;
+    ctx.shadowBlur = 28 * activeRatio;
+  }
+  
+  // Card Background
+  roundRect(ctx, x, y, w, h, 12);
+  ctx.fillStyle = C.card;
+  ctx.fill();
+  
+  // Border
+  ctx.strokeStyle = activeRatio > 0.2 ? accentCol : C.cardBorder;
+  ctx.lineWidth = activeRatio > 0.2 ? 2.5 : 1.5;
+  ctx.stroke();
+  ctx.restore();
+
+  // Top Accent Strip
+  ctx.save();
+  roundRect(ctx, x, y, w, 5, 2);
+  ctx.fillStyle = accentCol;
+  ctx.fill();
+  ctx.restore();
+
+  // Texts
+  ctx.fillStyle = C.text;
+  ctx.font = '600 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.fillText(title, x + 16, y + 30);
+
+  ctx.fillStyle = C.textMuted;
+  ctx.font = '500 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.fillText(subtitle, x + 16, y + 52);
+}
+
+// Animated Connecting Tube
+function drawWire(ctx, x1, y1, x2, y2, active = 0, col = C.orange) {
+  ctx.save();
+  ctx.beginPath();
+  const mx = (x1 + x2) / 2;
+  ctx.moveTo(x1, y1);
+  ctx.bezierCurveTo(mx, y1, mx, y2, x2, y2);
+  ctx.strokeStyle = active > 0.1 ? col : C.line;
+  ctx.lineWidth = active > 0.1 ? 3 : 1.8;
+  if (active > 0.1) {
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 12 * active;
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Animated Data Particle along Bezier
+function drawParticle(ctx, x1, y1, x2, y2, tProg, col = C.orange, label = '') {
+  if (tProg <= 0 || tProg >= 1) return;
+  const mx = (x1 + x2) / 2;
+  const u = 1 - tProg;
+  const px = u*u*u*x1 + 3*u*u*tProg*mx + 3*u*tProg*tProg*mx + tProg*tProg*tProg*x2;
+  const py = u*u*u*y1 + 3*u*u*tProg*y1 + 3*u*tProg*tProg*y2 + tProg*tProg*tProg*y2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(px, py, 6, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 18;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(px, py, 11, 0, Math.PI * 2);
+  ctx.fillStyle = col;
+  ctx.globalAlpha = 0.45;
+  ctx.fill();
+
+  if (label) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 11px ui-monospace, monospace';
+    ctx.fillText(label, px + 12, py - 6);
+  }
+  ctx.restore();
+}
+
+// Background Tech Grid
+function drawGrid(ctx, t) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+  ctx.lineWidth = 1;
+  const gridSize = 60;
+  for (let x = 0; x < W; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Subtle floating background particles
+  for (let i = 0; i < 40; i++) {
+    const rx = hash2(i, 1) * W;
+    const ry = (hash2(i, 2) * H + t * 15 * (hash2(i, 3) + 0.5)) % H;
+    const rSize = 1.2 + hash2(i, 4) * 2.2;
+    ctx.beginPath();
+    ctx.arc(rx, ry, rSize, 0, Math.PI * 2);
+    ctx.fillStyle = hash2(i, 5) > 0.5 ? C.orange : C.cyan;
+    ctx.globalAlpha = 0.15 + hash2(i, 6) * 0.2;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ============================================================================
+// MAIN PURE DRAW FUNCTION: window.draw(frame)
+// ============================================================================
+window.draw = function(frame) {
+  const t = (frame % FRAMES) / FPS; // Time in seconds [0 .. DUR]
+  
+  // Clear canvas
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, W, H);
+  
+  // Background Grid & Ambience
+  drawGrid(ctx, t);
+
+  // --------------------------------------------------------------------------
+  // TOP HEADER & BRANDING
+  // --------------------------------------------------------------------------
+  ctx.save();
+  // Logo Icon (Rust Hexagon + Core Spark)
+  ctx.save();
+  ctx.translate(70, 56);
+  roundRect(ctx, 0, 0, 48, 48, 10);
+  ctx.fillStyle = C.orange;
+  ctx.shadowColor = C.orangeGlow;
+  ctx.shadowBlur = 18;
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 24px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('P', 24, 33);
+  ctx.restore();
+
+  // Titles
+  ctx.fillStyle = C.text;
+  ctx.font = '800 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.fillText('PYLOS', 134, 76);
+  
+  ctx.fillStyle = C.orange;
+  ctx.font = '700 15px ui-monospace, monospace';
+  ctx.fillText('AI GATEWAY & MCP PROXY', 242, 74);
+
+  ctx.fillStyle = C.textMuted;
+  ctx.font = '400 14px -apple-system, sans-serif';
+  ctx.fillText('Architecture Hexagonale Asynchrone en Rust — Traitement < 2ms', 134, 100);
+
+  // Top Right Real-Time HUD Metrics
+  const hudBox = (hx, hy, label, val, col) => {
+    roundRect(ctx, hx, hy, 160, 52, 8);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = C.textMuted;
+    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.fillText(label, hx + 12, hy + 20);
+
+    ctx.fillStyle = col;
+    ctx.font = '700 17px ui-monospace, monospace';
+    ctx.fillText(val, hx + 12, hy + 41);
+  };
+
+  const dynRpm = Math.round(2400 + Math.sin(t * 2) * 180);
+  const dynLatency = (1.45 + Math.sin(t * 3.5) * 0.28).toFixed(2);
+  const dynTokens = (142.8 + (t * 1.6)).toFixed(1);
+  const dynHitRate = t > 4.5 && t < 9.0 ? '88.4%' : '67.2%';
+
+  hudBox(1160, 50, 'SURCOÛT MOYEN', `${dynLatency} ms`, C.cyan);
+  hudBox(1340, 50, 'DÉBIT / SEC', `${dynRpm} RPM`, C.orange);
+  hudBox(1520, 50, 'CACHE HIT-RATE', dynHitRate, C.green);
+  hudBox(1700, 50, 'TOKENS ÉCONOMISÉS', `${dynTokens} k`, C.purple);
+  ctx.restore();
+
+  // --------------------------------------------------------------------------
+  // NODES LAYOUT COORDINATES
+  // --------------------------------------------------------------------------
+  // Stage 1: Client Application (x: 70, y: 340)
+  const nClient = { x: 70, y: 340, w: 230, h: 160 };
+
+  // Stage 2: Axum Ingress & Rate Limiting (x: 370, y: 220)
+  const nAxum = { x: 370, y: 220, w: 250, h: 120 };
+
+  // Stage 3: Budget & Quotas Engine (x: 370, y: 440)
+  const nBudget = { x: 370, y: 440, w: 250, h: 120 };
+
+  // Stage 4: Pre-Plugins & PII Masking (x: 690, y: 330)
+  const nPlugins = { x: 690, y: 330, w: 250, h: 120 };
+
+  // Stage 5A: Cache TinyLFU (L1 Mem) (x: 1010, y: 200)
+  const nCacheL1 = { x: 1010, y: 200, w: 260, h: 110 };
+
+  // Stage 5B: Cache Sémantique Qdrant (L2 Vec) (x: 1010, y: 360)
+  const nCacheL2 = { x: 1010, y: 360, w: 260, h: 110 };
+
+  // Stage 6: Routeur Dynamique & Circuit Breaker (x: 1010, y: 520)
+  const nRouter = { x: 1010, y: 520, w: 260, h: 110 };
+
+  // Stage 7: LLM Providers Pool (Right Column) (x: 1350)
+  const nProvOpenAI = { x: 1350, y: 190, w: 240, h: 76 };
+  const nProvClaude = { x: 1350, y: 285, w: 240, h: 76 };
+  const nProvBedrock= { x: 1350, y: 380, w: 240, h: 76 };
+  const nProvGemini = { x: 1350, y: 475, w: 240, h: 76 };
+  const nProvOllama = { x: 1350, y: 570, w: 240, h: 76 };
+
+  // Stage 8: Post-Plugins & Graph Memory (Memgraph) (x: 690, y: 720)
+  const nPostPlugins = { x: 690, y: 720, w: 320, h: 110 };
+
+  // Stage 9: Egress & SSE Streaming (x: 370, y: 720)
+  const nEgress = { x: 370, y: 720, w: 250, h: 110 };
+
+  // --------------------------------------------------------------------------
+  // ACT / SCENARIO TIMING DETERMINATION
+  // Act 1: 0.0 - 4.5s -> Ingress, Axum, Budget check
+  // Act 2: 4.5 - 9.0s -> PII masking, TinyLFU CACHE HIT (Instant Return)
+  // Act 3: 9.0 - 13.5s -> Cache Miss, Semantic check, Dynamic Router to Claude
+  // Act 4: 13.5 - 18.0s -> Post-plugins, Memgraph graph sync, SSE stream to client
+  // --------------------------------------------------------------------------
+  const isAct1 = t >= 0.0 && t < 4.5;
+  const isAct2 = t >= 4.5 && t < 9.0;
+  const isAct3 = t >= 9.0 && t < 13.5;
+  const isAct4 = t >= 13.5 && t <= 18.0;
+
+  // Node Activity Weights [0 .. 1]
+  const aAxum = prog(t, 0.4, 1.2) * (1 - prog(t, 4.0, 4.5)) + prog(t, 4.8, 5.5) * (1 - prog(t, 8.5, 9.0)) + prog(t, 9.2, 9.8);
+  const aBudget = prog(t, 1.2, 2.0) * (1 - prog(t, 4.2, 4.8)) + prog(t, 9.8, 10.6);
+  const aPlugins = prog(t, 2.0, 2.8) * (1 - prog(t, 4.5, 5.0)) + prog(t, 5.2, 6.0) + prog(t, 10.5, 11.2);
+  const aCacheL1 = prog(t, 6.0, 7.5) * (1 - prog(t, 8.5, 9.0)); // Big Hit in Act 2
+  const aCacheL2 = prog(t, 10.8, 11.8);
+  const aRouter = prog(t, 11.4, 12.4);
+  const aClaude = prog(t, 12.0, 13.6);
+  const aMemgraph = prog(t, 14.0, 15.5);
+  const aEgress = prog(t, 7.2, 8.5) + prog(t, 15.0, 17.5);
+
+  // --------------------------------------------------------------------------
+  // DRAW PIPELINE WIRES (Under Nodes)
+  // --------------------------------------------------------------------------
+  // Client -> Axum
+  drawWire(ctx, nClient.x + nClient.w, nClient.y + 40, nAxum.x, nAxum.y + 60, aAxum, C.cyan);
+  // Axum -> Budget
+  drawWire(ctx, nAxum.x + nAxum.w / 2, nAxum.y + nAxum.h, nBudget.x + nBudget.w / 2, nBudget.y, aBudget, C.orange);
+  // Budget -> Pre-Plugins
+  drawWire(ctx, nBudget.x + nBudget.w, nBudget.y + 60, nPlugins.x, nPlugins.y + 60, aPlugins, C.orange);
+  // Pre-Plugins -> Cache L1
+  drawWire(ctx, nPlugins.x + nPlugins.w, nPlugins.y + 30, nCacheL1.x, nCacheL1.y + 55, aCacheL1, C.green);
+  // Pre-Plugins -> Cache L2
+  drawWire(ctx, nPlugins.x + nPlugins.w, nPlugins.y + 60, nCacheL2.x, nCacheL2.y + 55, aCacheL2, C.purple);
+  // Pre-Plugins -> Router
+  drawWire(ctx, nPlugins.x + nPlugins.w, nPlugins.y + 90, nRouter.x, nRouter.y + 55, aRouter, C.orange);
+
+  // Cache L1 -> Egress (Cache Hit Shortcut Return!)
+  if (isAct2) {
+    drawWire(ctx, nCacheL1.x + 30, nCacheL1.y + nCacheL1.h, nEgress.x + nEgress.w, nEgress.y + 30, prog(t, 6.8, 8.2), C.green);
+  }
+
+  // Router -> Providers
+  drawWire(ctx, nRouter.x + nRouter.w, nRouter.y + 30, nProvOpenAI.x, nProvOpenAI.y + 38, 0, C.line);
+  drawWire(ctx, nRouter.x + nRouter.w, nRouter.y + 50, nProvClaude.x, nProvClaude.y + 38, aClaude, C.orange);
+  drawWire(ctx, nRouter.x + nRouter.w, nRouter.y + 70, nProvBedrock.x, nProvBedrock.y + 38, 0, C.line);
+  drawWire(ctx, nRouter.x + nRouter.w, nRouter.y + 85, nProvGemini.x, nProvGemini.y + 38, 0, C.line);
+
+  // Claude -> Post-Plugins
+  drawWire(ctx, nProvClaude.x, nProvClaude.y + 50, nPostPlugins.x + nPostPlugins.w, nPostPlugins.y + 40, aMemgraph, C.purple);
+  // Post-Plugins -> Egress
+  drawWire(ctx, nPostPlugins.x, nPostPlugins.y + 55, nEgress.x + nEgress.w, nEgress.y + 55, aEgress, C.cyan);
+  // Egress -> Client (Stream Return)
+  drawWire(ctx, nEgress.x, nEgress.y + 55, nClient.x + nClient.w / 2, nClient.y + nClient.h, aEgress, C.cyan);
+
+  // --------------------------------------------------------------------------
+  // DRAW NODES
+  // --------------------------------------------------------------------------
+  // 1. Client App Card
+  ctx.save();
+  roundRect(ctx, nClient.x, nClient.y, nClient.w, nClient.h, 12);
+  ctx.fillStyle = C.card; ctx.fill();
+  ctx.strokeStyle = C.cyan; ctx.lineWidth = 2; ctx.stroke();
+  roundRect(ctx, nClient.x, nClient.y, nClient.w, 4, 2);
+  ctx.fillStyle = C.cyan; ctx.fill();
+
+  ctx.fillStyle = C.text;
+  ctx.font = '700 17px -apple-system, sans-serif';
+  ctx.fillText('Client Application', nClient.x + 16, nClient.y + 32);
+  ctx.fillStyle = C.textMuted;
+  ctx.font = '500 12px ui-monospace, monospace';
+  ctx.fillText('OpenAI SDK / Python / TS', nClient.x + 16, nClient.y + 52);
+
+  // Mini code snippet inside Client Card
+  roundRect(ctx, nClient.x + 12, nClient.y + 68, nClient.w - 24, 76, 8);
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill();
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.fillText('client = OpenAI(', nClient.x + 22, nClient.y + 88);
+  ctx.fillStyle = '#fb923c';
+  ctx.fillText('  base_url="http://pylos"', nClient.x + 22, nClient.y + 106);
+  ctx.fillStyle = '#a78bfa';
+  ctx.fillText('  api_key="sk-pylos-*"', nClient.x + 22, nClient.y + 124);
+  ctx.restore();
+
+  // 2. Axum Ingress Node
+  drawNode(ctx, nAxum.x, nAxum.y, nAxum.w, nAxum.h, '1. Axum Engine (Rust)', 'Token Bucket & Auth (<2ms)', C.cyan, C.cyanGlow, aAxum);
+
+  // 3. Budget Engine Node
+  const budgetTxt = isAct1 ? 'Plafond USD : $150 / mois (OK)' : 'Décompte temps réel : 12 jetons';
+  drawNode(ctx, nBudget.x, nBudget.y, nBudget.w, nBudget.h, '2. Moteur de Budgets', budgetTxt, C.orange, C.orangeGlow, aBudget);
+
+  // 4. Pre-Plugins Node
+  const pluginTxt = isAct2 ? 'Masquage PII anonymisé' : 'Validation & Guardrails';
+  drawNode(ctx, nPlugins.x, nPlugins.y, nPlugins.w, nPlugins.h, '3. Pre-Plugins Sécurité', pluginTxt, C.orange, C.orangeGlow, aPlugins);
+
+  // 5. Caches Nodes
+  drawNode(ctx, nCacheL1.x, nCacheL1.y, nCacheL1.w, nCacheL1.h, '4. Cache TinyLFU (L1)', 'Mémoire vive (0 token, <0.2ms)', C.green, C.greenGlow, aCacheL1);
+  drawNode(ctx, nCacheL2.x, nCacheL2.y, nCacheL2.w, nCacheL2.h, '5. Cache Sémantique (L2)', 'Qdrant Vectoriel (Cosine ≥ 0.92)', C.purple, C.purpleGlow, aCacheL2);
+
+  // 6. Router Node
+  drawNode(ctx, nRouter.x, nRouter.y, nRouter.w, nRouter.h, '6. Routeur Dynamique', 'Scoring santé, latence & CEL', C.orange, C.orangeGlow, aRouter);
+
+  // 7. Providers Pool Nodes
+  const drawProv = (node, name, latency, model, active) => {
+    roundRect(ctx, node.x, node.y, node.w, node.h, 8);
+    ctx.fillStyle = active > 0.2 ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.6)';
+    ctx.fill();
+    ctx.strokeStyle = active > 0.2 ? C.orange : C.cardBorder;
+    ctx.lineWidth = active > 0.2 ? 2 : 1;
+    if (active > 0.2) { ctx.shadowColor = C.orangeGlow; ctx.shadowBlur = 15; }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = C.text;
+    ctx.font = '700 14px -apple-system, sans-serif';
+    ctx.fillText(name, node.x + 14, node.y + 26);
+
+    ctx.fillStyle = active > 0.2 ? C.orange : C.textMuted;
+    ctx.font = '600 12px ui-monospace, monospace';
+    ctx.fillText(model, node.x + 14, node.y + 46);
+
+    ctx.fillStyle = C.textMuted;
+    ctx.font = '500 11px ui-monospace, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(latency, node.x + node.w - 14, node.y + 26);
+    ctx.textAlign = 'left';
+  };
+
+  drawProv(nProvOpenAI, 'OpenAI Adapter', '320 ms', 'gpt-4o', 0);
+  drawProv(nProvClaude, 'Anthropic Adapter', '210 ms', 'claude-3-5-sonnet', aClaude);
+  drawProv(nProvBedrock, 'AWS Bedrock (STS)', '240 ms', 'claude-3-5 / llama', 0);
+  drawProv(nProvGemini, 'Google Gemini', '180 ms', 'gemini-2-5-pro', 0);
+  drawProv(nProvOllama, 'Ollama Local / vLLM', '45 ms', 'deepseek-r1-7b', 0);
+
+  // 8. Post-Plugins Node
+  drawNode(ctx, nPostPlugins.x, nPostPlugins.y, nPostPlugins.w, nPostPlugins.h, '7. Post-Plugins & Mémoire', 'Graphe Memgraph + Extraction Contexte', C.purple, C.purpleGlow, aMemgraph);
+
+  // 9. Egress SSE Node
+  drawNode(ctx, nEgress.x, nEgress.y, nEgress.w, nEgress.h, '8. Egress & Streaming SSE', 'Tokens continus + Audit Logs SQLx', C.cyan, C.cyanGlow, aEgress);
+
+  // --------------------------------------------------------------------------
+  // ANIMATED PARTICLES (Packets on the Wire)
+  // --------------------------------------------------------------------------
+  if (isAct1) {
+    // Packet moving Client -> Axum
+    drawParticle(ctx, nClient.x + nClient.w, nClient.y + 40, nAxum.x, nAxum.y + 60, prog(t, 0.5, 1.8), C.cyan, 'POST /chat');
+    // Packet moving Axum -> Budget
+    drawParticle(ctx, nAxum.x + nAxum.w / 2, nAxum.y + nAxum.h, nBudget.x + nBudget.w / 2, nBudget.y, prog(t, 1.8, 2.9), C.orange, 'Auth: Valid');
+    // Packet moving Budget -> Pre-Plugins
+    drawParticle(ctx, nBudget.x + nBudget.w, nBudget.y + 60, nPlugins.x, nPlugins.y + 60, prog(t, 2.9, 4.0), C.orange, 'Quota OK');
+  } else if (isAct2) {
+    // Act 2: Cache Hit demo
+    drawParticle(ctx, nPlugins.x + nPlugins.w, nPlugins.y + 30, nCacheL1.x, nCacheL1.y + 55, prog(t, 4.8, 6.2), C.green, 'Hash: 0x8f2a');
+    
+    // CACHE HIT BURST
+    if (t > 6.2 && t < 8.6) {
+      const pBurst = prog(t, 6.2, 7.2);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(nCacheL1.x + 30, nCacheL1.y + 55, 30 + pBurst * 40, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(16, 185, 129, ${1 - pBurst})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Badge CACHE HIT
+      roundRect(ctx, nCacheL1.x + 150, nCacheL1.y - 18, 120, 28, 14);
+      ctx.fillStyle = C.green;
+      ctx.shadowColor = C.greenGlow; ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 12px ui-monospace, monospace';
+      ctx.fillText('⚡ CACHE HIT', nCacheL1.x + 162, nCacheL1.y);
+      ctx.restore();
+
+      // Return packet immediately to Egress
+      drawParticle(ctx, nCacheL1.x + 30, nCacheL1.y + nCacheL1.h, nEgress.x + nEgress.w, nEgress.y + 30, prog(t, 6.5, 7.6), C.green, '0 Tokens billed!');
+      drawParticle(ctx, nEgress.x, nEgress.y + 55, nClient.x + nClient.w / 2, nClient.y + nClient.h, prog(t, 7.6, 8.8), C.cyan, 'Stream: 0.1ms');
+    }
+  } else if (isAct3) {
+    // Act 3: Cache Miss, Dynamic Router, Dispatch to Claude
+    drawParticle(ctx, nPlugins.x + nPlugins.w, nPlugins.y + 90, nRouter.x, nRouter.y + 55, prog(t, 9.3, 10.8), C.orange, 'Miss -> Routing');
+    drawParticle(ctx, nRouter.x + nRouter.w, nRouter.y + 50, nProvClaude.x, nProvClaude.y + 38, prog(t, 10.8, 12.2), C.orange, 'Dispatch Claude');
+    drawParticle(ctx, nProvClaude.x, nProvClaude.y + 50, nPostPlugins.x + nPostPlugins.w, nPostPlugins.y + 40, prog(t, 12.2, 13.5), C.purple, 'Output chunk');
+  } else if (isAct4) {
+    // Act 4: Post-Plugins to Egress to Client
+    drawParticle(ctx, nPostPlugins.x, nPostPlugins.y + 55, nEgress.x + nEgress.w, nEgress.y + 55, prog(t, 13.8, 15.2), C.purple, 'Graph Sync');
+    drawParticle(ctx, nEgress.x, nEgress.y + 55, nClient.x + nClient.w / 2, nClient.y + nClient.h, prog(t, 15.2, 16.8), C.cyan, 'data: {"token":...}');
+  }
+
+  // --------------------------------------------------------------------------
+  // BOTTOM NARRATIVE BANNER (Explains the current action)
+  // --------------------------------------------------------------------------
+  ctx.save();
+  const bannerY = H - 90;
+  roundRect(ctx, 70, bannerY, W - 140, 60, 10);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Progress bar on banner bottom
+  const bannerProg = (t / DUR) * (W - 140);
+  roundRect(ctx, 70, bannerY + 56, bannerProg, 4, 2);
+  ctx.fillStyle = C.orange;
+  ctx.fill();
+
+  let actTitle = '', actDesc = '';
+  if (isAct1) {
+    actTitle = 'ÉTAPE 1 / 4 : INGRESS HAUTE PERFORMANCE & AUTHENTIFICATION';
+    actDesc = 'Le middleware Axum (Rust) valide la clé virtuelle sk-pylos-*, applique le limiteur Token Bucket et vérifie le budget USD.';
+  } else if (isAct2) {
+    actTitle = 'ÉTAPE 2 / 4 : MASQUAGE PII & CACHE MÉMOIRE L1 (TINYLFU)';
+    actDesc = 'Détection automatique d\'un Cache Hit : réponse instantanée (< 0.2ms) retournée au client avec 0 token facturé.';
+  } else if (isAct3) {
+    actTitle = 'ÉTAPE 3 / 4 : CACHE MISS & ROUTAGE INTELLIGENT MULTI-FOURNISSEURS';
+    actDesc = 'Sur requête inédite, le routeur pondéré sélectionne dynamiquement l\'adaptateur LLM optimal (ici Anthropic Claude 3.5 Sonnet).';
+  } else {
+    actTitle = 'ÉTAPE 4 / 4 : STREAMING SSE, EXTRACTION DE MÉMOIRE & AUDIT PROMETHEUS';
+    actDesc = 'Le flux de jetons SSE est renvoyé sans latence, le graphe de connaissances Memgraph s\'actualise et les métriques sont incrémentées.';
+  }
+
+  ctx.fillStyle = C.orange;
+  ctx.font = '700 13px ui-monospace, monospace';
+  ctx.fillText(actTitle, 95, bannerY + 24);
+
+  ctx.fillStyle = C.text;
+  ctx.font = '500 15px -apple-system, sans-serif';
+  ctx.fillText(actDesc, 95, bannerY + 46);
+  ctx.restore();
+};
+
+// ============================================================================
+// PROCEDURAL SOUNDTRACK (Web Audio API - Soundtrack Skill Standard)
+// window.SCORE(ac) is called both by the browser player and by render.mjs!
+// ============================================================================
+window.SCORE = function(ac) {
+  const master = ac.createGain();
+  master.gain.setValueAtTime(0.5, 0);
+  master.connect(ac.destination);
+
+  // Synth Pad / Ambient Bed (Deep futuristic drone)
+  const padOsc = ac.createOscillator();
+  const padGain = ac.createGain();
+  const padFilter = ac.createBiquadFilter();
+
+  padOsc.type = 'sawtooth';
+  padOsc.frequency.setValueAtTime(65.41, 0); // C2
+  padFilter.type = 'lowpass';
+  padFilter.frequency.setValueAtTime(320, 0);
+
+  padGain.gain.setValueAtTime(0.001, 0);
+  padGain.gain.linearRampToValueAtTime(0.12, 1.5);
+  padGain.gain.linearRampToValueAtTime(0.12, 16.5);
+  padGain.gain.linearRampToValueAtTime(0.001, 18.0);
+
+  padOsc.connect(padFilter);
+  padFilter.connect(padGain);
+  padGain.connect(master);
+  padOsc.start(0);
+  padOsc.stop(18);
+
+  // Soft Rhythm Tech Pulses on cues (0.0s, 4.5s, 9.0s, 13.5s)
+  const hitTimes = [0.0, 1.8, 4.5, 6.2, 9.0, 10.8, 13.5, 15.2];
+  hitTimes.forEach((st, idx) => {
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(idx === 3 ? 880 : 440, st); // Higher pitch for Cache Hit
+    if (idx === 3) osc.frequency.exponentialRampToValueAtTime(1320, st + 0.15); // Happy chime
+
+    g.gain.setValueAtTime(0.001, st);
+    g.gain.linearRampToValueAtTime(0.25, st + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.35);
+
+    osc.connect(g);
+    g.connect(master);
+    osc.start(st);
+    osc.stop(st + 0.4);
+  });
+};
+
+// ============================================================================
+// LIVE BROWSER PLAYER CONTROLS (Live Preview Loop)
+// ============================================================================
+let currentFrame = 0;
+let isPlaying = true;
+let audioStarted = false;
+let audioCtx = null;
+
+function renderFrame(f) {
+  currentFrame = f % FRAMES;
+  window.draw(currentFrame);
+  document.getElementById('scrubber').value = currentFrame;
+  const sec = (currentFrame / FPS).toFixed(1);
+  document.getElementById('time-txt').innerText = `${sec.padStart(4, '0')}s / ${(DUR).toFixed(1)}s`;
+}
+
+function loop() {
+  if (isPlaying) {
+    currentFrame = (currentFrame + 1) % FRAMES;
+    renderFrame(currentFrame);
+  }
+  requestAnimationFrame(loop);
+}
+
+// Initial draw
+renderFrame(0);
+
+// If ?render is in URL, render.mjs handles seeking and recording, so we skip the loop
+if (!window.location.search.includes('render')) {
+  requestAnimationFrame(loop);
+}
+
+// UI Event Handlers
+document.getElementById('btn-play').addEventListener('click', () => {
+  isPlaying = !isPlaying;
+  document.getElementById('btn-play').innerText = isPlaying ? '⏸ Pause' : '▶ Play';
+});
+
+document.getElementById('scrubber').addEventListener('input', (e) => {
+  isPlaying = false;
+  document.getElementById('btn-play').innerText = '▶ Play';
+  renderFrame(parseInt(e.target.value, 10));
+});
+
+document.getElementById('btn-audio').addEventListener('click', () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    window.SCORE(audioCtx);
+    audioStarted = true;
+    document.getElementById('btn-audio').innerText = '🔊 Audio: On';
+  } else {
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+      document.getElementById('btn-audio').innerText = '🔊 Audio: On';
+    } else if (audioCtx.state === 'running') {
+      audioCtx.suspend();
+      document.getElementById('btn-audio').innerText = '🔇 Audio: Off';
+    }
+  }
+});
+</script>
+</body>
+</html>
