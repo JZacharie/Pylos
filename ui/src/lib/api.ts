@@ -582,6 +582,11 @@ export const vectorStoresApi = {
 
 // ─── MCP Server Types & API ──────────────────────────────────────────────────
 
+export type McpTransportConfig =
+  | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string>; cwd?: string }
+  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | { type: 'sse'; url: string; headers?: Record<string, string> }
+
 export interface McpServer {
   id: string
   name: string
@@ -592,6 +597,7 @@ export interface McpServer {
   env_vars: Record<string, string> | null
   virtual_key_id: string | null
   team_id: string | null
+  transport_config?: McpTransportConfig | null
   created_at: number
   updated_at: number
 }

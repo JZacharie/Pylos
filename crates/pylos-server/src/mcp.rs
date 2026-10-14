@@ -4,7 +4,9 @@ use serde_json::{json, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::state::AppState;
-use pylos_core::domain::mcp_server::{McpServer, McpServerStatus, McpServerType};
+use pylos_core::domain::mcp_server::{
+    McpServer, McpServerStatus, McpServerType, McpTransportConfig,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateMcpServerRequest {
@@ -16,6 +18,8 @@ pub struct CreateMcpServerRequest {
     pub env_vars: Option<Value>,
     pub virtual_key_id: Option<String>,
     pub team_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport_config: Option<McpTransportConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,6 +32,8 @@ pub struct UpdateMcpServerRequest {
     pub env_vars: Option<Value>,
     pub virtual_key_id: Option<String>,
     pub team_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport_config: Option<McpTransportConfig>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,6 +47,8 @@ pub struct McpServerResponse {
     pub env_vars: Option<Value>,
     pub virtual_key_id: Option<String>,
     pub team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport_config: Option<McpTransportConfig>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -63,6 +71,7 @@ fn server_to_response(s: McpServer) -> McpServerResponse {
         env_vars: s.env_vars,
         virtual_key_id: s.virtual_key_id,
         team_id: s.team_id,
+        transport_config: s.transport_config,
         created_at: s.created_at,
         updated_at: s.updated_at,
     }
@@ -137,6 +146,7 @@ pub async fn create_mcp_server(
         env_vars: req.env_vars,
         virtual_key_id: req.virtual_key_id,
         team_id: req.team_id,
+        transport_config: req.transport_config,
         created_at: now,
         updated_at: now,
     };
@@ -197,6 +207,7 @@ pub async fn update_mcp_server(
         env_vars: req.env_vars.or(existing.env_vars.clone()),
         virtual_key_id: req.virtual_key_id.or(existing.virtual_key_id.clone()),
         team_id: req.team_id.or(existing.team_id.clone()),
+        transport_config: req.transport_config.or(existing.transport_config.clone()),
         created_at: existing.created_at,
         updated_at: now,
     };

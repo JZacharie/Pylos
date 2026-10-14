@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { mcpServersApi, type McpServer } from '../lib/api'
-import { Plus, Pencil, Trash2, X, Check, AlertTriangle, RotateCcw, Server, Globe, Box, Power, PowerOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Check, AlertTriangle, RotateCcw, Server, Globe, Box, Power, PowerOff, Terminal } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,10 @@ interface McpServerFormState {
   env_vars: EnvVarEntry[]
   virtual_key_id: string
   team_id: string
+  transport_type: 'http' | 'sse' | 'stdio'
+  command: string
+  args: string
+  cwd: string
 }
 
 const DEFAULT_FORM: McpServerFormState = {
@@ -25,6 +29,10 @@ const DEFAULT_FORM: McpServerFormState = {
   env_vars: [],
   virtual_key_id: '',
   team_id: '',
+  transport_type: 'http',
+  command: '',
+  args: '',
+  cwd: '',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -34,6 +42,34 @@ function formToPayload(form: McpServerFormState) {
   for (const e of form.env_vars) {
     if (e.key.trim()) envVars[e.key.trim()] = e.value
   }
+
+  let transport_config: McpServer['transport_config'] = undefined
+  if (form.transport_type === 'stdio') {
+    if (form.command.trim()) {
+      transport_config = {
+        type: 'stdio',
+        command: form.command.trim(),
+        args: form.args.trim() ? form.args.trim().split(/\s+/) : [],
+        cwd: form.cwd.trim() || undefined,
+        env: Object.keys(envVars).length > 0 ? envVars : undefined,
+      }
+    }
+  } else if (form.transport_type === 'sse') {
+    if (form.target_url.trim()) {
+      transport_config = {
+        type: 'sse',
+        url: form.target_url.trim(),
+      }
+    }
+  } else if (form.transport_type === 'http') {
+    if (form.target_url.trim()) {
+      transport_config = {
+        type: 'http',
+        url: form.target_url.trim(),
+      }
+    }
+  }
+
   return {
     name: form.name,
     server_type: form.server_type,
@@ -42,10 +78,27 @@ function formToPayload(form: McpServerFormState) {
     env_vars: Object.keys(envVars).length > 0 ? envVars : undefined,
     virtual_key_id: form.virtual_key_id || undefined,
     team_id: form.team_id || undefined,
+    transport_config,
   }
 }
 
 function serverToForm(s: McpServer): McpServerFormState {
+  let transport_type: 'http' | 'sse' | 'stdio' = 'http'
+  let command = ''
+  let args = ''
+  let cwd = ''
+
+  if (s.transport_config) {
+    transport_type = s.transport_config.type
+    if (s.transport_config.type === 'stdio') {
+      command = s.transport_config.command
+      args = (s.transport_config.args ?? []).join(' ')
+      cwd = s.transport_config.cwd ?? ''
+    }
+  } else if (s.target_url && s.target_url.endsWith('/sse')) {
+    transport_type = 'sse'
+  }
+
   return {
     name: s.name,
     server_type: s.server_type,
@@ -56,6 +109,10 @@ function serverToForm(s: McpServer): McpServerFormState {
       : [],
     virtual_key_id: s.virtual_key_id ?? '',
     team_id: s.team_id ?? '',
+    transport_type,
+    command,
+    args,
+    cwd,
   }
 }
 
@@ -148,18 +205,72 @@ function McpServerModal({
             </select>
           </div>
 
-          {/* Target URL */}
+          {/* Transport Type */}
           <div>
-            <label className="block text-xs text-zinc-400 mb-1.5">Target URL</label>
-            <input
-              type="text"
-              value={form.target_url}
-              onChange={e => setField('target_url', e.target.value)}
-              placeholder="http://localhost:3000/mcp"
+            <label className="block text-xs text-zinc-400 mb-1.5">Transport</label>
+            <select
+              value={form.transport_type}
+              onChange={e => setField('transport_type', e.target.value as 'http' | 'sse' | 'stdio')}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
-                font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
-            />
+                focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+            >
+              <option value="http">HTTP (Proxy / Streamable)</option>
+              <option value="sse">Server-Sent Events (SSE)</option>
+              <option value="stdio">Standard I/O (stdio process)</option>
+            </select>
           </div>
+
+          {form.transport_type === 'stdio' ? (
+            <div className="space-y-3 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800/80">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Command *</label>
+                <input
+                  type="text"
+                  value={form.command}
+                  onChange={e => setField('command', e.target.value)}
+                  placeholder="npx or python"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
+                    font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Arguments (space separated)</label>
+                <input
+                  type="text"
+                  value={form.args}
+                  onChange={e => setField('args', e.target.value)}
+                  placeholder="-y @modelcontextprotocol/server-postgres"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
+                    font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Working Directory (optional)</label>
+                <input
+                  type="text"
+                  value={form.cwd}
+                  onChange={e => setField('cwd', e.target.value)}
+                  placeholder="/app"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
+                    font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+                />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1.5">
+                {form.transport_type === 'sse' ? 'SSE Endpoint URL *' : 'Target HTTP URL *'}
+              </label>
+              <input
+                type="text"
+                value={form.target_url}
+                onChange={e => setField('target_url', e.target.value)}
+                placeholder={form.transport_type === 'sse' ? 'http://localhost:8000/sse' : 'http://localhost:3000/mcp'}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200
+                  font-mono focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+              />
+            </div>
+          )}
 
           {/* Container image */}
           <div>
@@ -362,6 +473,9 @@ function McpServerCard({
               <Box size={11} />
               {server.server_type}
             </span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-800/80 text-emerald-400 border border-zinc-700/40">
+              {server.transport_config?.type ?? (server.target_url?.endsWith('/sse') ? 'sse' : 'http')}
+            </span>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -376,15 +490,22 @@ function McpServerCard({
 
       {/* Info */}
       <div className="space-y-2 text-xs">
-        {server.target_url && (
+        {server.transport_config?.type === 'stdio' ? (
           <div className="flex items-center gap-2 text-zinc-400">
-            <Globe size={12} />
+            <Terminal size={12} className="text-emerald-400 shrink-0" />
+            <span className="truncate font-mono">
+              {server.transport_config.command} {(server.transport_config.args ?? []).join(' ')}
+            </span>
+          </div>
+        ) : server.target_url ? (
+          <div className="flex items-center gap-2 text-zinc-400">
+            <Globe size={12} className="shrink-0" />
             <span className="truncate font-mono">{server.target_url}</span>
           </div>
-        )}
+        ) : null}
         {server.container_image && (
           <div className="flex items-center gap-2 text-zinc-400">
-            <Box size={12} />
+            <Box size={12} className="shrink-0" />
             <span className="truncate font-mono">{server.container_image}</span>
           </div>
         )}
