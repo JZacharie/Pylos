@@ -124,7 +124,15 @@ while IFS= read -r job_b64; do
 
   echo "Job « ${job_name} » (${job_conclusion:-inconnu})"
 
-  if ! gh api "/repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" > "${WORKDIR}/job.log" 2> "${WORKDIR}/job.err"; then
+  # curl plutôt que « gh api » : gh refuse de restituer un log contenant des
+  # séquences d'échappement ANSI (sorties colorées), ce qui faisait perdre des
+  # jobs entiers. curl suit la redirection 302 vers le stockage des logs.
+  if ! curl --silent --show-error --fail-with-body --location \
+    --retry 3 --retry-delay 2 --max-time 120 \
+    -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+    -H "Accept: application/vnd.github+json" \
+    "${GITHUB_API_URL:-https://api.github.com}/repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
+    > "${WORKDIR}/job.log" 2> "${WORKDIR}/job.err"; then
     echo "::warning::Log indisponible pour le job « ${job_name} » (${job_id}) : $(tr -d '\n' < "${WORKDIR}/job.err" | cut -c1-200)" >&2
     continue
   fi
@@ -149,6 +157,7 @@ while IFS= read -r job_b64; do
       | map(
           . as $line
           | ($line[0:19] + "Z" | try fromdateiso8601 catch null) as $sec
+          | ($line | gsub("\u001b\\[[0-9;]*[A-Za-z]"; "")) as $clean
           | {
               _timestamp: (if $sec == null then $fallback_us else ($sec * 1000000) end),
               workflow: $workflow,
@@ -165,11 +174,11 @@ while IFS= read -r job_b64; do
               run_conclusion: $run_conclusion,
               job_conclusion: $job_conclusion,
               level: (
-                if ($line | test("##\\[error\\]")) then "error"
-                elif ($line | test("##\\[warning\\]")) then "warning"
+                if ($clean | test("##\\[error\\]")) then "error"
+                elif ($clean | test("##\\[warning\\]")) then "warning"
                 else "info" end
               ),
-              message: $line
+              message: $clean
             }
         )
       | .[]

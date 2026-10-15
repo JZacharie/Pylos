@@ -84,5 +84,8 @@ order by lignes desc
 - **HTTP 200 avec `successful: 0`** : OpenObserve répond 200 même en cas de
   rejet. Le script analyse le corps de la réponse et échoue explicitement si
   `failed > 0`, pour ne jamais perdre de logs en silence.
+- **Jobs manquants** : `gh api` refuse de restituer un log contenant des
+  séquences d'échappement ANSI (sorties colorées). Le téléchargement des logs
+  passe donc par `curl`, qui suit la redirection 302 de l'API.
 - **Aucun déclenchement** : `workflow_run` ne fonctionne que si
   `.github/workflows/ci-logs.yml` est présent sur la branche par défaut.
