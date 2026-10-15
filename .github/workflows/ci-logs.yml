@@ -1,0 +1,55 @@
+name: CI Logs to OpenObserve
+
+# Expédie les logs de chaque run CI vers OpenObserve (O2) une fois le run terminé.
+#
+# Pourquoi un workflow séparé plutôt qu'un job dans ci.yml ?
+#   * un seul endroit à maintenir, et il couvre CI + PR Tests + MegaLinter + CodeQL ;
+#   * le graphe des jobs existants n'est pas modifié (aucun risque de régression) ;
+#   * le déclencheur « workflow_run » est le mécanisme prévu par GitHub pour
+#     exploiter les logs d'un run achevé (doc OpenObserve :
+#     https://openobserve.ai/blog/capturing-pulse-of-your-github-actions/).
+#
+# Prérequis : les secrets de dépôt OPENOBSERVE_ENDPOINT et
+# OPENOBSERVE_ACCESS_KEY doivent exister (Settings > Secrets and variables > Actions).
+# Ce fichier doit être présent sur la branche par défaut pour que le
+# déclencheur « workflow_run » s'active.
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - PR Tests
+      - MegaLinter
+      - CodeQL
+    types: [completed]
+
+# Lecture des logs du run déclencheur, rien de plus.
+permissions:
+  actions: read
+  contents: read
+
+# Un envoi par run : deux runs identiques ne se marchent pas dessus.
+concurrency:
+  group: ci-logs-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Endpoint d'ingestion O2, ex. https://o2-openobserve.p.zacharie.org/api/default/githubactions/_json
+  OPENOBSERVE_ENDPOINT: ${{ secrets.OPENOBSERVE_ENDPOINT }}
+  OPENOBSERVE_ACCESS_KEY: ${{ secrets.OPENOBSERVE_ACCESS_KEY }}
+
+jobs:
+  push-logs:
+    name: Push run logs to OpenObserve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Push logs to OpenObserve
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: bash .github/workflows/scripts/push-ci-logs-to-openobserve.sh
