@@ -1,0 +1,19 @@
+title = "JZacharie Zero-Leak Secret-Guard Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow symmetrically encrypted secrets ENC[SYM256,...] and lockfiles"
+regexTarget = "line"
+regexes = [
+  '''ENC\[(?:SYM256|AES256_GCM|AES256_PBKDF2),salt:[A-Za-z0-9+/=_-]+,iv:[A-Za-z0-9+/=_-]+,tag:[A-Za-z0-9+/=_-]+,data:[A-Za-z0-9+/=_-]+\]''',
+  '''secret-guard:ignore''',
+]
+paths = [
+  '''Cargo\.lock$''',
+  '''package-lock\.json$''',
+  '''pnpm-lock\.yaml$''',
+  '''\.github/scripts/secret_guard\.py$''',
+  '''\.gitleaks\.toml$''',
+]
