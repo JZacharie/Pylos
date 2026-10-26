@@ -86,8 +86,8 @@ IGNORED_EXTENSIONS = {
 
 SAFE_PLACEHOLDERS = {
     "changeme", "placeholder", "your_token_here", "your-api-key",
-    "example", "dummy", "secret", "password", "none", "null", "true", "false",
-    "todo", "fixme", "test", "mock", "default", "REDACTED",
+    "example", "dummy", "secret", "password", "motdepasse", "none", "null", "true", "false",
+    "todo", "fixme", "test", "mock", "default", "redacted", "miiepqibaakcaqea...",
 }
 
 
@@ -217,7 +217,14 @@ def scan_file_content(rel_path: str, content: str) -> List[str]:
             if m:
                 matched = m.group(0)
                 low = matched.lower()
-                if any(ph in low for ph in SAFE_PLACEHOLDERS) or "xxxx" in low or "..." in low:
+                low_line = line_without_enc.lower()
+                if (
+                    any(ph in low for ph in SAFE_PLACEHOLDERS)
+                    or "xxxx" in low
+                    or "..." in low
+                    or "miiepqibaakcaqea..." in low_line
+                    or "user:motdepasse@host" in low_line
+                ):
                     continue
                 preview = matched[:6] + "..." + matched[-4:] if len(matched) > 14 else "***"
                 findings.append(
