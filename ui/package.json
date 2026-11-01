@@ -13,13 +13,13 @@
   "dependencies": {
     "@openobserve/browser-logs": "^0.4.0",
     "@openobserve/browser-rum": "^0.4.0",
-    "@tanstack/react-query": "^5.104.4",
-    "axios": "^1.17.0",
+    "@tanstack/react-query": "^5.105.0",
+    "axios": "^1.21.0",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.57.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.4",
+    "react-router-dom": "^7.18.5",
     "recharts": "^3.9.2"
   },
   "devDependencies": {
@@ -28,15 +28,15 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "autoprefixer": "^10.6.1",
-    "eslint": "^10.12.0",
+    "autoprefixer": "^10.6.2",
+    "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
-    "postcss": "^8.5.29",
+    "postcss": "^8.5.32",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",
-    "typescript-eslint": "^8.71.1",
-    "vite": "^8.3.4"
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5"
   }
 }
