@@ -1,11 +1,12 @@
 ---
 name: auto-deepseek-delegation
-description: |
+description: >-
   Automatically generate lightweight helper skills based on user instructions to reduce context size and token usage. For tasks identified as complex (e.g., > 200 lines of code generation, heavy refactoring, or when token budget would exceed a safe threshold), this skill transparently forwards the work to the `deepseek-coder` agent.
+---
 
 # Overview
 This skill provides a two‑step workflow:
-1. **Skill scaffolding** – Given a concise natural‑language description, it creates a new skill directory under `<repo>/.gemini/skills/<skill_name>/` containing a `SKILL.md` that documents the intent and any helper scripts.
+1. **Skill scaffolding** – Given a concise natural‑language description, it creates a new skill directory under `<repo>/.agents/skills/<skill_name>/` (or `<repo>/.gemini/skills/<skill_name>/`) containing a `SKILL.md` that documents the intent and any helper scripts.
 2. **Complexity detection** – When the user request exceeds a configurable token budget (default ≈ 200 tokens) or explicitly mentions heavy code generation, the skill automatically invokes the `deepseek-coder` skill to perform the heavy lifting.
 
 # Usage
@@ -27,7 +28,7 @@ This skill provides a two‑step workflow:
 
 # Security & Safety
 - No external network calls are performed by this skill; it operates purely on the filesystem.
-- The generated skill files are limited to the repository root (`/home/joseph/git/Pylos`).
+- The generated skill files are limited to the repository root (`<repo>`).
 - All generated code is wrapped in a minimal template; the user must review before applying.
 
 # Example Invocation
@@ -38,7 +39,6 @@ This skill provides a two‑step workflow:
 }
 ```
 The skill will:
-1. Create `.gemini/skills/format_dates_hook/`.
+1. Create `.agents/skills/format_dates_hook/`.
 2. Write a `SKILL.md` describing the new hook.
 3. Detect complexity and forward the heavy generation to `deepseek-coder`, saving the result to `output.txt`.
-```
