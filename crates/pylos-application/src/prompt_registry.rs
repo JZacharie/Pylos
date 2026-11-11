@@ -159,6 +159,7 @@ mod tests {
             frequency_penalty: None,
             logit_bias: None,
             user: None,
+            session_id: None,
             tools: None,
             tool_choice: None,
             seed: None,
@@ -166,6 +167,7 @@ mod tests {
             min_p: None,
             repetition_penalty: None,
             max_completion_tokens: None,
+            account: None,
         });
 
         let mut ctx = RequestContext::default();

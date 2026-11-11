@@ -381,6 +381,8 @@ impl InferenceOrchestrator {
                 frequency_penalty: tc.frequency_penalty,
                 logit_bias: None,
                 user: tc.user.clone(),
+                session_id: tc.session_id.clone(),
+                account: tc.account.clone(),
                 tools: None,
                 tool_choice: None,
                 response_format: None,

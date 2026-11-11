@@ -610,6 +610,7 @@ mod tests {
             presence_penalty: None,
             frequency_penalty: None,
             user: None,
+            session_id: None,
             stop: None,
             logit_bias: None,
             tools: None,
@@ -620,6 +621,7 @@ mod tests {
             min_p: None,
             repetition_penalty: None,
             max_completion_tokens: None,
+            account: None,
         };
         let cohere_req = to_cohere_request(&req, false);
         assert_eq!(cohere_req.messages[0].role, "system");

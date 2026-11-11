@@ -402,6 +402,8 @@ mod tests {
             min_p: None,
             repetition_penalty: None,
             max_completion_tokens: None,
+            session_id: None,
+            account: None,
         };
         assert!(is_critical_request(&req));
     }
@@ -433,6 +435,8 @@ mod tests {
             min_p: None,
             repetition_penalty: None,
             max_completion_tokens: None,
+            session_id: None,
+            account: None,
         };
 
         let saved = apply_caveman(&mut req, CavemanMode::Full, true);

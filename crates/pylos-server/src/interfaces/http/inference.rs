@@ -116,6 +116,27 @@ pub async fn chat_completions(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
 
+    let header_session_id = headers
+        .get("x-session-id")
+        .or_else(|| headers.get("x-antigravity-session-id"))
+        .or_else(|| headers.get("x-conversation-id"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    if payload.session_id.is_none() {
+        payload.session_id = header_session_id;
+    }
+
+    let header_account = headers
+        .get("x-antigravity-account")
+        .or_else(|| headers.get("x-account"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    if payload.account.is_none() {
+        payload.account = header_account;
+    }
+
     // Les en-têtes de forçage ne peuvent pas élargir les droits d'une Virtual Key.
     if let Some(vk) = &vk_info {
         if let Some(forced) = &force_provider {
@@ -282,6 +303,7 @@ async fn complete_response(
 
             let actual_model = resp.model.clone();
             let actual_provider = provider.clone();
+            let resp_id = resp.id.clone();
             let mut response = Json(resp).into_response();
             response.headers_mut().insert(
                 axum::http::header::HeaderName::from_static("x-pylos-provider"),
@@ -291,6 +313,19 @@ async fn complete_response(
                 axum::http::header::HeaderName::from_static("x-pylos-model"),
                 axum::http::header::HeaderValue::from_str(&actual_model).unwrap(),
             );
+            if actual_provider == "antigravity" || resp_id.starts_with("chatcmpl-agy-") {
+                let conv_id = resp_id.trim_start_matches("chatcmpl-agy-");
+                if let Ok(val) = axum::http::header::HeaderValue::from_str(conv_id) {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-antigravity-conversation-id"),
+                        val.clone(),
+                    );
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-session-id"),
+                        val,
+                    );
+                }
+            }
             response
         }
         Ok((pylos_core::domain::request::PylosResponse::Image(resp), _)) => {

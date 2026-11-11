@@ -21,6 +21,7 @@ pub enum ProviderKind {
     Vertex,
     DeepSeek,
     Lemonade,
+    Antigravity,
     /// Provider custom via URL de base configurable
     Custom(String),
 }
@@ -46,6 +47,7 @@ impl std::fmt::Display for ProviderKind {
             ProviderKind::Vertex => write!(f, "vertex"),
             ProviderKind::DeepSeek => write!(f, "deepseek"),
             ProviderKind::Lemonade => write!(f, "lemonade"),
+            ProviderKind::Antigravity => write!(f, "antigravity"),
             ProviderKind::Custom(name) => write!(f, "custom:{}", name),
         }
     }
@@ -54,6 +56,14 @@ impl std::fmt::Display for ProviderKind {
 impl ProviderKind {
     /// Déduit le provider depuis le nom du modèle.
     pub fn guess_from_model(model: &str) -> Self {
+        if model.starts_with("antigravity/")
+            || model.starts_with("antigravity:")
+            || model.starts_with("agy/")
+            || model.starts_with("agy:")
+            || model.contains("argon")
+        {
+            return ProviderKind::Antigravity;
+        }
         if model.starts_with("us.")
             || model.starts_with("eu.")
             || model.starts_with("ap.")
@@ -180,6 +190,14 @@ impl ProviderKind {
             }
             ProviderKind::XAI => model.starts_with("grok"),
             ProviderKind::DeepSeek => model.starts_with("deepseek"),
+            ProviderKind::Antigravity => {
+                model.starts_with("antigravity")
+                    || model.starts_with("agy")
+                    || model.starts_with("gemini")
+                    || model.contains("argon")
+                    || model.starts_with("claude")
+                    || model.starts_with("gpt-oss")
+            }
             ProviderKind::Nebius => {
                 model.contains("llama") || model.contains("qwen") || model.contains("deepseek")
             }
@@ -221,6 +239,7 @@ impl ProviderKind {
             ProviderKind::Vertex => "vertex",
             ProviderKind::DeepSeek => "deepseek",
             ProviderKind::Lemonade => "lemonade",
+            ProviderKind::Antigravity => "google_antigravity",
             ProviderKind::Custom(_) => "custom",
         }
     }
@@ -262,6 +281,7 @@ pub fn default_env_var(kind: &ProviderKind) -> Option<&'static str> {
         ProviderKind::Fireworks => Some("FIREWORKS_API_KEY"),
         ProviderKind::OpenRouter => Some("OPENROUTER_API_KEY"),
         ProviderKind::Lemonade => Some("LEMONADE_API_KEY"),
+        ProviderKind::Antigravity => Some("ANTIGRAVITY_CSRF_TOKEN"),
         _ => None,
     }
 }

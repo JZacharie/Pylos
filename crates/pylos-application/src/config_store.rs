@@ -1049,6 +1049,69 @@ fn auto_detect_config() -> PylosConfig {
         detected.push("bedrock");
     }
 
+    // Google Antigravity (Quotas & Sessions Antigravity locales)
+    let has_antigravity = std::env::var("ANTIGRAVITY_CSRF_TOKEN").is_ok()
+        || std::env::var("ANTIGRAVITY_BIN").is_ok()
+        || std::env::var("AGY_BIN").is_ok()
+        || {
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_default();
+            if !home.is_empty() {
+                let win = std::path::Path::new(&home).join(".gemini").join("bin").join("agy.exe");
+                let unix = std::path::Path::new(&home).join(".gemini").join("bin").join("agy");
+                win.exists() || unix.exists()
+            } else {
+                false
+            }
+        };
+
+    if has_antigravity {
+        let models = vec![
+            "antigravity/*".into(),
+            "agy/*".into(),
+            "gemini-3.8-flash".into(),
+            "gemini-4-argon".into(),
+            "gemini-2.5-flash".into(),
+            "gemini-2.5-pro".into(),
+            "claude-opus-5-5".into(),
+            "claude-sonnet-5-5".into(),
+            "gpt-oss-120b".into(),
+        ];
+
+        let accounts: Vec<String> = if let Ok(val) = std::env::var("ANTIGRAVITY_ACCOUNTS") {
+            val.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            vec![
+                "joseph.zacharie@gmail.com".to_string(),
+                "joseph.zacharie.ai3@gmail.com".to_string(),
+            ]
+        };
+
+        let keys = accounts
+            .into_iter()
+            .map(|acc| ProviderKeyConfig {
+                name: acc.clone(),
+                value: EnvVar::Literal(acc),
+                models: models.clone(),
+                weight: 1.0,
+                bedrock_key_config: None,
+                azure_config: None,
+            })
+            .collect();
+
+        let mut provider = ProviderConfig {
+            keys,
+            ..Default::default()
+        };
+        provider.network.timeout_secs = 120;
+        config.providers.insert("antigravity".into(), provider);
+        detected.push("antigravity");
+    }
+
     if detected.is_empty() {
         warn!("No providers detected. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, MISTRAL_API_KEY, GROQ_API_KEY, or AWS_ACCESS_KEY_ID");
     } else {
@@ -1067,7 +1130,7 @@ fn build_runtime_providers(
 ) -> Vec<(Arc<dyn pylos_core::domain::traits::Provider>, RuntimeConfig)> {
     use pylos_core::domain::provider::{ProviderConfig as RuntimeCfg, ProviderKey, ProviderKind};
     use pylos_infrastructure::{
-        AnthropicProvider, AzureProvider, BedrockProvider, CohereProvider, GeminiProvider,
+        AnthropicProvider, AntigravityProvider, AzureProvider, BedrockProvider, CohereProvider, GeminiProvider,
         OpenAIProvider,
     };
 
@@ -1192,6 +1255,46 @@ fn build_runtime_providers(
             continue;
         }
 
+        // ── Cas Antigravity (Google Antigravity CLI / Quotas) ──
+        if name == "antigravity" || name == "agy" {
+            let keys: Vec<ProviderKey> = if provider_cfg.keys.is_empty() {
+                vec![
+                    ProviderKey::new("joseph.zacharie@gmail.com").with_weight(1.0),
+                    ProviderKey::new("joseph.zacharie.ai3@gmail.com").with_weight(1.0),
+                ]
+            } else {
+                provider_cfg
+                    .keys
+                    .iter()
+                    .map(|k| {
+                        let val = k.value.resolve().unwrap_or_else(|| k.name.clone());
+                        let mut pk = ProviderKey::new(val).with_weight(k.weight);
+                        pk.metadata.insert("name".into(), k.name.clone());
+                        pk
+                    })
+                    .collect()
+            };
+
+            let mut runtime_cfg = RuntimeCfg::new(ProviderKind::Antigravity, keys);
+            runtime_cfg.base_url = provider_cfg.network.base_url.clone();
+            runtime_cfg.timeout_ms = if provider_cfg.network.timeout_secs > 0 {
+                provider_cfg.network.timeout_secs * 1000
+            } else {
+                120_000
+            };
+            runtime_cfg.max_retries = provider_cfg.network.max_retries;
+            runtime_cfg.retry_backoff_initial_ms = provider_cfg.network.retry_backoff_initial_ms;
+            runtime_cfg.retry_backoff_max_ms = provider_cfg.network.retry_backoff_max_ms;
+            runtime_cfg.allowed_models = allowed_models.clone();
+
+            info!(provider = %name, "Antigravity provider registered");
+            providers.push((
+                Arc::new(AntigravityProvider::new()) as Arc<dyn pylos_core::domain::traits::Provider>,
+                runtime_cfg,
+            ));
+            continue;
+        }
+
         // ── Providers HTTP classiques (OpenAI, Anthropic, Groq, etc.) ──
         let keys: Vec<ProviderKey> = provider_cfg
             .keys
@@ -1224,6 +1327,7 @@ fn build_runtime_providers(
             "ollama-jo3" | "ollama" => ProviderKind::Ollama,
             "openrouter" => ProviderKind::OpenRouter,
             "lemonade" => ProviderKind::Lemonade,
+            "antigravity" | "agy" => ProviderKind::Antigravity,
             other => ProviderKind::Custom(other.to_string()),
         };
 
@@ -1246,6 +1350,7 @@ fn build_runtime_providers(
             ProviderKind::Anthropic => Arc::new(AnthropicProvider::new()),
             ProviderKind::Gemini => Arc::new(GeminiProvider::new()),
             ProviderKind::Cohere => Arc::new(CohereProvider::new()),
+            ProviderKind::Antigravity => Arc::new(AntigravityProvider::new()),
             _ => Arc::new(OpenAIProvider::new(name.to_string())), // OpenAI-compatibles : OpenAI, Groq, Mistral, xAI, etc.
         };
 

@@ -433,6 +433,10 @@ fn next_reset_ms(duration_str: &str) -> i64 {
 }
 
 fn estimate_request_cost(model: &str) -> f64 {
+    if model.starts_with("antigravity") || model.starts_with("agy") {
+        // Antigravity consomme le quota Google Antigravity de l'utilisateur
+        return 0.0;
+    }
     let (input_per_1m, output_per_1m): (f64, f64) = if model.contains("gpt-4o") {
         (5.0, 15.0)
     } else if model.contains("claude-3-5") || model.contains("claude-3.5") {

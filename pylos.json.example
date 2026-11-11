@@ -1,0 +1,76 @@
+{
+  "version": 2,
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "log_level": "info",
+    "enable_logging": true,
+    "disable_content_logging": false,
+    "log_retention_days": 365,
+    "max_request_body_size_mb": 100,
+    "allowed_origins": [
+      "*"
+    ],
+    "enforce_auth_on_inference": false,
+    "queuing": {
+      "max_concurrency": 100,
+      "max_queue_size": 1000,
+      "queue_timeout_ms": 30000
+    }
+  },
+  "providers": {
+    "antigravity": {
+      "keys": [
+        {
+          "name": "joseph.zacharie@gmail.com",
+          "value": "joseph.zacharie@gmail.com",
+          "models": [
+            "antigravity/*",
+            "agy/*",
+            "gemini-3.8-flash",
+            "gemini-4-argon",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "gpt-oss-120b"
+          ],
+          "weight": 1.0
+        },
+        {
+          "name": "joseph.zacharie.ai3@gmail.com",
+          "value": "joseph.zacharie.ai3@gmail.com",
+          "models": [
+            "antigravity/*",
+            "agy/*",
+            "gemini-3.8-flash",
+            "gemini-4-argon",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "gpt-oss-120b"
+          ],
+          "weight": 1.0
+        }
+      ],
+      "network": {
+        "timeout_secs": 120,
+        "max_retries": 2,
+        "retry_backoff_initial_ms": 500,
+        "retry_backoff_max_ms": 5000
+      },
+      "concurrency": {
+        "max_concurrency": 10,
+        "buffer_size": 100
+      }
+    }
+  },
+  "governance": {
+    "virtual_keys": [],
+    "budgets": [],
+    "rate_limits": [],
+    "routing_rules": []
+  },
+  "plugins": []
+}

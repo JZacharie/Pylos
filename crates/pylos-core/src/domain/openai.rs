@@ -67,7 +67,7 @@ pub struct ToolCallFunction {
 // Chat Completion
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ChatCompletionRequest {
     pub model: String,
     pub messages: Vec<ChatCompletionMessage>,
@@ -91,6 +91,12 @@ pub struct ChatCompletionRequest {
     pub logit_bias: Option<HashMap<String, f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    /// Identifiant de session / conversation pour la persistance du contexte (ex: Antigravity)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Compte Antigravity / Provider cible (ex: joseph.zacharie@gmail.com, joseph.zacharie.ai3@gmail.com)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
     // ── Tool calling ──────────────────────────────────────────────────────────
     /// Liste des outils disponibles pour le modèle
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -235,6 +241,12 @@ pub struct TextCompletionRequest {
     pub frequency_penalty: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    /// Identifiant de session / conversation pour la persistance du contexte (ex: Antigravity)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Compte Antigravity / Provider cible (ex: joseph.zacharie@gmail.com, joseph.zacharie.ai3@gmail.com)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
     #[serde(default)]
     pub echo: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
