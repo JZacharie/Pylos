@@ -168,14 +168,11 @@ pub async fn list_models(
             for model in &key.models {
                 if model == "*" {
                     wildcard = true;
-                    break;
+                    continue;
                 }
                 if !provider_model_ids.contains(model) {
                     provider_model_ids.push(model.clone());
                 }
-            }
-            if wildcard {
-                break;
             }
         }
 
@@ -261,8 +258,26 @@ pub async fn list_models(
                     .model_catalog
                     .list_models(Some(provider_name), false)
                     .await;
-                for info in catalog_models {
-                    models.push(model_info_to_entry(&info));
+                if catalog_models.is_empty() && !provider_model_ids.is_empty() {
+                    for model_id in &provider_model_ids {
+                        let info = state.model_catalog.get_model(provider_name, model_id).await;
+                        let entry = if let Some(ref info) = info {
+                            model_info_to_entry(info)
+                        } else {
+                            json!({
+                                "id": model_id,
+                                "provider": provider_name,
+                                "object": "model",
+                                "owned_by": provider_name,
+                                "pylos": make_minimal_pylos(provider_name, model_id, None),
+                            })
+                        };
+                        models.push(entry);
+                    }
+                } else {
+                    for info in catalog_models {
+                        models.push(model_info_to_entry(&info));
+                    }
                 }
             }
         } else {
