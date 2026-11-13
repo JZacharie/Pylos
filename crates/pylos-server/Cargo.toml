@@ -30,6 +30,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true }
+rustls = { workspace = true }
 prometheus = { workspace = true }
 fastrand = { workspace = true }
 async-trait = { workspace = true }

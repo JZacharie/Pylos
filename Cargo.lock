@@ -3050,6 +3050,7 @@ dependencies = [
  "pylos-infrastructure",
  "reqwest 0.12.28",
  "rust-embed",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.10.9",

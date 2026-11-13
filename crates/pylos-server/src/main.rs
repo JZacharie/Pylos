@@ -9,6 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
     dotenvy::dotenv().ok();
 
