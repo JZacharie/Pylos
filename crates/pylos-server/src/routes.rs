@@ -257,6 +257,17 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/auth/google/callback", post(auth::google_callback))
         .route("/api/auth/logout", post(auth::logout));
 
+    // Endpoints S-MCP-04: Outils MCP exposés aux clients (OpenAI format + exécution directe)
+    let mcp_tools_routes = Router::new()
+        .route("/mcp/tools/list", get(mcp::list_tools_endpoint))
+        .route("/mcp/tools/call", post(mcp::call_tool_endpoint))
+        .route("/api/mcp/tools/list", get(mcp::list_tools_endpoint))
+        .route("/api/mcp/tools/call", post(mcp::call_tool_endpoint))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            virtual_key_middleware,
+        ));
+
     // Statut MCP : reserve aux administrateurs (expose target_url et la topologie interne).
     let mcp_status_routes = Router::new()
         .route("/mcp/{server_name}", get(mcp_proxy::mcp_server_status))
@@ -279,6 +290,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(inference_routes)
         .merge(management_routes)
         .merge(guardrails_admin_routes)
+        .merge(mcp_tools_routes)
         .merge(mcp_status_routes)
         .merge(mcp_proxy_routes)
         .merge(setup::setup_router())

@@ -1058,8 +1058,14 @@ fn auto_detect_config() -> PylosConfig {
                 .or_else(|_| std::env::var("HOME"))
                 .unwrap_or_default();
             if !home.is_empty() {
-                let win = std::path::Path::new(&home).join(".gemini").join("bin").join("agy.exe");
-                let unix = std::path::Path::new(&home).join(".gemini").join("bin").join("agy");
+                let win = std::path::Path::new(&home)
+                    .join(".gemini")
+                    .join("bin")
+                    .join("agy.exe");
+                let unix = std::path::Path::new(&home)
+                    .join(".gemini")
+                    .join("bin")
+                    .join("agy");
                 win.exists() || unix.exists()
             } else {
                 false
@@ -1130,8 +1136,8 @@ fn build_runtime_providers(
 ) -> Vec<(Arc<dyn pylos_core::domain::traits::Provider>, RuntimeConfig)> {
     use pylos_core::domain::provider::{ProviderConfig as RuntimeCfg, ProviderKey, ProviderKind};
     use pylos_infrastructure::{
-        AnthropicProvider, AntigravityProvider, AzureProvider, BedrockProvider, CohereProvider, GeminiProvider,
-        OpenAIProvider,
+        AnthropicProvider, AntigravityProvider, AzureProvider, BedrockProvider, CohereProvider,
+        GeminiProvider, OpenAIProvider,
     };
 
     let mut providers = vec![];
@@ -1289,7 +1295,8 @@ fn build_runtime_providers(
 
             info!(provider = %name, "Antigravity provider registered");
             providers.push((
-                Arc::new(AntigravityProvider::new()) as Arc<dyn pylos_core::domain::traits::Provider>,
+                Arc::new(AntigravityProvider::new())
+                    as Arc<dyn pylos_core::domain::traits::Provider>,
                 runtime_cfg,
             ));
             continue;

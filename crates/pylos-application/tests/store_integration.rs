@@ -82,6 +82,7 @@ async fn test_cross_store_workflow() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
     vk.upsert_key(&vk_config).await.expect("upsert vk");
 
@@ -156,6 +157,7 @@ async fn test_vk_without_rate_limit_still_works() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
     vk.upsert_key(&vk_cfg).await.expect("upsert vk");
 
@@ -193,6 +195,7 @@ async fn test_budget_reset_after_period() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
     vk.upsert_key(&vk_cfg).await.expect("upsert vk");
 

@@ -67,6 +67,88 @@ pub async fn virtual_key_middleware(
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|value| value.to_string());
 
+    let admin_key_header = req
+        .headers()
+        .get("x-admin-key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    // 0. Reconnaissance automatique des administrateurs (sk-pylos-admin, PYLOS_ADMIN_KEY ou JWT admin)
+    let is_admin_token = if let Some(ref token) = auth_token {
+        if token == "sk-pylos-admin" {
+            true
+        } else if let Some(expected_hash) = &*state.admin_key_hash.read().await {
+            crate::state::verify_admin_secret(token, expected_hash)
+        } else {
+            false
+        }
+    } else if let Some(ref key) = admin_key_header {
+        if let Some(expected_hash) = &*state.admin_key_hash.read().await {
+            crate::state::verify_admin_secret(key, expected_hash)
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    let is_admin_jwt = if !is_admin_token {
+        if let Some(ref token) = auth_token {
+            if let Ok(claims) = jsonwebtoken::decode::<serde_json::Value>(
+                token,
+                &jsonwebtoken::DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+                &jsonwebtoken::Validation::default(),
+            ) {
+                let role = claims.claims.get("role").and_then(|r| r.as_str());
+                let sub = claims.claims.get("sub").and_then(|s| s.as_str()).unwrap_or("");
+                role == Some("admin") || crate::interfaces::http::auth::is_admin_email(sub)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if is_admin_token || is_admin_jwt {
+        let cfg = state.config_store.get().await;
+        let static_admin = cfg.governance.virtual_keys.iter().find(|v| v.id == "vk-admin");
+        let (vk_id, vk_name, provider_configs, allowed_tools, denied_tools) =
+            if let Some(vk_cfg) = static_admin {
+                (
+                    vk_cfg.id.clone(),
+                    vk_cfg.name.clone(),
+                    vk_cfg.provider_configs.clone(),
+                    vk_cfg.allowed_tools.clone(),
+                    vk_cfg.denied_tools.clone(),
+                )
+            } else {
+                (
+                    "vk-admin".to_string(),
+                    "Admin Key".to_string(),
+                    vec![pylos_core::domain::config::VkProviderConfig {
+                        provider: "*".to_string(),
+                        weight: 1.0,
+                        allowed_models: vec!["*".to_string()],
+                        key_names: vec!["*".to_string()],
+                    }],
+                    None,
+                    None,
+                )
+            };
+        req.extensions_mut().insert(Some(VirtualKeyInfo {
+            id: vk_id,
+            name: vk_name,
+            key: auth_token.unwrap_or_else(|| "sk-pylos-admin".to_string()),
+            provider_configs,
+            allowed_tools,
+            denied_tools,
+        }));
+        return next.run(req).await;
+    }
+
     match auth_token.as_deref() {
         Some(token) if token.starts_with(VIRTUAL_KEY_PREFIX) => {
             // 1. Check in the database for absolute configuration freshness
@@ -97,9 +179,10 @@ pub async fn virtual_key_middleware(
                 Ok(None) => {
                     // Deleted in DB -> ensure it is removed from memory only if not in static config
                     let cfg = state.config_store.get().await;
-                    let is_in_static = cfg.governance.virtual_keys.iter().any(|v| {
-                        v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
-                    });
+                    let is_in_static = token == "sk-pylos-admin"
+                        || cfg.governance.virtual_keys.iter().any(|v| {
+                            v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
+                        });
                     if !is_in_static {
                         state.vk_registry.deregister(token).await;
                     }
@@ -112,54 +195,9 @@ pub async fn virtual_key_middleware(
             };
 
             // 2. If active key is found in DB or config, register/update it in the in-memory registry
-            let (vk_id, vk_name, provider_configs) = if let Some(ref vk_cfg) = db_vk {
-                let cfg = state.config_store.get().await;
-                let rate_limit = cfg
-                    .governance
-                    .rate_limits
-                    .iter()
-                    .find(|rl| Some(&rl.id) == vk_cfg.rate_limit_id.as_ref())
-                    .map(|rl| rl.request_max_limit)
-                    .unwrap_or(0);
-
-                let v_key = pylos_core::domain::virtual_key::VirtualKey::new(
-                    token.to_string(),
-                    &vk_cfg.name,
-                )
-                .with_rpm(rate_limit);
-                state.vk_registry.register(v_key).await;
-                (
-                    vk_cfg.id.clone(),
-                    vk_cfg.name.clone(),
-                    vk_cfg.provider_configs.clone(),
-                )
-            } else {
-                let cfg = state.config_store.get().await;
-                let static_vk = cfg.governance.virtual_keys.iter().find(|v| {
-                    v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
-                });
-
-                if let Some(vk_cfg) = static_vk {
-                    if !vk_cfg.is_active {
-                        state.vk_registry.deregister(token).await;
-                        return (
-                            StatusCode::UNAUTHORIZED,
-                            Json(json!({
-                                "error": {
-                                    "message": "Virtual key is inactive",
-                                    "type": "governance_error",
-                                    "code": 401
-                                }
-                            })),
-                        )
-                            .into_response();
-                    }
-
-                    if is_expired(vk_cfg.expires_at) {
-                        state.vk_registry.deregister(token).await;
-                        return expired_response();
-                    }
-
+            let (vk_id, vk_name, provider_configs, allowed_tools, denied_tools) =
+                if let Some(ref vk_cfg) = db_vk {
+                    let cfg = state.config_store.get().await;
                     let rate_limit = cfg
                         .governance
                         .rate_limits
@@ -178,11 +216,85 @@ pub async fn virtual_key_middleware(
                         vk_cfg.id.clone(),
                         vk_cfg.name.clone(),
                         vk_cfg.provider_configs.clone(),
+                        vk_cfg.allowed_tools.clone(),
+                        vk_cfg.denied_tools.clone(),
                     )
                 } else {
-                    (String::new(), String::new(), Vec::new())
-                }
-            };
+                    let cfg = state.config_store.get().await;
+                    let static_vk = cfg.governance.virtual_keys.iter().find(|v| {
+                        v.value.as_ref().and_then(|val| val.resolve()).as_deref() == Some(token)
+                    });
+
+                    if let Some(vk_cfg) = static_vk {
+                        if !vk_cfg.is_active {
+                            state.vk_registry.deregister(token).await;
+                            return (
+                                StatusCode::UNAUTHORIZED,
+                                Json(json!({
+                                    "error": {
+                                        "message": "Virtual key is inactive",
+                                        "type": "governance_error",
+                                        "code": 401
+                                    }
+                                })),
+                            )
+                                .into_response();
+                        }
+
+                        if is_expired(vk_cfg.expires_at) {
+                            state.vk_registry.deregister(token).await;
+                            return expired_response();
+                        }
+
+                        let rate_limit = cfg
+                            .governance
+                            .rate_limits
+                            .iter()
+                            .find(|rl| Some(&rl.id) == vk_cfg.rate_limit_id.as_ref())
+                            .map(|rl| rl.request_max_limit)
+                            .unwrap_or(0);
+
+                        let v_key = pylos_core::domain::virtual_key::VirtualKey::new(
+                            token.to_string(),
+                            &vk_cfg.name,
+                        )
+                        .with_rpm(rate_limit);
+                        state.vk_registry.register(v_key).await;
+                        (
+                            vk_cfg.id.clone(),
+                            vk_cfg.name.clone(),
+                            vk_cfg.provider_configs.clone(),
+                            vk_cfg.allowed_tools.clone(),
+                            vk_cfg.denied_tools.clone(),
+                        )
+                    } else if token == "sk-pylos-admin" {
+                        let static_admin = cfg.governance.virtual_keys.iter().find(|v| v.id == "vk-admin");
+                        if let Some(vk_cfg) = static_admin {
+                            (
+                                vk_cfg.id.clone(),
+                                vk_cfg.name.clone(),
+                                vk_cfg.provider_configs.clone(),
+                                vk_cfg.allowed_tools.clone(),
+                                vk_cfg.denied_tools.clone(),
+                            )
+                        } else {
+                            (
+                                "vk-admin".to_string(),
+                                "Admin Key".to_string(),
+                                vec![pylos_core::domain::config::VkProviderConfig {
+                                    provider: "*".to_string(),
+                                    weight: 1.0,
+                                    allowed_models: vec!["*".to_string()],
+                                    key_names: vec!["*".to_string()],
+                                }],
+                                None,
+                                None,
+                            )
+                        }
+                    } else {
+                        (String::new(), String::new(), Vec::new(), None, None)
+                    }
+                };
 
             // 3. La cle doit exister (base de donnees ou configuration statique)
             if vk_id.is_empty() {
@@ -207,6 +319,8 @@ pub async fn virtual_key_middleware(
                 name: vk_name,
                 key: token.to_string(),
                 provider_configs,
+                allowed_tools,
+                denied_tools,
             }));
             next.run(req).await
         }
@@ -227,4 +341,6 @@ pub struct VirtualKeyInfo {
     pub name: String,
     pub key: String,
     pub provider_configs: Vec<pylos_core::domain::config::VkProviderConfig>,
+    pub allowed_tools: Option<Vec<String>>,
+    pub denied_tools: Option<Vec<String>>,
 }

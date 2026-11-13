@@ -87,12 +87,13 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     result == 0
 }
 
-/// Emails administrateurs déclarés via `ADMIN_EMAILS` (séparés par des virgules).
-fn is_admin_email(email: &str) -> bool {
+/// Emails administrateurs déclarés via `ADMIN_EMAILS` ou `ADMIN_EMAIL` (séparés par des virgules).
+pub fn is_admin_email(email: &str) -> bool {
     let wanted = email.to_lowercase();
-    std::env::var("ADMIN_EMAILS")
-        .unwrap_or_default()
-        .split(',')
+    let val = std::env::var("ADMIN_EMAILS")
+        .or_else(|_| std::env::var("ADMIN_EMAIL"))
+        .unwrap_or_default();
+    val.split(',')
         .map(|candidate| candidate.trim().to_lowercase())
         .any(|candidate| !candidate.is_empty() && candidate == wanted)
 }
@@ -292,6 +293,17 @@ pub async fn google_callback(
             } else {
                 user.role.clone()
             };
+            if role != user.role {
+                let mut updated = user.clone();
+                updated.role = role.clone();
+                updated.updated_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+                if let Err(e) = state.org_store.upsert_user(&updated).await {
+                    tracing::warn!(error = %e, "Failed to persist updated admin role for user");
+                }
+            }
             (role, user.group.clone())
         }
         None => {
@@ -361,6 +373,8 @@ pub async fn google_callback(
                 updated_at: Some(now_secs * 1000),
                 last_active: None,
                 expires_at: None,
+                allowed_tools: None,
+                denied_tools: None,
             };
 
             if let Err(e) = state.vk_store.upsert_key(&vk_cfg).await {

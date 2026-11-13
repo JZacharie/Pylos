@@ -128,6 +128,7 @@ pub struct AppState {
     pub org_store: Arc<OrganizationStore>,
     pub search_tool_store: Arc<SearchToolStore>,
     pub mcp_server_store: Arc<McpServerStore>,
+    pub mcp_registry: Arc<pylos_application::McpToolRegistry>,
     pub admin_key_hash: Arc<tokio::sync::RwLock<Option<String>>>,
     pub setup_required: Arc<tokio::sync::RwLock<bool>>,
     pub google_client_id: Option<String>,
@@ -691,6 +692,19 @@ impl AppState {
                 name => tracing::debug!(name = %name, "Unknown plugin, skipping"),
             }
         }
+
+        // Automatic registration of OtelPlugin if endpoint is provided via environment
+        if plugins.iter().all(|p| p.name() != "otel") {
+            let has_otel_env = std::env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT").is_ok()
+                || std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok()
+                || std::env::var("OTEL_ENDPOINT").is_ok();
+            if has_otel_env {
+                let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "pylos".to_string());
+                plugins.push(Arc::new(pylos_application::OtelPlugin::new(service_name)));
+                tracing::info!(name = "otel", "OtelPlugin automatically enabled via environment");
+            }
+        }
+
         plugins
     }
 
@@ -837,6 +851,11 @@ impl AppState {
         let admin_key_hash = Arc::new(tokio::sync::RwLock::new(resolved_hash));
         let setup_required = Arc::new(tokio::sync::RwLock::new(resolved_setup));
 
+        let mcp_registry = Arc::new(pylos_application::McpToolRegistry::new());
+        if let Ok(servers) = mcp_server_store.list().await {
+            mcp_registry.sync_all(&servers).await;
+        }
+
         Ok(Self {
             orchestrator,
             config_store,
@@ -851,12 +870,20 @@ impl AppState {
             org_store,
             search_tool_store,
             mcp_server_store,
+            mcp_registry,
             admin_key_hash,
             setup_required,
             google_client_id: std::env::var("GOOGLE_CLIENT_ID").ok(),
             google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").ok(),
             google_redirect_uri: std::env::var("GOOGLE_REDIRECT_URI").ok(),
             jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+                // If PYLOS_ENCRYPTION_KEY or PYLOS_ADMIN_KEY is provided, derive a stable secret
+                if let Ok(enc_key) = std::env::var("PYLOS_ENCRYPTION_KEY") {
+                    return hash_sha256(&format!("pylos_jwt_secret_{enc_key}"));
+                }
+                if let Ok(admin_key) = std::env::var("PYLOS_ADMIN_KEY") {
+                    return hash_sha256(&format!("pylos_jwt_secret_{admin_key}"));
+                }
                 // Generates a random session JWT key if none is provided
                 let mut s = String::new();
                 for _ in 0..32 {

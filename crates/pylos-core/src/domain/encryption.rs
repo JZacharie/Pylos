@@ -73,7 +73,9 @@ fn cipher() -> Result<&'static Aes256Gcm, String> {
     if CIPHER.get().is_none() {
         init()?;
     }
-    CIPHER.get().ok_or_else(|| "encryption is not initialized".to_string())
+    CIPHER
+        .get()
+        .ok_or_else(|| "encryption is not initialized".to_string())
 }
 
 /// Chiffre une valeur (nonce aléatoire préfixé au ciphertext).

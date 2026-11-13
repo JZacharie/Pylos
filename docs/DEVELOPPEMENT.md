@@ -205,7 +205,7 @@ de branche.
 | **Sprint 1** (gouvernance & fiabilité #119-#126) | ✅ mergé (PR #152), 8 issues fermées |
 | **Sprint 2** (architecture & qualité #127-#135) | ⏳ à démarrer |
 | **Sprint 3** (fonctionnalités & observabilité #136-#141) | ⏳ |
-| **MCP Tool Execution Gateway** (jalon #5, epics #142-#148) | ⏳ prochaine étape : story **S-MCP-00** (transport `McpServer` + migrations) |
+| **MCP Tool Execution Gateway** (jalon #5, epics #142-#148) | ✅ Implémenté (Epics #142-#148, Stories S-MCP-00 → S-MCP-15 : transports stdio/http/sse, ToolRegistry, agent loop multi-turn, `web_fetch` anti-SSRF, filtrage VK) |
 | **Mnemosyne pipeline observability** (#47, jalon #6) | ⏳ plan en 4 phases |
 
 ---

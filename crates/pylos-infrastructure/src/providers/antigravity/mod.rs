@@ -35,7 +35,15 @@ mod tests {
         );
         assert_eq!(
             normalize_antigravity_model("claude-opus-5-5"),
-            "claude-opus-5-5-medium"
+            "claude-opus-4-6-thinking"
+        );
+        assert_eq!(
+            normalize_antigravity_model("claude-opus-4-6-thinking"),
+            "claude-opus-4-6-thinking"
+        );
+        assert_eq!(
+            normalize_antigravity_model("claude-sonnet-4-6"),
+            "claude-sonnet-4-6"
         );
         assert_eq!(
             normalize_antigravity_model("gpt-oss-120b"),
@@ -87,41 +95,32 @@ mod tests {
         );
 
         // 1. Explicit account specified in request takes priority
-        let acc1 = provider.resolve_account(
-            &config,
-            Some("joseph.zacharie.ai3@gmail.com"),
-            None,
-            None,
-        );
+        let acc1 =
+            provider.resolve_account(&config, Some("joseph.zacharie.ai3@gmail.com"), None, None);
         assert_eq!(acc1, Some("joseph.zacharie.ai3@gmail.com".to_string()));
 
         // 2. Existing session account takes priority (sticky session)
-        let acc_sticky = provider.resolve_account(
-            &config,
-            None,
-            Some("joseph.zacharie@gmail.com"),
-            None,
-        );
-        assert_eq!(
-            acc_sticky,
-            Some("joseph.zacharie@gmail.com".to_string())
-        );
+        let acc_sticky =
+            provider.resolve_account(&config, None, Some("joseph.zacharie@gmail.com"), None);
+        assert_eq!(acc_sticky, Some("joseph.zacharie@gmail.com".to_string()));
 
         // 3. User email detection
-        let acc_user = provider.resolve_account(
-            &config,
-            None,
-            None,
-            Some("joseph.zacharie@gmail.com"),
-        );
+        let acc_user =
+            provider.resolve_account(&config, None, None, Some("joseph.zacharie@gmail.com"));
         assert_eq!(acc_user, Some("joseph.zacharie@gmail.com".to_string()));
 
         // 4. Round-robin alternates between both configured accounts
         let r1 = provider.resolve_account(&config, None, None, None);
         let r2 = provider.resolve_account(&config, None, None, None);
         assert_ne!(r1, r2);
-        assert!(r1 == Some("joseph.zacharie@gmail.com".into()) || r1 == Some("joseph.zacharie.ai3@gmail.com".into()));
-        assert!(r2 == Some("joseph.zacharie@gmail.com".into()) || r2 == Some("joseph.zacharie.ai3@gmail.com".into()));
+        assert!(
+            r1 == Some("joseph.zacharie@gmail.com".into())
+                || r1 == Some("joseph.zacharie.ai3@gmail.com".into())
+        );
+        assert!(
+            r2 == Some("joseph.zacharie@gmail.com".into())
+                || r2 == Some("joseph.zacharie.ai3@gmail.com".into())
+        );
     }
 
     #[test]

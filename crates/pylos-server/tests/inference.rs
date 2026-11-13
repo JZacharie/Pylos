@@ -172,6 +172,7 @@ async fn test_chat_completions_unary() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -259,6 +260,7 @@ async fn test_chat_completions_stream() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -354,6 +356,7 @@ async fn test_image_generations() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -515,6 +518,7 @@ async fn test_a2a_allowed_models_routing() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -713,6 +717,7 @@ async fn test_semantic_caching_flow() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -868,6 +873,7 @@ async fn test_structured_outputs_validation() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -999,6 +1005,7 @@ async fn test_inference_queuing_and_timeout() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -1160,6 +1167,7 @@ async fn test_virtual_key_cannot_escape_provider_restrictions() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
     vk_store.upsert_key(&vk).await.unwrap();
 
@@ -1182,6 +1190,7 @@ async fn test_virtual_key_cannot_escape_provider_restrictions() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -1359,6 +1368,7 @@ async fn state_with(
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,
@@ -1477,6 +1487,7 @@ async fn test_budget_enforced_on_virtual_key_id() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
 
     // Budget volontairement minuscule (0.01 USD) pour l'ID de la clé.
@@ -1545,6 +1556,7 @@ async fn test_expired_virtual_key_is_rejected() {
             updated_at: None,
             last_active: None,
             expires_at: Some(expires_at),
+            ..Default::default()
         }
     }
 
@@ -1672,6 +1684,7 @@ async fn test_rate_limit_uses_shared_store() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
 
     let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
@@ -1781,6 +1794,7 @@ async fn test_guardrails_blocking_mode_http() {
                 .await
                 .unwrap(),
         ),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: Arc::new(tokio::sync::RwLock::new(false)),
         google_client_id: None,

@@ -842,6 +842,23 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
                 "grok-3-mini".to_string()
             }
         }
+        "antigravity" => {
+            if model.contains("opus") {
+                "claude-opus-4-6-thinking".to_string()
+            } else if model.contains("sonnet") || model.contains("claude") {
+                "claude-sonnet-4-6".to_string()
+            } else if model.contains("gpt-oss") || model.contains("120b") {
+                "gpt-oss-120b-medium".to_string()
+            } else if is_pro || model.contains("argon") {
+                "gemini-4-argon-medium".to_string()
+            } else if model.contains("high") {
+                "gemini-3.8-flash-high".to_string()
+            } else if model.contains("low") {
+                "gemini-3.8-flash-low".to_string()
+            } else {
+                "gemini-3.8-flash-medium".to_string()
+            }
+        }
         "lemonade-optimus" => {
             if model == "nomic-embed-text" {
                 "nomic-embed-text-v2-moe-GGUF".to_string()
@@ -1036,6 +1053,24 @@ mod tests {
         assert_eq!(
             map_model_for_provider("bedrock", "gpt-4o", &[]),
             "amazon.nova-pro-v1:0"
+        );
+
+        // Test fallback to Antigravity models
+        assert_eq!(
+            map_model_for_provider("antigravity", "gemini-2.5-flash", &[]),
+            "gemini-3.8-flash-medium"
+        );
+        assert_eq!(
+            map_model_for_provider("antigravity", "claude-3-5-sonnet", &[]),
+            "claude-sonnet-4-6"
+        );
+        assert_eq!(
+            map_model_for_provider("antigravity", "claude-3-opus", &[]),
+            "claude-opus-4-6-thinking"
+        );
+        assert_eq!(
+            map_model_for_provider("antigravity", "gpt-4o", &[]),
+            "gemini-4-argon-medium"
         );
     }
 }

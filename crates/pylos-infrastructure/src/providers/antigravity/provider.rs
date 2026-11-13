@@ -52,7 +52,15 @@ impl AntigravityProvider {
     pub fn session_manager(&self) -> Arc<SessionManager> {
         self.session_manager.clone()
     }
+}
 
+impl Default for AntigravityProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AntigravityProvider {
     /// Résout le compte Antigravity à utiliser pour la requête
     pub fn resolve_account(
         &self,
@@ -99,7 +107,9 @@ impl AntigravityProvider {
         }
 
         // 5. Fallback variable d'environnement AGY_ACCOUNT
-        std::env::var("AGY_ACCOUNT").ok().filter(|s| !s.trim().is_empty())
+        std::env::var("AGY_ACCOUNT")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
     }
 
     /// Résout le chemin vers l'exécutable `agy`
@@ -228,7 +238,12 @@ impl AntigravityProvider {
             full.trim_end().to_string()
         };
 
-        (prompt, agy_conversation_id, client_session, selected_account)
+        (
+            prompt,
+            agy_conversation_id,
+            client_session,
+            selected_account,
+        )
     }
 }
 
@@ -413,10 +428,13 @@ impl Provider for AntigravityProvider {
             message: format!("Failed to spawn agy process: {}", e),
         })?;
 
-        let stdout = child.stdout.take().ok_or_else(|| PylosError::ProviderError {
-            provider: "antigravity".into(),
-            message: "Failed to capture agy stdout".into(),
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| PylosError::ProviderError {
+                provider: "antigravity".into(),
+                message: "Failed to capture agy stdout".into(),
+            })?;
 
         let session_manager = self.session_manager.clone();
         let bound_account = selected_account.clone();

@@ -57,7 +57,9 @@ impl VirtualKeyStore {
                     created_by        TEXT,
                     updated_at        INTEGER,
                     last_active       INTEGER,
-                    expires_at        INTEGER
+                    expires_at        INTEGER,
+                    allowed_tools     TEXT,
+                    denied_tools      TEXT
                 )
                 "#,
             )
@@ -180,9 +182,8 @@ impl VirtualKeyStore {
                 PylosError::InvalidRequest("Virtual key must have a value".into())
             })?;
 
-        let encrypted_value = key_encrypt(&raw_value).map_err(|e| {
-            PylosError::Internal(format!("Failed to encrypt key value: {e}"))
-        })?;
+        let encrypted_value = key_encrypt(&raw_value)
+            .map_err(|e| PylosError::Internal(format!("Failed to encrypt key value: {e}")))?;
         let value_hash = {
             let mut hasher = Sha256::new();
             hasher.update(raw_value.as_bytes());
@@ -191,6 +192,14 @@ impl VirtualKeyStore {
 
         let provider_configs_json =
             serde_json::to_string(&vk.provider_configs).unwrap_or_else(|_| "[]".to_string());
+        let allowed_tools_json = vk
+            .allowed_tools
+            .as_ref()
+            .map(|t| serde_json::to_string(t).unwrap_or_default());
+        let denied_tools_json = vk
+            .denied_tools
+            .as_ref()
+            .map(|t| serde_json::to_string(t).unwrap_or_default());
 
         let now_ms = crate::log_store::now_ms();
 
@@ -201,10 +210,10 @@ impl VirtualKeyStore {
                     INSERT INTO virtual_keys
                         (id, name, description, value, value_hash, is_active, rate_limit_id, provider_configs,
                          team_alias, team_id, organization_id, access_group_id, user_email, user_id,
-                         created_at, created_by, updated_at, last_active, expires_at)
+                         created_at, created_by, updated_at, last_active, expires_at, allowed_tools, denied_tools)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
                             $9, $10, $11, $12, $13, $14,
-                            COALESCE($15, ?), $16, COALESCE($17, ?), $18, $19)
+                            COALESCE($15, ?), $16, COALESCE($17, ?), $18, $19, $20, $21)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         description = excluded.description,
@@ -222,7 +231,9 @@ impl VirtualKeyStore {
                         created_by = excluded.created_by,
                         updated_at = excluded.updated_at,
                         last_active = excluded.last_active,
-                        expires_at = excluded.expires_at
+                        expires_at = excluded.expires_at,
+                        allowed_tools = excluded.allowed_tools,
+                        denied_tools = excluded.denied_tools
                     "#,
                 )
                 .bind(&vk.id)
@@ -244,6 +255,8 @@ impl VirtualKeyStore {
                 .bind(vk.updated_at)
                 .bind(vk.last_active)
                 .bind(vk.expires_at)
+                .bind(&allowed_tools_json)
+                .bind(&denied_tools_json)
                 .bind(now_ms)
                 .bind(now_ms)
                 .execute(pool)
@@ -256,16 +269,24 @@ impl VirtualKeyStore {
                 let provider_configs_val: serde_json::Value =
                     serde_json::from_str(&provider_configs_json)
                         .unwrap_or(serde_json::Value::Array(vec![]));
+                let allowed_tools_val = vk
+                    .allowed_tools
+                    .as_ref()
+                    .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null));
+                let denied_tools_val = vk
+                    .denied_tools
+                    .as_ref()
+                    .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null));
 
                 sqlx::query::<sqlx::Postgres>(
                     r#"
                     INSERT INTO virtual_keys
                         (id, name, description, value, value_hash, is_active, rate_limit_id, provider_configs,
                          team_alias, team_id, organization_id, access_group_id, user_email, user_id,
-                         created_at, created_by, updated_at, last_active, expires_at)
+                         created_at, created_by, updated_at, last_active, expires_at, allowed_tools, denied_tools)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
                             $9, $10, $11, $12, $13, $14,
-                            COALESCE($15, $20), $16, COALESCE($17, $21), $18, $19)
+                            COALESCE($15, $22), $16, COALESCE($17, $23), $18, $19, $20, $21)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         description = excluded.description,
@@ -283,7 +304,9 @@ impl VirtualKeyStore {
                         created_by = excluded.created_by,
                         updated_at = excluded.updated_at,
                         last_active = excluded.last_active,
-                        expires_at = excluded.expires_at
+                        expires_at = excluded.expires_at,
+                        allowed_tools = excluded.allowed_tools,
+                        denied_tools = excluded.denied_tools
                     "#,
                 )
                 .bind(&vk.id)
@@ -305,6 +328,8 @@ impl VirtualKeyStore {
                 .bind(vk.updated_at)
                 .bind(vk.last_active)
                 .bind(vk.expires_at)
+                .bind(&allowed_tools_val)
+                .bind(&denied_tools_val)
                 .bind(now_ms)
                 .bind(now_ms)
                 .execute(pool)
@@ -436,6 +461,14 @@ fn row_to_vk_config_sqlite(row: &sqlx::sqlite::SqliteRow) -> VirtualKeyConfig {
         updated_at: row.try_get("updated_at").ok(),
         last_active: row.try_get("last_active").ok(),
         expires_at: row.try_get("expires_at").ok(),
+        allowed_tools: row
+            .try_get::<String, _>("allowed_tools")
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok()),
+        denied_tools: row
+            .try_get::<String, _>("denied_tools")
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok()),
     }
 }
 
@@ -466,6 +499,14 @@ fn row_to_vk_config_pg(row: &sqlx::postgres::PgRow) -> VirtualKeyConfig {
         updated_at: row.try_get("updated_at").ok(),
         last_active: row.try_get("last_active").ok(),
         expires_at: row.try_get("expires_at").ok(),
+        allowed_tools: row
+            .try_get::<serde_json::Value, _>("allowed_tools")
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok()),
+        denied_tools: row
+            .try_get::<serde_json::Value, _>("denied_tools")
+            .ok()
+            .and_then(|v| serde_json::from_value(v).ok()),
     }
 }
 
@@ -500,6 +541,7 @@ mod tests {
             updated_at: None,
             last_active: None,
             expires_at: None,
+            ..Default::default()
         };
 
         store.upsert_key(&vk).await.unwrap();

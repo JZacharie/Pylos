@@ -222,7 +222,10 @@ mod tests {
             "Proxy-Authorization",
             "X-Forwarded-For",
         ] {
-            assert!(!forwardable_header(header), "{header} ne doit pas etre transmis");
+            assert!(
+                !forwardable_header(header),
+                "{header} ne doit pas etre transmis"
+            );
         }
     }
 

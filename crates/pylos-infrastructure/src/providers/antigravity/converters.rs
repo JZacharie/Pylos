@@ -59,7 +59,11 @@ pub fn normalize_antigravity_model(model: &str) -> String {
         .trim_start_matches("agy/")
         .trim_start_matches("agy:");
 
-    if clean.ends_with("-low") || clean.ends_with("-medium") || clean.ends_with("-high") {
+    if clean.ends_with("-low")
+        || clean.ends_with("-medium")
+        || clean.ends_with("-high")
+        || clean.ends_with("-thinking")
+    {
         return clean.to_string();
     }
 
@@ -68,17 +72,21 @@ pub fn normalize_antigravity_model(model: &str) -> String {
         "gemini-4-argon" | "argon" | "gemini-argon" => "gemini-4-argon-medium".into(),
         "gemini-2.5-flash" | "gemini-1.5-flash" => "gemini-3.8-flash-medium".into(),
         "gemini-2.5-pro" | "gemini-1.5-pro" | "pro" => "gemini-4-argon-medium".into(),
-        "claude-opus-5-5" | "claude-opus" | "opus" => "claude-opus-5-5-medium".into(),
-        "claude-sonnet-5-5" | "claude-sonnet" | "sonnet" => "claude-sonnet-5-5-medium".into(),
+        "claude-opus-4-6-thinking" => "claude-opus-4-6-thinking".into(),
+        "claude-opus-5-5" | "claude-opus" | "opus" => "claude-opus-4-6-thinking".into(),
+        "claude-sonnet-4-6" => "claude-sonnet-4-6".into(),
+        "claude-sonnet-5-5" | "claude-sonnet" | "sonnet" => "claude-sonnet-4-6".into(),
         "gpt-oss-120b" | "gpt-oss" => "gpt-oss-120b-medium".into(),
-        other if other.is_empty() => "gemini-3.8-flash-medium".into(),
+        "" => "gemini-3.8-flash-medium".into(),
         other => {
             if other.contains("argon") {
                 "gemini-4-argon-medium".into()
             } else if other.contains("claude") && other.contains("opus") {
-                "claude-opus-5-5-medium".into()
+                "claude-opus-4-6-thinking".into()
             } else if other.contains("claude") {
-                "claude-sonnet-5-5-medium".into()
+                "claude-sonnet-4-6".into()
+            } else if other.contains("gpt-oss") || other.contains("120b") {
+                "gpt-oss-120b-medium".into()
             } else {
                 format!("{}-medium", other)
             }
@@ -144,11 +152,7 @@ pub fn to_chat_completion_response(
 }
 
 /// Crée un StreamChunk de delta textuel pour SSE
-pub fn to_stream_chunk_delta(
-    delta: &str,
-    conv_id: &str,
-    requested_model: &str,
-) -> StreamChunk {
+pub fn to_stream_chunk_delta(delta: &str, conv_id: &str, requested_model: &str) -> StreamChunk {
     let created = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)

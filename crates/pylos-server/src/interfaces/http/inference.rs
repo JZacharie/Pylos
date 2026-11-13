@@ -86,6 +86,29 @@ pub async fn chat_completions(
         .then(|| crate::compression::caveman_input_json(&payload))
         .flatten();
 
+    let auto_tools = headers
+        .get("x-pylos-auto-tools")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s == "true" || s == "1")
+        .unwrap_or(false);
+
+    if auto_tools && payload.tools.is_none() {
+        let (allowed, denied) = match &vk_info {
+            Some(vk) => (vk.allowed_tools.as_deref(), vk.denied_tools.as_deref()),
+            None => (None, None),
+        };
+        let available = state.mcp_registry.list_tools(allowed, denied).await;
+        if !available.is_empty() {
+            payload.tools = Some(available);
+        }
+    }
+
+    let execute_tools = headers
+        .get("x-pylos-execute-tools")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s != "false" && s != "0")
+        .unwrap_or(true);
+
     let is_stream = payload.stream.unwrap_or(false);
     let model = payload.model.clone();
     let input_preview = payload
@@ -202,6 +225,7 @@ pub async fn chat_completions(
             request_id,
             source,
             caveman_input,
+            execute_tools,
         )
         .await
     }
@@ -219,6 +243,7 @@ async fn complete_response(
     request_id: String,
     source: Option<String>,
     caveman_input: Option<String>,
+    execute_tools: bool,
 ) -> Response {
     let start = Instant::now();
     let req_type = "chat_completion";
@@ -226,7 +251,28 @@ async fn complete_response(
 
     state.metrics.inc_requests(&provider_name, &model, req_type);
 
-    match state.orchestrator.complete(request, ctx).await {
+    let orchestrator_res = match request {
+        PylosRequest::ChatCompletion(chat_req) if execute_tools && chat_req.tools.is_some() => {
+            let (allowed, denied) = match &vk_info {
+                Some(vk) => (vk.allowed_tools.as_deref(), vk.denied_tools.as_deref()),
+                None => (None, None),
+            };
+            let config = pylos_application::mcp::AgentLoopConfig::default();
+            pylos_application::mcp::run_agent_loop(
+                state.orchestrator.clone(),
+                state.mcp_registry.clone(),
+                chat_req,
+                ctx,
+                &config,
+                allowed,
+                denied,
+            )
+            .await
+        }
+        other_req => state.orchestrator.complete(other_req, ctx).await,
+    };
+
+    match orchestrator_res {
         Ok((pylos_core::domain::request::PylosResponse::ChatCompletion(resp), final_ctx)) => {
             let latency = start.elapsed().as_secs_f64() * 1000.0;
             state.metrics.inc_success(&provider_name, &model);
@@ -317,7 +363,9 @@ async fn complete_response(
                 let conv_id = resp_id.trim_start_matches("chatcmpl-agy-");
                 if let Ok(val) = axum::http::header::HeaderValue::from_str(conv_id) {
                     response.headers_mut().insert(
-                        axum::http::header::HeaderName::from_static("x-antigravity-conversation-id"),
+                        axum::http::header::HeaderName::from_static(
+                            "x-antigravity-conversation-id",
+                        ),
                         val.clone(),
                     );
                     response.headers_mut().insert(

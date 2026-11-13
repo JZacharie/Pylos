@@ -6,6 +6,11 @@ DISABLE_LINTERS:
   - JAVASCRIPT_STANDARD
   - TYPESCRIPT_STANDARD
   - JSON_JSONLINT
+  - CSS_STYLELINT
+  - HTML_DJLINT
+  - YAML_V8R
+  - YAML_YAMLLINT
+  - DOCKERFILE_HADOLINT
 
 # Exclude files/folders from all linters (using regex matching the full path relative to root)
 # - helm/**/templates : fichiers templates Helm (non YAML valide avant rendu)

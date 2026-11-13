@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, getBaseUrl } from '../lib/api'
 import { formatLatency, formatCost, providerColor } from '../lib/utils'
 import {
   Send, StopCircle, Trash2, ChevronDown,
@@ -500,9 +500,10 @@ export default function Playground() {
     }
 
     try {
+      const storedKey = typeof window !== 'undefined' ? (localStorage.getItem('pylos_admin_key') || localStorage.getItem('pylos_pg_auth_key')) : null;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer sk-pylos-admin',
+        'Authorization': `Bearer ${storedKey || 'sk-pylos-admin'}`,
         'X-Pylos-Source': 'playground',
       }
       if (cavemanMode !== 'off') {
@@ -519,8 +520,10 @@ export default function Playground() {
         headers['x-bypass-guardrails'] = 'true'
       }
 
+      const endpoint = `${getBaseUrl()}/v1/chat/completions`;
+
       if (streaming) {
-        const resp = await fetch('/v1/chat/completions', {
+        const resp = await fetch(endpoint, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
@@ -624,7 +627,7 @@ export default function Playground() {
           actualModel,
         })
       } else {
-        const resp = await fetch('/v1/chat/completions', {
+        const resp = await fetch(endpoint, {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),

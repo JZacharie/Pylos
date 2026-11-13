@@ -290,6 +290,10 @@ pub struct CreateVirtualKeyRequest {
     pub created_by: Option<String>,
     #[serde(default)]
     pub expires_at: Option<i64>,
+    #[serde(default)]
+    pub allowed_tools: Option<Vec<String>>,
+    #[serde(default)]
+    pub denied_tools: Option<Vec<String>>,
 }
 
 fn default_true() -> bool {
@@ -326,6 +330,8 @@ pub async fn create_virtual_key(
         updated_at: None,
         last_active: None,
         expires_at: req.expires_at,
+        allowed_tools: req.allowed_tools,
+        denied_tools: req.denied_tools,
     };
 
     match state.vk_store.upsert_key(&vk_cfg).await {
@@ -398,6 +404,10 @@ pub struct UpdateVirtualKeyRequest {
     pub created_by: Option<String>,
     #[serde(default)]
     pub expires_at: Option<i64>,
+    #[serde(default)]
+    pub allowed_tools: Option<Vec<String>>,
+    #[serde(default)]
+    pub denied_tools: Option<Vec<String>>,
 }
 
 pub async fn update_virtual_key(
@@ -434,6 +444,12 @@ pub async fn update_virtual_key(
     }
     if let Some(pcs) = req.provider_configs {
         vk.provider_configs = pcs;
+    }
+    if let Some(allowed) = req.allowed_tools {
+        vk.allowed_tools = Some(allowed);
+    }
+    if let Some(denied) = req.denied_tools {
+        vk.denied_tools = Some(denied);
     }
     if req.rate_limit_id.is_some() {
         vk.rate_limit_id = req.rate_limit_id.clone();
@@ -751,7 +767,12 @@ pub async fn list_provider_defaults() -> impl IntoResponse {
             base_url: Some("https://generativelanguage.googleapis.com/v1beta"),
             env_var: Some("GEMINI_API_KEY"),
             docs_url: Some("https://aistudio.google.com/apikey"),
-            default_models: vec!["gemini-3.5-pro", "gemini-3.5-flash", "gemini-2.5-pro", "gemini-2.5-flash"],
+            default_models: vec![
+                "gemini-3.5-pro",
+                "gemini-3.5-flash",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+            ],
         },
         ProviderPreset {
             name: "groq",

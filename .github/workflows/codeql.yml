@@ -47,6 +47,7 @@ jobs:
 
       - name: Pre-build dependencies and resolve targets
         run: |
+          mkdir -p ui/dist
           cargo check --all-targets --all-features --workspace --locked
 
       - name: Initialize CodeQL

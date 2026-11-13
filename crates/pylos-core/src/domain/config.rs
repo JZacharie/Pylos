@@ -539,6 +539,14 @@ pub struct VirtualKeyConfig {
     #[serde(default)]
     pub provider_configs: Vec<VkProviderConfig>,
 
+    /// Outils autorisés pour cette Virtual Key (S-MCP-12)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_tools: Option<Vec<String>>,
+
+    /// Outils explicitement interdits pour cette Virtual Key (S-MCP-12)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub denied_tools: Option<Vec<String>>,
+
     /// Alias de l'équipe propriétaire
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team_alias: Option<String>,
@@ -582,6 +590,33 @@ pub struct VirtualKeyConfig {
     /// Timestamp d'expiration (ms)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<i64>,
+}
+
+impl Default for VirtualKeyConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            description: None,
+            value: None,
+            is_active: true,
+            rate_limit_id: None,
+            provider_configs: Vec::new(),
+            allowed_tools: None,
+            denied_tools: None,
+            team_alias: None,
+            team_id: None,
+            organization_id: None,
+            access_group_id: None,
+            user_email: None,
+            user_id: None,
+            created_at: None,
+            created_by: None,
+            updated_at: None,
+            last_active: None,
+            expires_at: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

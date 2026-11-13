@@ -52,9 +52,7 @@ pub async fn management_auth_middleware(
     request
         .extensions_mut()
         .insert(None::<pylos_core::domain::organization::InternalUser>);
-    request
-        .extensions_mut()
-        .insert(None::<VirtualKeyInfo>);
+    request.extensions_mut().insert(None::<VirtualKeyInfo>);
 
     let provided_key = match extract_admin_key(request.headers()) {
         Some(key) => key.to_string(),
@@ -112,10 +110,33 @@ async fn session_admin(state: &AppState, token: &str) -> Option<InternalUser> {
     .ok()?;
 
     let email = token_data.claims.sub.to_lowercase();
+    let is_admin_by_email = crate::interfaces::http::auth::is_admin_email(&email);
+
     let users = state.org_store.list_users().await.ok()?;
-    users.into_iter().find(|u| {
-        u.email.to_lowercase() == email && u.is_active && u.role.eq_ignore_ascii_case("admin")
-    })
+    if let Some(mut u) = users.into_iter().find(|u| u.email.to_lowercase() == email && u.is_active) {
+        if u.role.eq_ignore_ascii_case("admin") || is_admin_by_email {
+            if is_admin_by_email && !u.role.eq_ignore_ascii_case("admin") {
+                u.role = "admin".to_string();
+                let _ = state.org_store.upsert_user(&u).await;
+            }
+            return Some(u);
+        }
+    } else if is_admin_by_email {
+        let fallback_user = InternalUser {
+            id: format!("usr_{}", fastrand::u64(..)),
+            email: email.clone(),
+            name: token_data.claims.name,
+            role: "admin".to_string(),
+            group: token_data.claims.group,
+            organization_id: None,
+            team_ids: vec![],
+            is_active: true,
+            created_at: 0,
+            updated_at: 0,
+        };
+        return Some(fallback_user);
+    }
+    None
 }
 
 fn extract_admin_key(headers: &axum::http::HeaderMap) -> Option<&str> {

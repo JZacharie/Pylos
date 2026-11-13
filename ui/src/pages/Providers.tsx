@@ -64,6 +64,7 @@ function providerToForm(p: Provider): ProviderFormState {
 }
 
 const PROVIDER_PRESETS: ProviderPreset[] = [
+  { name: 'antigravity', label: 'Google Antigravity', base_url: null, env_var: 'ANTIGRAVITY_BIN', docs_url: 'https://antigravity.google/', default_models: ['gemini-3.8-flash-medium', 'gemini-3.8-flash-high', 'gemini-3.8-flash-low', 'gemini-4-argon', 'claude-opus-4-6-thinking', 'claude-sonnet-4-6', 'gpt-oss-120b-medium', 'gemini-3.8-flash', 'claude-opus-5-5', 'claude-sonnet-5-5', 'gpt-oss-120b'] },
   { name: 'openai', label: 'OpenAI', base_url: null, env_var: 'OPENAI_API_KEY', docs_url: 'https://platform.openai.com/api-keys', default_models: ['gpt-4o', 'gpt-4o-mini'] },
   { name: 'anthropic', label: 'Anthropic', base_url: null, env_var: 'ANTHROPIC_API_KEY', docs_url: 'https://console.anthropic.com/settings/keys', default_models: ['claude-sonnet-4-5', 'claude-haiku-3-5'] },
   { name: 'ollama', label: 'Ollama (Local)', base_url: 'http://localhost:11434', env_var: null, docs_url: 'https://ollama.ai/download', default_models: ['llama3.2:3b', 'llama3.1:8b', 'mistral:7b'] },

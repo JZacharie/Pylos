@@ -16,6 +16,7 @@ pub mod semantic_cache;
 pub mod system_prompt_store;
 
 pub mod batching;
+pub mod mcp;
 pub mod mcp_server_store;
 pub mod organization_store;
 pub mod prefix_cache;
@@ -25,6 +26,12 @@ pub mod smart_router;
 pub mod structured_output;
 pub mod use_cases;
 pub mod virtual_key_store;
+
+pub use mcp::{
+    create_mcp_client, execute_tool_calls_parallel, execute_web_fetch, is_tool_allowed,
+    run_agent_loop, web_fetch_tool_def, AgentLoopConfig, HttpMcpClient, McpClient, McpToolRegistry,
+    StdioMcpClient, StreamToolCallAccumulator, WEB_FETCH_TOOL_NAME,
+};
 
 pub use mcp_server_store::McpServerStore;
 pub use organization_store::OrganizationStore;

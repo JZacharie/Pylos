@@ -34,7 +34,6 @@ import PromptsManagement from './pages/PromptsManagement'
 import ApiPlayground from './pages/ApiPlayground'
 import TagManagement from './pages/TagManagement'
 import ClaudePlugins from './pages/ClaudePlugins'
-import OldUsage from './pages/OldUsage'
 import Login from './pages/Login'
 import Callback from './pages/Callback'
 import UiTheme from './pages/UiTheme'
@@ -236,7 +235,7 @@ export default function App() {
             <Route path="/experimental/api-playground" element={<ApiPlayground />} />
             <Route path="/experimental/tag-management" element={<TagManagement />} />
             <Route path="/experimental/claude-plugins" element={<ClaudePlugins />} />
-            <Route path="/experimental/old-usage" element={<OldUsage />} />
+            <Route path="/experimental/old-usage" element={<Navigate to="/analytics" replace />} />
 
             <Route path="/settings/router" element={<RouterSettings />} />
             <Route path="/settings/logging-alerts" element={<LoggingAlerts />} />

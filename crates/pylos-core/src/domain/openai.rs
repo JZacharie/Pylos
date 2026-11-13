@@ -26,6 +26,20 @@ pub struct Tool {
     pub function: FunctionDefinition,
 }
 
+impl From<crate::domain::mcp_server::McpTool> for Tool {
+    fn from(tool: crate::domain::mcp_server::McpTool) -> Self {
+        Tool {
+            tool_type: "function".to_string(),
+            function: FunctionDefinition {
+                name: tool.name,
+                description: tool.description,
+                parameters: Some(tool.input_schema),
+                strict: None,
+            },
+        }
+    }
+}
+
 /// Choix du mode d'appel d'outil
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]

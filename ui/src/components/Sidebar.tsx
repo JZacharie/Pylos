@@ -29,9 +29,6 @@ import {
   LayoutGrid,
   HardDrive,
   Terminal,
-  Tag,
-  Puzzle,
-  History,
   Sliders,
   Bell,
   Settings,
@@ -68,67 +65,57 @@ function isPlaygroup(): boolean {
   }
 }
 
-// Admin-only items hidden for non-admin users
-const AI_GATEWAY_CORE = [
-  { to: '/keys',       icon: KeyRound,        label: 'Virtual Keys' },
-  { to: '/playground', icon: FlaskConical,    label: 'Playground' },
-  { to: '/models',     icon: Server,          label: 'Models + Endpoints' },
-  { to: '/agents',     icon: Bot,             label: 'Agents' },
-  { to: '/mcp-servers',icon: Cpu,             label: 'MCP Servers' },
-  { to: '/policies',   icon: FileBadge,       label: 'Policies' },
-]
-
-const AI_GATEWAY_ADMIN = [
-  { to: '/guardrails', icon: Shield,          label: 'Guardrails' },
+// AI Gateway items
+const AI_GATEWAY = [
+  { to: '/keys',         icon: KeyRound,        label: 'Virtual Keys' },
+  { to: '/playground',   icon: FlaskConical,    label: 'Playground' },
+  { to: '/providers',    icon: Server,          label: 'Providers' },
+  { to: '/models',       icon: BookOpen,        label: 'Model Catalog' },
+  { to: '/mcp-servers',  icon: Cpu,             label: 'MCP Servers' },
+  { to: '/agents',       icon: Bot,             label: 'Agents' },
+  { to: '/guardrails',   icon: Shield,          label: 'Guardrails' },
 ]
 
 const NAV_TOOLS = [
-  { to: '/tools/search', icon: Search, label: 'Search Tools' },
-  { to: '/tools/vector-stores', icon: Database, label: 'Vector Stores' },
-  { to: '/tools/policies', icon: ShieldCheck, label: 'Tool Policies' },
+  { to: '/tools/search',        icon: Search,      label: 'Search Tools' },
+  { to: '/tools/vector-stores', icon: Database,    label: 'Vector Stores' },
+  { to: '/tools/policies',      icon: ShieldCheck, label: 'Tool Policies' },
 ]
 
 const OBSERVABILITY = [
-  { to: '/analytics',  icon: BarChart2,       label: 'Usage' },
-  { to: '/logs',       icon: ScrollText,      label: 'Logs' },
-  { to: '/guardrails-monitor', icon: ShieldAlert, label: 'Guardrails Monitor' },
+  { to: '/analytics',              icon: BarChart2,   label: 'Analytics & Usage' },
+  { to: '/logs',                   icon: ScrollText,  label: 'Logs' },
+  { to: '/guardrails-monitor',     icon: ShieldAlert, label: 'Guardrails Monitor' },
+  { to: '/settings/cost-tracking', icon: DollarSign,  label: 'Cost Tracking' },
 ]
 
-const ACCESS_CONTROL = [
+const GOVERNANCE = [
+  { to: '/organizations',  icon: Landmark,       label: 'Organizations' },
   { to: '/teams',          icon: Users,          label: 'Teams' },
   { to: '/users',          icon: User,           label: 'Internal Users' },
-  { to: '/organizations',  icon: Landmark,       label: 'Organizations' },
   { to: '/access-groups',  icon: Layers,         label: 'Access Groups' },
   { to: '/budgets',        icon: CreditCard,     label: 'Budgets' },
+  { to: '/policies',       icon: FileBadge,      label: 'Routing Policies' },
 ]
 
 const DEVELOPER_TOOLS = [
-  { to: '/api-reference',     icon: Code2,          label: 'API Reference' },
-  { to: '/ai-hub',            icon: LayoutGrid,     label: 'AI Hub' },
-  { to: '/learning-resources',icon: BookOpen,       label: 'Learning Resources' },
-]
-
-const EXPERIMENTAL = [
-  { to: '/experimental/caching',        icon: HardDrive,  label: 'Caching' },
-  { to: '/experimental/prompts',        icon: Terminal,   label: 'Prompts' },
-  { to: '/experimental/api-playground', icon: FlaskConical,label: 'API Playground' },
-  { to: '/experimental/tag-management', icon: Tag,        label: 'Tag Management' },
-  { to: '/experimental/claude-plugins', icon: Puzzle,     label: 'Claude Code Plugins' },
-  { to: '/experimental/old-usage',      icon: History,    label: 'Old Usage' },
+  { to: '/api-reference',               icon: Code2,          label: 'API Reference' },
+  { to: '/experimental/api-playground', icon: Terminal,       label: 'API Tester' },
+  { to: '/ai-hub',                      icon: LayoutGrid,     label: 'AI Hub' },
+  { to: '/learning-resources',          icon: BookOpen,       label: 'Learning Resources' },
 ]
 
 const SETTINGS_SUB = [
-  { to: '/settings/router',         icon: Sliders,    label: 'Router Settings' },
+  { to: '/settings/router',         icon: Sliders,    label: 'Router & Fallbacks' },
   { to: '/settings/logging-alerts', icon: Bell,       label: 'Logging & Alerts' },
+  { to: '/experimental/caching',    icon: HardDrive,  label: 'Prompt Caching' },
   { to: '/settings/admin',          icon: Settings,   label: 'Admin Settings', hasDot: true },
-  { to: '/settings/cost-tracking',  icon: DollarSign, label: 'Cost Tracking' },
   { to: '/settings/ui-theme',       icon: Palette,    label: 'UI Theme' },
 ]
 
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const [collapsed, setCollapsed] = useState(false)
   const [toolsExpanded, setToolsExpanded] = useState(true)
-  const [experimentalExpanded, setExperimentalExpanded] = useState(true)
   const [settingsExpanded, setSettingsExpanded] = useState(true)
 
   const userJson = typeof window !== 'undefined' ? localStorage.getItem('pylos_user') : null;
@@ -191,7 +178,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             <div className="mx-3 mt-2 mb-2 border-t border-zinc-800/50" />
           )}
 
-          {[...AI_GATEWAY_CORE, ...(isAdmin() ? AI_GATEWAY_ADMIN : [])].map(({ to, icon: Icon, label }) => (
+          {AI_GATEWAY.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -291,17 +278,17 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             </NavLink>
           ))}
 
-          {/* ACCESS CONTROL SECTION */}
+          {/* GOVERNANCE & ACCESS CONTROL SECTION */}
           {isAdmin() && <>
             {(!collapsed || isOpen) ? (
               <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Access Control
+                Governance & Access
               </div>
             ) : (
               <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
             )}
 
-            {ACCESS_CONTROL.map(({ to, icon: Icon, label }) => (
+            {GOVERNANCE.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -356,51 +343,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               )}
             </NavLink>
           ))}
-
-          {/* Experimental Dropdown */}
-          <div className="flex flex-col mt-1">
-            <button
-              onClick={() => {
-                if (collapsed) setCollapsed(false);
-                setExperimentalExpanded(!experimentalExpanded);
-              }}
-              className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 w-full"
-            >
-              <div className="flex items-center gap-3">
-                <FlaskConical size={18} className="flex-shrink-0" />
-                {(!collapsed || isOpen) && <span>Experimental</span>}
-              </div>
-              {(!collapsed || isOpen) && (
-                experimentalExpanded ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
-              )}
-            </button>
-            {experimentalExpanded && (!collapsed || isOpen) && (
-              <div className="flex flex-col mt-1 ml-4 space-y-1 border-l border-zinc-800/50 pl-2">
-                {EXPERIMENTAL.map(({ to, icon: Icon, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                      ${isActive
-                        ? 'bg-zinc-800 text-white'
-                        : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0 absolute -ml-4" />}
-                        <Icon size={16} className="flex-shrink-0" />
-                        <span>{label}</span>
-                      </>
-                    )}
-                  </NavLink>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* SETTINGS SECTION */}
           {isAdmin() && <>
@@ -497,7 +439,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           onClick={() => {
             if (onClose) onClose();
             const currentKey = localStorage.getItem('pylos_admin_key') || '';
-            const newKey = window.prompt("Configure Pylos Admin Key (PYLOS_ADMIN_KEY):", currentKey);
+            const isJwt = currentKey.startsWith('ey') || currentKey.includes('.');
+            const newKey = window.prompt("Configure Pylos Admin Key (PYLOS_ADMIN_KEY):", isJwt ? '' : currentKey);
             if (newKey !== null) {
               localStorage.setItem('pylos_admin_key', newKey);
               window.location.reload();

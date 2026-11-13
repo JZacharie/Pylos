@@ -7,7 +7,7 @@ import {
   Activity, Play, Globe, Key, Network, Sliders, Tags, FileJson
 } from 'lucide-react'
 
-const PROVIDERS = ['all', 'anthropic', 'gemini', 'groq', 'mistral', 'deepseek', 'ollama-jo3', 'lemonade-jo3', 'lemonade-optimus']
+const PROVIDERS = ['all', 'antigravity', 'anthropic', 'gemini', 'groq', 'mistral', 'deepseek', 'ollama-jo3', 'lemonade-jo3', 'lemonade-optimus']
 
 function formatPrice(price: number): string {
   if (price === 0) return 'Free'

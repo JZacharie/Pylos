@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const getBaseUrl = (): string => {
+export const getBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
     // If the API points to localhost/127.0.0.1 but the frontend is loaded from a different domain,
@@ -47,10 +47,12 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       const currentKey = localStorage.getItem('pylos_admin_key');
+      const isJwt = !!currentKey && (currentKey.startsWith('ey') || currentKey.includes('.'));
+      const promptDefault = isJwt ? '' : (currentKey || '');
       const promptMsg = error.response.status === 401
         ? "Administration key required. Please enter your PYLOS_ADMIN_KEY:"
         : "Invalid administration key. Please enter a valid PYLOS_ADMIN_KEY:";
-      const adminKey = window.prompt(promptMsg, currentKey || '');
+      const adminKey = window.prompt(promptMsg, promptDefault);
       if (adminKey !== null) {
         localStorage.setItem('pylos_admin_key', adminKey);
         originalRequest.headers['Authorization'] = `Bearer ${adminKey}`;
@@ -582,6 +584,11 @@ export const vectorStoresApi = {
 
 // ─── MCP Server Types & API ──────────────────────────────────────────────────
 
+export type McpTransportConfig =
+  | { type: 'stdio'; command: string; args?: string[]; env?: Record<string, string>; current_dir?: string }
+  | { type: 'http'; url: string; headers?: Record<string, string>; timeout_secs?: number }
+  | { type: 'sse'; url: string; headers?: Record<string, string>; timeout_secs?: number }
+
 export interface McpServer {
   id: string
   name: string
@@ -592,6 +599,7 @@ export interface McpServer {
   env_vars: Record<string, string> | null
   virtual_key_id: string | null
   team_id: string | null
+  transport_config?: McpTransportConfig | null
   created_at: number
   updated_at: number
 }

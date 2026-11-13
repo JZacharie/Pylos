@@ -132,6 +132,7 @@ async fn test_virtual_key_cannot_access_management_api() {
         updated_at: None,
         last_active: None,
         expires_at: None,
+        ..Default::default()
     };
     state.vk_store.upsert_key(&vk).await.unwrap();
 
@@ -168,12 +169,22 @@ async fn test_management_api_requires_admin_role() {
 
     state
         .org_store
-        .upsert_user(&internal_user("u-member", "member@example.com", "member", true))
+        .upsert_user(&internal_user(
+            "u-member",
+            "member@example.com",
+            "member",
+            true,
+        ))
         .await
         .unwrap();
     state
         .org_store
-        .upsert_user(&internal_user("u-admin", "admin@example.com", "admin", true))
+        .upsert_user(&internal_user(
+            "u-admin",
+            "admin@example.com",
+            "admin",
+            true,
+        ))
         .await
         .unwrap();
     state
@@ -303,7 +314,10 @@ async fn test_admin_secret_hashing() {
     assert!(!verify_admin_secret("mauvais-secret", &hashed));
 
     // Sel aléatoire : deux hachages du même secret diffèrent
-    assert_ne!(hash_admin_secret("s3cret-admin"), hash_admin_secret("s3cret-admin"));
+    assert_ne!(
+        hash_admin_secret("s3cret-admin"),
+        hash_admin_secret("s3cret-admin")
+    );
 
     // Compatibilité legacy SHA-256
     let legacy = hash_sha256("legacy-admin");

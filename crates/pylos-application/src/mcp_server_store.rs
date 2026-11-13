@@ -29,6 +29,7 @@ impl McpServerStore {
                     env_vars          TEXT,
                     virtual_key_id    TEXT,
                     team_id           TEXT,
+                    transport_config  TEXT,
                     created_at        INTEGER NOT NULL,
                     updated_at        INTEGER NOT NULL
                 )"#,
@@ -61,11 +62,15 @@ impl McpServerStore {
         let server_type_str = server.server_type.to_string();
         let status_str = server.status.to_string();
         let env_str = server.env_vars.as_ref().map(|v| v.to_string());
+        let transport_str = server
+            .transport_config
+            .as_ref()
+            .map(|tc| serde_json::to_string(tc).unwrap_or_default());
 
         match &self.pool {
             DbPool::Sqlite(pool) => {
                 sqlx::query(
-                    "INSERT INTO mcp_servers (id, name, server_type, status, target_url, container_image, env_vars, virtual_key_id, team_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO mcp_servers (id, name, server_type, status, target_url, container_image, env_vars, virtual_key_id, team_id, transport_config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 )
                 .bind(&server.id)
                 .bind(&server.name)
@@ -76,6 +81,7 @@ impl McpServerStore {
                 .bind(&env_str)
                 .bind(&server.virtual_key_id)
                 .bind(&server.team_id)
+                .bind(&transport_str)
                 .bind(server.created_at)
                 .bind(server.updated_at)
                 .execute(pool)
@@ -84,7 +90,7 @@ impl McpServerStore {
             }
             DbPool::Postgres(pool) => {
                 sqlx::query(
-                    "INSERT INTO mcp_servers (id, name, server_type, status, target_url, container_image, env_vars, virtual_key_id, team_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                    "INSERT INTO mcp_servers (id, name, server_type, status, target_url, container_image, env_vars, virtual_key_id, team_id, transport_config, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
                 )
                 .bind(&server.id)
                 .bind(&server.name)
@@ -95,6 +101,7 @@ impl McpServerStore {
                 .bind(&env_str)
                 .bind(&server.virtual_key_id)
                 .bind(&server.team_id)
+                .bind(&transport_str)
                 .bind(server.created_at)
                 .bind(server.updated_at)
                 .execute(pool)
@@ -157,11 +164,15 @@ impl McpServerStore {
         let server_type_str = server.server_type.to_string();
         let status_str = server.status.to_string();
         let env_str = server.env_vars.as_ref().map(|v| v.to_string());
+        let transport_str = server
+            .transport_config
+            .as_ref()
+            .map(|tc| serde_json::to_string(tc).unwrap_or_default());
 
         match &self.pool {
             DbPool::Sqlite(pool) => {
                 sqlx::query(
-                    "UPDATE mcp_servers SET name = ?, server_type = ?, status = ?, target_url = ?, container_image = ?, env_vars = ?, virtual_key_id = ?, team_id = ?, updated_at = ? WHERE id = ?",
+                    "UPDATE mcp_servers SET name = ?, server_type = ?, status = ?, target_url = ?, container_image = ?, env_vars = ?, virtual_key_id = ?, team_id = ?, transport_config = ?, updated_at = ? WHERE id = ?",
                 )
                 .bind(&server.name)
                 .bind(&server_type_str)
@@ -171,6 +182,7 @@ impl McpServerStore {
                 .bind(&env_str)
                 .bind(&server.virtual_key_id)
                 .bind(&server.team_id)
+                .bind(&transport_str)
                 .bind(server.updated_at)
                 .bind(&server.id)
                 .execute(pool)
@@ -179,7 +191,7 @@ impl McpServerStore {
             }
             DbPool::Postgres(pool) => {
                 sqlx::query(
-                    "UPDATE mcp_servers SET name = $2, server_type = $3, status = $4, target_url = $5, container_image = $6, env_vars = $7, virtual_key_id = $8, team_id = $9, updated_at = $10 WHERE id = $1",
+                    "UPDATE mcp_servers SET name = $2, server_type = $3, status = $4, target_url = $5, container_image = $6, env_vars = $7, virtual_key_id = $8, team_id = $9, transport_config = $10, updated_at = $11 WHERE id = $1",
                 )
                 .bind(&server.id)
                 .bind(&server.name)
@@ -190,6 +202,7 @@ impl McpServerStore {
                 .bind(&env_str)
                 .bind(&server.virtual_key_id)
                 .bind(&server.team_id)
+                .bind(&transport_str)
                 .bind(server.updated_at)
                 .execute(pool)
                 .await
@@ -340,6 +353,8 @@ fn parse_status(s: &str) -> McpServerStatus {
 fn row_to_mcp_server_sqlite(row: &sqlx::sqlite::SqliteRow) -> Result<McpServer, PylosError> {
     let env_raw: Option<String> = row.try_get("env_vars").ok().flatten();
     let env_vars = env_raw.and_then(|s| serde_json::from_str(&s).ok());
+    let transport_raw: Option<String> = row.try_get("transport_config").ok().flatten();
+    let transport_config = transport_raw.and_then(|s| serde_json::from_str(&s).ok());
 
     Ok(McpServer {
         id: row
@@ -361,6 +376,7 @@ fn row_to_mcp_server_sqlite(row: &sqlx::sqlite::SqliteRow) -> Result<McpServer, 
         env_vars,
         virtual_key_id: row.try_get("virtual_key_id").ok().flatten(),
         team_id: row.try_get("team_id").ok().flatten(),
+        transport_config,
         created_at: row
             .try_get("created_at")
             .map_err(|e| PylosError::Internal(format!("Bad created_at: {e}")))?,
@@ -373,6 +389,8 @@ fn row_to_mcp_server_sqlite(row: &sqlx::sqlite::SqliteRow) -> Result<McpServer, 
 fn row_to_mcp_server_pg(row: &sqlx::postgres::PgRow) -> Result<McpServer, PylosError> {
     let env_raw: Option<String> = row.try_get("env_vars").ok().flatten();
     let env_vars = env_raw.and_then(|s| serde_json::from_str(&s).ok());
+    let transport_raw: Option<String> = row.try_get("transport_config").ok().flatten();
+    let transport_config = transport_raw.and_then(|s| serde_json::from_str(&s).ok());
 
     Ok(McpServer {
         id: row
@@ -394,6 +412,7 @@ fn row_to_mcp_server_pg(row: &sqlx::postgres::PgRow) -> Result<McpServer, PylosE
         env_vars,
         virtual_key_id: row.try_get("virtual_key_id").ok().flatten(),
         team_id: row.try_get("team_id").ok().flatten(),
+        transport_config,
         created_at: row
             .try_get("created_at")
             .map_err(|e| PylosError::Internal(format!("Bad created_at: {e}")))?,

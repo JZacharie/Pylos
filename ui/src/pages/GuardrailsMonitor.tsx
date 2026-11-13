@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { guardrailsApi, type GuardrailsBreakdown, type GuardrailsTimeline } from '../lib/api'
-import { ShieldAlert, Ban, Search, FileText, AlertTriangle, RefreshCw } from 'lucide-react'
+import { ShieldAlert, Ban, Search, FileText, AlertTriangle, RefreshCw, Shield } from 'lucide-react'
 
 const PERIODS = [
   { label: '1h', value: '1h' },
@@ -211,6 +212,13 @@ export default function GuardrailsMonitor() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            to="/guardrails"
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5"
+          >
+            <Shield size={14} className="text-emerald-400" />
+            <span>Configure Guardrails</span>
+          </Link>
           <div className="flex bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
             {PERIODS.map(p => (
               <button

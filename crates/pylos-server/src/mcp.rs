@@ -1,10 +1,18 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::middleware::virtual_key::VirtualKeyInfo;
 use crate::state::AppState;
-use pylos_core::domain::mcp_server::{McpServer, McpServerStatus, McpServerType};
+use pylos_core::domain::mcp_server::{
+    McpServer, McpServerStatus, McpServerType, McpTransportConfig,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateMcpServerRequest {
@@ -16,6 +24,7 @@ pub struct CreateMcpServerRequest {
     pub env_vars: Option<Value>,
     pub virtual_key_id: Option<String>,
     pub team_id: Option<String>,
+    pub transport_config: Option<McpTransportConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,6 +37,7 @@ pub struct UpdateMcpServerRequest {
     pub env_vars: Option<Value>,
     pub virtual_key_id: Option<String>,
     pub team_id: Option<String>,
+    pub transport_config: Option<McpTransportConfig>,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,6 +51,8 @@ pub struct McpServerResponse {
     pub env_vars: Option<Value>,
     pub virtual_key_id: Option<String>,
     pub team_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport_config: Option<McpTransportConfig>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -63,6 +75,7 @@ fn server_to_response(s: McpServer) -> McpServerResponse {
         env_vars: s.env_vars,
         virtual_key_id: s.virtual_key_id,
         team_id: s.team_id,
+        transport_config: s.transport_config,
         created_at: s.created_at,
         updated_at: s.updated_at,
     }
@@ -137,6 +150,7 @@ pub async fn create_mcp_server(
         env_vars: req.env_vars,
         virtual_key_id: req.virtual_key_id,
         team_id: req.team_id,
+        transport_config: req.transport_config,
         created_at: now,
         updated_at: now,
     };
@@ -197,12 +211,16 @@ pub async fn update_mcp_server(
         env_vars: req.env_vars.or(existing.env_vars.clone()),
         virtual_key_id: req.virtual_key_id.or(existing.virtual_key_id.clone()),
         team_id: req.team_id.or(existing.team_id.clone()),
+        transport_config: req.transport_config.or(existing.transport_config.clone()),
         created_at: existing.created_at,
         updated_at: now,
     };
 
     match state.mcp_server_store.update(&updated).await {
-        Ok(saved) => (StatusCode::OK, Json(json!(server_to_response(saved)))).into_response(),
+        Ok(saved) => {
+            let _ = state.mcp_registry.sync_server(&saved).await;
+            (StatusCode::OK, Json(json!(server_to_response(saved)))).into_response()
+        }
         Err(e) => internal_err(e.to_string()).into_response(),
     }
 }
@@ -212,7 +230,10 @@ pub async fn delete_mcp_server(
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
     match state.mcp_server_store.delete(&id).await {
-        Ok(_) => (StatusCode::OK, Json(json!({"deleted": true}))).into_response(),
+        Ok(_) => {
+            state.mcp_registry.remove_server(&id).await;
+            (StatusCode::OK, Json(json!({"deleted": true}))).into_response()
+        }
         Err(e) => match &e {
             pylos_core::error::PylosError::NotFound(_) => not_found(e.to_string()).into_response(),
             _ => internal_err(e.to_string()).into_response(),
@@ -229,7 +250,10 @@ pub async fn activate_mcp_server(
         .set_status(&id, &McpServerStatus::Active)
         .await
     {
-        Ok(server) => (StatusCode::OK, Json(json!(server_to_response(server)))).into_response(),
+        Ok(server) => {
+            let _ = state.mcp_registry.sync_server(&server).await;
+            (StatusCode::OK, Json(json!(server_to_response(server)))).into_response()
+        }
         Err(e) => match &e {
             pylos_core::error::PylosError::NotFound(_) => not_found(e.to_string()).into_response(),
             _ => internal_err(e.to_string()).into_response(),
@@ -246,9 +270,71 @@ pub async fn deactivate_mcp_server(
         .set_status(&id, &McpServerStatus::Inactive)
         .await
     {
-        Ok(server) => (StatusCode::OK, Json(json!(server_to_response(server)))).into_response(),
+        Ok(server) => {
+            state.mcp_registry.remove_server(&id).await;
+            (StatusCode::OK, Json(json!(server_to_response(server)))).into_response()
+        }
         Err(e) => match &e {
             pylos_core::error::PylosError::NotFound(_) => not_found(e.to_string()).into_response(),
+            _ => internal_err(e.to_string()).into_response(),
+        },
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CallToolRequest {
+    pub name: String,
+    #[serde(default)]
+    pub arguments: Value,
+}
+
+/// Endpoint S-MCP-04: GET /mcp/tools/list
+/// Renvoie les outils disponibles au format standard OpenAI Tool, filtrés selon les autorisations
+pub async fn list_tools_endpoint(
+    State(state): State<AppState>,
+    vk_info: Option<Extension<Option<VirtualKeyInfo>>>,
+) -> impl IntoResponse {
+    let (allowed, denied) = match vk_info.and_then(|Extension(vk)| vk) {
+        Some(vk) => (vk.allowed_tools, vk.denied_tools),
+        None => (None, None),
+    };
+    let tools = state
+        .mcp_registry
+        .list_tools(allowed.as_deref(), denied.as_deref())
+        .await;
+    (StatusCode::OK, Json(json!({ "tools": tools }))).into_response()
+}
+
+/// Endpoint POST /mcp/tools/call
+/// Exécute un outil MCP ou built-in
+pub async fn call_tool_endpoint(
+    State(state): State<AppState>,
+    vk_info: Option<Extension<Option<VirtualKeyInfo>>>,
+    Json(req): Json<CallToolRequest>,
+) -> impl IntoResponse {
+    let (allowed, denied) = match vk_info.and_then(|Extension(vk)| vk) {
+        Some(vk) => (vk.allowed_tools, vk.denied_tools),
+        None => (None, None),
+    };
+    match state
+        .mcp_registry
+        .execute_tool(
+            &req.name,
+            req.arguments,
+            allowed.as_deref(),
+            denied.as_deref(),
+        )
+        .await
+    {
+        Ok(res) => (StatusCode::OK, Json(json!(res))).into_response(),
+        Err(e) => match &e {
+            pylos_core::error::PylosError::NotFound(msg) => not_found(msg.clone()).into_response(),
+            pylos_core::error::PylosError::Unauthorized(msg) => {
+                (StatusCode::FORBIDDEN, Json(json!({"error": msg}))).into_response()
+            }
+            pylos_core::error::PylosError::InvalidRequest(msg) => {
+                (StatusCode::BAD_REQUEST, Json(json!({"error": msg}))).into_response()
+            }
             _ => internal_err(e.to_string()).into_response(),
         },
     }

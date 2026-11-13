@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Shield, Save, Check, RotateCcw, Search, Info } from 'lucide-react'
+import { Shield, Save, Check, RotateCcw, Search, Info, Activity } from 'lucide-react'
 import { configApi } from '../lib/api'
 
 interface GuardrailItem {
@@ -167,6 +168,13 @@ export default function Guardrails() {
             >
               Classic Settings
             </button>
+            <Link
+              to="/guardrails-monitor"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:bg-zinc-800/60 transition-all"
+            >
+              <Activity size={13} className="animate-pulse" />
+              <span>Live Monitor</span>
+            </Link>
           </div>
         </div>
       </header>

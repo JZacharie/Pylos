@@ -95,7 +95,11 @@ export default function Policies() {
   const createMut = useMutation({
     mutationFn: (f: PolicyFormState) => {
       let config: Record<string, unknown> = {}
-      try { config = JSON.parse(f.config) } catch {}
+      try {
+        config = JSON.parse(f.config)
+      } catch {
+        // Fallback to empty object if JSON parsing fails
+      }
       return policiesApi.create({ name: f.name, description: f.description || null, policy_type: f.policy_type, config, is_active: f.is_active })
     },
     onSuccess: () => { invalidate(); setShowCreate(false); setMutationError(null) },
@@ -144,7 +148,11 @@ export default function Policies() {
   const updateMut = useMutation({
     mutationFn: ({ id, f }: { id: string; f: PolicyFormState }) => {
       let config: Record<string, unknown> = {}
-      try { config = JSON.parse(f.config) } catch {}
+      try {
+        config = JSON.parse(f.config)
+      } catch {
+        // Fallback to empty object if JSON parsing fails
+      }
       return policiesApi.update(id, { name: f.name, description: f.description || null, policy_type: f.policy_type, config, is_active: f.is_active })
     },
     onSuccess: () => { invalidate(); setEditing(null); setMutationError(null) },
