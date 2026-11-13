@@ -52,7 +52,7 @@ jobs:
           kubectl rollout status deployment pylos-ui -n pylos
 
       - name: Notify Slack
-        if: success()
+        if: success() && env.SLACK_WEBHOOK != ''
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
