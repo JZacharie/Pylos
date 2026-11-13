@@ -139,6 +139,17 @@ pub async fn chat_completions(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
 
+    let (force_provider, force_model, model) = if let Some(fp) = force_provider {
+        (Some(fp), force_model, model)
+    } else if let Some((prov, m)) = model.split_once('/') {
+        (Some(prov.to_string()), Some(m.to_string()), m.to_string())
+    } else if let Some((prov, m)) = model.split_once("::") {
+        (Some(prov.to_string()), Some(m.to_string()), m.to_string())
+    } else {
+        (None, force_model, model)
+    };
+    payload.model = model.clone();
+
     let header_session_id = headers
         .get("x-session-id")
         .or_else(|| headers.get("x-antigravity-session-id"))

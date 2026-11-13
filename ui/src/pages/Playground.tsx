@@ -512,7 +512,7 @@ export default function Playground() {
       if (cavemanCompress) {
         headers['x-caveman-compress'] = 'true'
       }
-      if (forceProviderModel) {
+      if (provider) {
         headers['x-pylos-force-provider'] = provider
         headers['x-pylos-force-model'] = model
       }

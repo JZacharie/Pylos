@@ -341,8 +341,8 @@ impl InferenceOrchestrator {
                 Err(e) => {
                     self.record_failure(provider.name());
                     warn!(provider = provider.name(), error = %e, "Embedding failed");
-                    // Toute erreur retriable doit déclencher le fallback vers le provider suivant.
-                    if !e.is_retriable() {
+                    // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
+                    if matches!(e, PylosError::BudgetExceeded(_) | PylosError::GuardrailViolation(_) | PylosError::InvalidRequest(_)) {
                         return Err(e);
                     }
                     last_error = Some(e);
@@ -536,8 +536,8 @@ impl InferenceOrchestrator {
                         "[Path] Provider '{}' FAILED for model '{}' — error: {}",
                         provider.name(), model, e
                     );
-                    // Toute erreur retriable doit déclencher le fallback vers le provider suivant.
-                    if !e.is_retriable() {
+                    // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
+                    if matches!(e, PylosError::BudgetExceeded(_) | PylosError::GuardrailViolation(_) | PylosError::InvalidRequest(_)) {
                         return Err(e);
                     }
                     last_error = Some(e);
@@ -668,8 +668,8 @@ impl InferenceOrchestrator {
                         "[Path] Stream: Provider '{}' FAILED for model '{}' — error: {}",
                         provider.name(), stream_model, e
                     );
-                    // Toute erreur retriable doit déclencher le fallback vers le provider suivant.
-                    if !e.is_retriable() {
+                    // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
+                    if matches!(e, PylosError::BudgetExceeded(_) | PylosError::GuardrailViolation(_) | PylosError::InvalidRequest(_)) {
                         return Err(e);
                     }
                     last_error = Some(e);
