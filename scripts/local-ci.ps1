@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # local-ci.ps1
 # Execute les memes checks que la pipeline GitHub Actions,
 # mais en local pour un feedback plus rapide (sous Windows/PowerShell).
@@ -11,6 +11,9 @@
 Param(
     [switch]$Release
 )
+
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $RepoRoot
 
 # Configuration de la console
 $Host.UI.RawUI.WindowTitle = "Local CI - Pylos"

@@ -21,17 +21,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull, Tag and Push Backend
-        run: |
-          docker pull ghcr.io/jzacharie/pylos:dev
-          docker tag ghcr.io/jzacharie/pylos:dev ghcr.io/jzacharie/pylos:latest
-          docker push ghcr.io/jzacharie/pylos:latest
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-      - name: Pull, Tag and Push Frontend
+      - name: Promote Multi-Arch Manifests to :latest
         run: |
-          docker pull ghcr.io/jzacharie/pylos-ui:dev
-          docker tag ghcr.io/jzacharie/pylos-ui:dev ghcr.io/jzacharie/pylos-ui:latest
-          docker push ghcr.io/jzacharie/pylos-ui:latest
+          echo "Promoting Backend multi-arch manifest :dev -> :latest..."
+          docker buildx imagetools create -t ghcr.io/jzacharie/pylos:latest ghcr.io/jzacharie/pylos:dev
+          echo "Promoting Frontend multi-arch manifest :dev -> :latest..."
+          docker buildx imagetools create -t ghcr.io/jzacharie/pylos-ui:latest ghcr.io/jzacharie/pylos-ui:dev
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4

@@ -8,7 +8,7 @@ on:
     paths-ignore:
       - 'site/**'
       - 'docs/**'
-      - 'megalinter-reports/**'
+      - 'scripts/**'
       - '**/*.md'
 
 # Une nouvelle poussee sur la meme branche annule le run precedent.
@@ -22,7 +22,7 @@ env:
 
 jobs:
   check:
-    name: Check
+    name: Check Rust (Clippy & Tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -42,8 +42,25 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --locked
 
+  check-ui:
+    name: Check UI (TypeScript & Build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install UI dependencies
+        run: npm ci --prefix ui
+      - name: Verify UI build
+        run: npm run build --prefix ui
+
   build-and-push:
     name: Build & Push (${{ matrix.arch }})
+    needs: [check, check-ui]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -143,15 +160,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GH_PAT }}
-          path: jo3
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
 
-      - name: Set up kubeconfig
+      - name: Configure kubectl
         env:
           KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
         run: |
@@ -159,105 +172,14 @@ jobs:
           echo "$KUBECONFIG_CONTENT" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
 
-      - name: Restart pylos-dev deployment
+      - name: Restart pylos-dev deployments
         run: |
-          kubectl rollout restart deployment -n pylos-dev
+          kubectl rollout restart deployment pylos-server -n pylos-dev
+          kubectl rollout restart deployment pylos-ui -n pylos-dev
+          kubectl rollout status deployment pylos-server -n pylos-dev --timeout=3m
+          kubectl rollout status deployment pylos-ui -n pylos-dev --timeout=3m
           kubectl get pods -n pylos-dev -o wide
 
       - name: Cleanup kubeconfig
         if: always()
         run: rm -f $HOME/.kube/config
-
-  # deploy-dev:
-  #   name: Deploy to Dev (canary)
-  #   needs: [merge-manifest]
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v6
-
-  #     - name: Configure kubeconfig
-  #       run: |
-  #         mkdir -p $HOME/.kube
-  #         echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
-  #         chmod 600 $HOME/.kube/config
-
-  #     - name: Checkout GitOps repo (jo3)
-  #       uses: actions/checkout@v6
-  #       with:
-  #         repository: JZacharie/jo3
-  #         token: ${{ secrets.GH_PAT }}
-  #         path: jo3
-
-  #     - name: Deploy dev canary
-  #       run: |
-  #         cp jo3/values/ai/pylos/manifests/deployment.yaml jo3/values/ai/pylos/manifests/dev-deployment.yaml
-  #         sed -i "s|name: pylos-server|name: pylos-dev|" jo3/values/ai/pylos/manifests/dev-deployment.yaml
-  #         sed -i "s|app: pylos-server|app: pylos-dev|g" jo3/values/ai/pylos/manifests/dev-deployment.yaml
-  #         sed -i "s|replicas: 1|replicas: 1|" jo3/values/ai/pylos/manifests/dev-deployment.yaml
-  #         sed -i "0,/image: ghcr.io/ s|image: ghcr.io/jzacharie/pylos:latest|image: ghcr.io/jzacharie/pylos:${{ github.sha }}|" jo3/values/ai/pylos/manifests/dev-deployment.yaml
-  #         # Supprimer la partie pylos-ui (ne garder que le backend)
-  #         awk 'BEGIN{n=0} /^---/{n++;next} n==0' jo3/values/ai/pylos/manifests/dev-deployment.yaml > /tmp/dev-only.yaml
-  #         mv /tmp/dev-only.yaml jo3/values/ai/pylos/manifests/dev-deployment.yaml
-  #         cd jo3
-  #         git add values/ai/pylos/manifests/dev-deployment.yaml
-  #         git -c user.name="Pylos CI" -c user.email="ci@pylos.dev" commit -m "chore(ai/pylos): deploy dev canary ${{ github.sha }}"
-  #         git push
-
-  #     - name: Wait for ArgoCD sync
-  #       run: |
-  #         sleep 15
-  #         kubectl rollout status -n pylos deployment/pylos-dev --timeout=5m
-
-  #     - name: Diagnose on failure
-  #       if: failure()
-  #       run: |
-  #         kubectl get pods -n pylos -o wide
-  #         kubectl describe pod -n pylos -l app=pylos-dev 2>&1 | tail -30 || true
-
-  # deploy-prod:
-  #   name: Deploy to Production
-  #   needs: [deploy-dev]
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: read
-  #     id-token: write
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v6
-
-  #     - name: Checkout GitOps repo (jo3)
-  #       uses: actions/checkout@v6
-  #       with:
-  #         repository: JZacharie/jo3
-  #         token: ${{ secrets.GH_PAT }}
-  #         path: jo3
-
-  #     - name: Update production image tags
-  #       run: |
-  #         SHA="${{ github.sha }}"
-  #         sed -i "s|image: ghcr.io/jzacharie/pylos:latest|image: ghcr.io/jzacharie/pylos:$SHA|" jo3/values/ai/pylos/manifests/deployment.yaml
-  #         sed -i "s|image: ghcr.io/jzacharie/pylos-ui:latest|image: ghcr.io/jzacharie/pylos-ui:$SHA|" jo3/values/ai/pylos/manifests/deployment.yaml
-  #         cd jo3
-  #         git add values/ai/pylos/manifests/deployment.yaml
-  #         git -c user.name="Pylos CI" -c user.email="ci@pylos.dev" commit -m "chore(ai/pylos): deploy production ${{ github.sha }}"
-  #         git push
-
-  #     - name: Wait for ArgoCD sync
-  #       run: |
-  #         sleep 15
-  #         kubectl rollout status -n pylos deployment/pylos-server --timeout=5m
-  #         kubectl rollout status -n pylos deployment/pylos-ui --timeout=5m
-
-  #     - name: Remove dev canary
-  #       run: |
-  #         cd jo3
-  #         git rm values/ai/pylos/manifests/dev-deployment.yaml 2>/dev/null || true
-  #         git -c user.name="Pylos CI" -c user.email="ci@pylos.dev" commit -m "chore(ai/pylos): remove dev canary after prod deploy" 2>/dev/null || true
-  #         git push 2>/dev/null || true
-
-  #     - name: Verify production deployment
-  #       run: kubectl get pods -n pylos -o wide

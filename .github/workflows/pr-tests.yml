@@ -53,6 +53,7 @@ jobs:
               - 'Cargo.lock'
               - '.github/workflows/pr-tests.yml'
               - '.github/workflows/scripts/**'
+              - 'scripts/**'
             ui:
               - 'ui/**'
               - 'package.json'

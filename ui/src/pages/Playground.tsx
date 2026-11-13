@@ -7,6 +7,7 @@ import {
   Send, StopCircle, Trash2, ChevronDown,
   Zap, Clock, Hash, Coins, CheckCircle, XCircle,
   SlidersHorizontal, X, Star, RotateCcw, Globe,
+  Search, Check,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,50 +53,327 @@ async function fetchModels(): Promise<Model[]> {
 // ─── Composants ──────────────────────────────────────────────────────────────
 
 function ModelSelect({
-  models, value, onChange, disabled, favorites = [],
+  models,
+  value,
+  onChange,
+  disabled,
+  favorites = [],
+  onToggleFavorite,
 }: {
   models: Model[]
   value: string
   onChange: (v: string) => void
   disabled?: boolean
   favorites?: string[]
+  onToggleFavorite?: (v: string) => void
 }) {
-  const grouped: Record<string, Model[]> = {}
-  if (Array.isArray(models)) {
-    for (const m of models) {
-      if (!grouped[m.provider]) grouped[m.provider] = []
-      grouped[m.provider].push(m)
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState<'all' | 'favorites' | string>('all')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Parse current value
+  let selectedProvider = ''
+  let selectedModelId = ''
+  if (value) {
+    if (value.includes('::')) {
+      const [p, ...rest] = value.split('::')
+      selectedProvider = p
+      selectedModelId = rest.join('::')
+    } else {
+      const found = models.find(m => m.id === value)
+      selectedProvider = found?.provider || ''
+      selectedModelId = value
     }
   }
+  const selectedModelObj = models.find(
+    m => `${m.provider}::${m.id}` === value || (m.provider === selectedProvider && m.id === selectedModelId)
+  )
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  // Close on Escape & focus input on open
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      const timer = setTimeout(() => searchInputRef.current?.focus(), 50)
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        clearTimeout(timer)
+      }
+    }
+  }, [isOpen])
+
+  // Get unique list of providers
+  const providers = Array.from(new Set(models.map(m => m.provider))).sort()
+
+  // Filter models
+  const q = searchQuery.trim().toLowerCase()
+  const filteredModels = models.filter(m => {
+    const val = `${m.provider}::${m.id}`
+    const isFav = favorites.includes(val)
+
+    // Tab filter
+    if (activeTab === 'favorites' && !isFav) return false
+    if (activeTab !== 'all' && activeTab !== 'favorites' && m.provider !== activeTab) return false
+
+    // Search query filter
+    if (q) {
+      const matchId = m.id.toLowerCase().includes(q)
+      const matchProvider = m.provider.toLowerCase().includes(q)
+      const matchSize = m.details?.parameter_size?.toLowerCase().includes(q)
+      const matchFamily = m.details?.family?.toLowerCase().includes(q)
+      if (!matchId && !matchProvider && !matchSize && !matchFamily) return false
+    }
+
+    return true
+  })
+
+  // Group filtered models by provider
+  const grouped: Record<string, Model[]> = {}
+  for (const m of filteredModels) {
+    if (!grouped[m.provider]) grouped[m.provider] = []
+    grouped[m.provider].push(m)
+  }
+
+  const favCount = models.filter(m => favorites.includes(`${m.provider}::${m.id}`)).length
 
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={disabled}
-        className="w-full appearance-none bg-zinc-900 border border-zinc-800 rounded-lg
-          px-3 py-2 text-sm text-zinc-100 pr-8
-          focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20
-          disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <option value="">— Select a model —</option>
-        {Object.entries(grouped).map(([provider, ms]) => (
-          <optgroup key={provider} label={`▸ ${provider.toUpperCase()}`}>
-            {ms.map(m => {
-              const val = `${provider}::${m.id}`
-              const isFav = favorites.includes(val)
-              return (
-                <option key={val} value={val}>
-                  {isFav ? '★ ' : ''}{m.id}
-                  {m.details?.parameter_size ? ` (${m.details.parameter_size})` : ''}
-                </option>
-              )
-            })}
-          </optgroup>
-        ))}
-      </select>
-      <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+    <div className="relative" ref={containerRef}>
+      {/* Trigger button + optional external favorite star */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          disabled={disabled}
+          className={`flex-1 min-w-0 bg-zinc-900 border rounded-lg px-3 py-2 text-left text-sm text-zinc-100 flex items-center justify-between gap-2 transition-all focus:outline-none focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed ${
+            isOpen
+              ? 'border-emerald-500/50 ring-1 ring-emerald-500/20 bg-zinc-850'
+              : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-850/60'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {selectedModelId ? (
+              <>
+                <div
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ background: providerColor(selectedProvider) }}
+                  title={selectedProvider}
+                />
+                <span className="truncate font-medium text-zinc-100 text-xs sm:text-sm">
+                  {selectedModelId}
+                </span>
+                {selectedModelObj?.details?.parameter_size && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono flex-shrink-0 border border-zinc-750">
+                    {selectedModelObj.details.parameter_size}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-sm text-zinc-500">— Select a model —</span>
+            )}
+          </div>
+          <ChevronDown
+            size={14}
+            className={`text-zinc-500 transition-transform duration-200 flex-shrink-0 ${
+              isOpen ? 'rotate-180 text-emerald-400' : ''
+            }`}
+          />
+        </button>
+
+        {value && onToggleFavorite && (
+          <button
+            type="button"
+            onClick={() => onToggleFavorite(value)}
+            disabled={disabled}
+            className={`p-2 rounded-lg border flex items-center justify-center flex-shrink-0 transition-all active:scale-95 ${
+              favorites.includes(value)
+                ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
+            }`}
+            title={favorites.includes(value) ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star size={16} fill={favorites.includes(value) ? 'currentColor' : 'none'} />
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+          {/* Search bar */}
+          <div className="p-2 border-b border-zinc-800/80 bg-zinc-900/90">
+            <div className="relative flex items-center">
+              <Search size={14} className="absolute left-2.5 text-zinc-400 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search models, providers, sizes..."
+                className="w-full bg-zinc-950/70 border border-zinc-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 text-zinc-500 hover:text-zinc-300 p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Provider Filter Chips */}
+            <div className="flex items-center gap-1 mt-2 overflow-x-auto pb-0.5 pt-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <button
+                type="button"
+                onClick={() => setActiveTab('all')}
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 transition-colors ${
+                  activeTab === 'all'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-medium'
+                    : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+              >
+                All ({models.length})
+              </button>
+              {favCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('favorites')}
+                  className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 transition-colors ${
+                    activeTab === 'favorites'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-medium'
+                      : 'bg-zinc-800/60 text-zinc-400 hover:text-amber-300 hover:bg-zinc-800'
+                  }`}
+                >
+                  <Star size={9} fill="currentColor" className="text-amber-400" />
+                  <span>Favs ({favCount})</span>
+                </button>
+              )}
+              {providers.map(prov => {
+                const count = models.filter(m => m.provider === prov).length
+                const isActive = activeTab === prov
+                return (
+                  <button
+                    key={prov}
+                    type="button"
+                    onClick={() => setActiveTab(isActive ? 'all' : prov)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 transition-colors ${
+                      isActive
+                        ? 'bg-zinc-700/80 text-zinc-100 border border-zinc-600 font-medium'
+                        : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    }`}
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: providerColor(prov) }} />
+                    <span className="capitalize">{prov}</span>
+                    <span className="text-zinc-500 text-[9px]">({count})</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Model list grouped by provider */}
+          <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/40">
+            {Object.keys(grouped).length === 0 ? (
+              <div className="py-8 text-center text-xs text-zinc-500">
+                No models found {searchQuery ? `matching "${searchQuery}"` : ''}
+              </div>
+            ) : (
+              Object.entries(grouped).map(([provider, ms]) => (
+                <div key={provider} className="relative">
+                  {/* Sticky Group Header */}
+                  <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center justify-between border-b border-zinc-800/50">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: providerColor(provider) }} />
+                      <span>{provider}</span>
+                    </div>
+                    <span className="text-[9px] text-zinc-500 font-normal">
+                      {ms.length} model{ms.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {/* Provider models */}
+                  <div className="py-0.5">
+                    {ms.map(m => {
+                      const val = `${provider}::${m.id}`
+                      const isSelected = value === val || value === m.id
+                      const isFav = favorites.includes(val)
+
+                      return (
+                        <div
+                          key={val}
+                          onClick={() => {
+                            onChange(val)
+                            setIsOpen(false)
+                          }}
+                          className={`group px-3 py-1.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-emerald-500/15 text-emerald-300 font-medium'
+                              : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                            <span className="truncate font-mono text-[11px] sm:text-xs">
+                              {m.id}
+                            </span>
+                            {m.details?.parameter_size && (
+                              <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800/90 text-zinc-400 font-mono flex-shrink-0 border border-zinc-750">
+                                {m.details.parameter_size}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {isSelected && (
+                              <Check size={13} className="text-emerald-400 flex-shrink-0" />
+                            )}
+                            {onToggleFavorite && (
+                              <button
+                                type="button"
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  onToggleFavorite(val)
+                                }}
+                                className={`p-1 rounded hover:bg-zinc-700/60 transition-colors ${
+                                  isFav
+                                    ? 'text-amber-400'
+                                    : 'text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-zinc-300'
+                                }`}
+                                title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                              >
+                                <Star size={12} fill={isFav ? 'currentColor' : 'none'} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -770,34 +1048,17 @@ export default function Playground() {
           {/* Model selector */}
           <div className="space-y-1.5">
             <label className="text-xs text-zinc-400">Model</label>
-            <div className="flex gap-2">
-              <div className="flex-1 min-w-0">
-                {modelsLoading
-                  ? <div className="h-9 bg-zinc-800 rounded-lg animate-pulse" />
-                  : <ModelSelect
-                      models={models}
-                      value={selectedModel}
-                      onChange={setSelectedModel}
-                      disabled={isRunning}
-                      favorites={favorites}
-                    />
-                }
-              </div>
-              {selectedModel && (
-                <button
-                  onClick={() => toggleFavorite(selectedModel)}
+            {modelsLoading
+              ? <div className="h-9 bg-zinc-800 rounded-lg animate-pulse" />
+              : <ModelSelect
+                  models={models}
+                  value={selectedModel}
+                  onChange={setSelectedModel}
                   disabled={isRunning}
-                  className={`p-2 rounded-lg border flex items-center justify-center flex-shrink-0 transition-all active:scale-95
-                    ${favorites.includes(selectedModel)
-                      ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 hover:bg-amber-500/20'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                    }`}
-                  title={favorites.includes(selectedModel) ? 'Remove from favorites' : 'Add to favorites'}
-                >
-                  <Star size={16} fill={favorites.includes(selectedModel) ? 'currentColor' : 'none'} />
-                </button>
-              )}
-            </div>
+                  favorites={favorites}
+                  onToggleFavorite={toggleFavorite}
+                />
+            }
 
             {/* Quick Switch Favorites */}
             {favorites.length > 0 && (

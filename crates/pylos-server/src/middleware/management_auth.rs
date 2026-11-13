@@ -113,7 +113,10 @@ async fn session_admin(state: &AppState, token: &str) -> Option<InternalUser> {
     let is_admin_by_email = crate::interfaces::http::auth::is_admin_email(&email);
 
     let users = state.org_store.list_users().await.ok()?;
-    if let Some(mut u) = users.into_iter().find(|u| u.email.to_lowercase() == email && u.is_active) {
+    if let Some(mut u) = users
+        .into_iter()
+        .find(|u| u.email.to_lowercase() == email && u.is_active)
+    {
         if u.role.eq_ignore_ascii_case("admin") || is_admin_by_email {
             if is_admin_by_email && !u.role.eq_ignore_ascii_case("admin") {
                 u.role = "admin".to_string();

@@ -342,7 +342,12 @@ impl InferenceOrchestrator {
                     self.record_failure(provider.name());
                     warn!(provider = provider.name(), error = %e, "Embedding failed");
                     // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
-                    if matches!(e, PylosError::BudgetExceeded(_) | PylosError::GuardrailViolation(_) | PylosError::InvalidRequest(_)) {
+                    if matches!(
+                        e,
+                        PylosError::BudgetExceeded(_)
+                            | PylosError::GuardrailViolation(_)
+                            | PylosError::InvalidRequest(_)
+                    ) {
                         return Err(e);
                     }
                     last_error = Some(e);
@@ -537,7 +542,12 @@ impl InferenceOrchestrator {
                         provider.name(), model, e
                     );
                     // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
-                    if matches!(e, PylosError::BudgetExceeded(_) | PylosError::GuardrailViolation(_) | PylosError::InvalidRequest(_)) {
+                    if matches!(
+                        e,
+                        PylosError::BudgetExceeded(_)
+                            | PylosError::GuardrailViolation(_)
+                            | PylosError::InvalidRequest(_)
+                    ) {
                         return Err(e);
                     }
                     last_error = Some(e);
@@ -669,7 +679,12 @@ impl InferenceOrchestrator {
                         provider.name(), stream_model, e
                     );
                     // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
-                    if matches!(e, PylosError::BudgetExceeded(_) | PylosError::GuardrailViolation(_) | PylosError::InvalidRequest(_)) {
+                    if matches!(
+                        e,
+                        PylosError::BudgetExceeded(_)
+                            | PylosError::GuardrailViolation(_)
+                            | PylosError::InvalidRequest(_)
+                    ) {
                         return Err(e);
                     }
                     last_error = Some(e);

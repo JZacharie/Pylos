@@ -699,9 +699,13 @@ impl AppState {
                 || std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").is_ok()
                 || std::env::var("OTEL_ENDPOINT").is_ok();
             if has_otel_env {
-                let service_name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "pylos".to_string());
+                let service_name =
+                    std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "pylos".to_string());
                 plugins.push(Arc::new(pylos_application::OtelPlugin::new(service_name)));
-                tracing::info!(name = "otel", "OtelPlugin automatically enabled via environment");
+                tracing::info!(
+                    name = "otel",
+                    "OtelPlugin automatically enabled via environment"
+                );
             }
         }
 

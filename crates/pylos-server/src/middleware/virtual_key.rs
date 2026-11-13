@@ -100,7 +100,11 @@ pub async fn virtual_key_middleware(
                 &jsonwebtoken::Validation::default(),
             ) {
                 let role = claims.claims.get("role").and_then(|r| r.as_str());
-                let sub = claims.claims.get("sub").and_then(|s| s.as_str()).unwrap_or("");
+                let sub = claims
+                    .claims
+                    .get("sub")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("");
                 role == Some("admin") || crate::interfaces::http::auth::is_admin_email(sub)
             } else {
                 false
@@ -114,7 +118,11 @@ pub async fn virtual_key_middleware(
 
     if is_admin_token || is_admin_jwt {
         let cfg = state.config_store.get().await;
-        let static_admin = cfg.governance.virtual_keys.iter().find(|v| v.id == "vk-admin");
+        let static_admin = cfg
+            .governance
+            .virtual_keys
+            .iter()
+            .find(|v| v.id == "vk-admin");
         let (vk_id, vk_name, provider_configs, allowed_tools, denied_tools) =
             if let Some(vk_cfg) = static_admin {
                 (
@@ -268,7 +276,11 @@ pub async fn virtual_key_middleware(
                             vk_cfg.denied_tools.clone(),
                         )
                     } else if token == "sk-pylos-admin" {
-                        let static_admin = cfg.governance.virtual_keys.iter().find(|v| v.id == "vk-admin");
+                        let static_admin = cfg
+                            .governance
+                            .virtual_keys
+                            .iter()
+                            .find(|v| v.id == "vk-admin");
                         if let Some(vk_cfg) = static_admin {
                             (
                                 vk_cfg.id.clone(),

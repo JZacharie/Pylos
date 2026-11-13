@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(dirname "$0")/.."
 
 # Couleurs pour l'affichage
 GREEN='\033[0;32m'

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(dirname "$0")/.."
 
 # Local test runner to quickly run CI validations before push
 echo "🧪 Running local Pylos validation suite..."

@@ -36,8 +36,19 @@ pylos.*.json
 # Project Survey
 Final_project_Survey.xlsx
 
-# SQLite databases
+# SQLite databases & runtime files
+*.db
+*.db-shm
+*.db-wal
 .sqlite/
+db_backup/
+
+# Logs & temporary files
+*.log
+tmp_*
+
+# CI & Linter reports
+megalinter-reports/
 
 # ── BMAD ────────────────────────────────────────────────────
 
