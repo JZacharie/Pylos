@@ -192,7 +192,10 @@ impl ModelCatalog {
             params.push(p.to_string());
         }
         if !include_deprecated {
-            sql.push_str(" AND is_deprecated = 0 AND enabled = 1");
+            match &self.pool {
+                Pool::Sqlite(_) => sql.push_str(" AND is_deprecated = 0 AND enabled = 1"),
+                Pool::Postgres(_) => sql.push_str(" AND is_deprecated = FALSE AND enabled = TRUE"),
+            }
         }
         sql.push_str(" ORDER BY provider, model_id");
 
