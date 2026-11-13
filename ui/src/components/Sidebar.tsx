@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
@@ -36,7 +36,7 @@ import {
   Palette,
   ScrollText,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { healthApi, authApi } from '../lib/api'
 
@@ -113,10 +113,119 @@ const SETTINGS_SUB = [
   { to: '/settings/ui-theme',       icon: Palette,    label: 'UI Theme' },
 ]
 
+function SectionHeader({
+  title,
+  count,
+  isExpanded,
+  onToggle,
+  isCollapsed,
+  isOpen,
+  topSpacing = true,
+}: {
+  title: string
+  count?: number
+  isExpanded: boolean
+  onToggle: () => void
+  isCollapsed: boolean
+  isOpen?: boolean
+  topSpacing?: boolean
+}) {
+  if (isCollapsed && !isOpen) {
+    return <div className={`mx-3 ${topSpacing ? 'mt-4' : 'mt-2'} mb-2 border-t border-zinc-800/50`} />
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`flex items-center justify-between w-full px-3 ${
+        topSpacing ? 'pt-4' : 'pt-2'
+      } pb-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-300 uppercase tracking-wider transition-colors group cursor-pointer text-left select-none`}
+      title={isExpanded ? `Collapse ${title}` : `Expand ${title}`}
+    >
+      <span className="flex items-center gap-1.5">
+        <span>{title}</span>
+        {count !== undefined && (
+          <span className="text-[10px] font-normal text-zinc-600 group-hover:text-zinc-400 transition-colors">
+            ({count})
+          </span>
+        )}
+      </span>
+      <span className="p-0.5 rounded text-zinc-600 group-hover:text-zinc-300 transition-colors">
+        {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      </span>
+    </button>
+  )
+}
+
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+  const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
-  const [toolsExpanded, setToolsExpanded] = useState(true)
-  const [settingsExpanded, setSettingsExpanded] = useState(true)
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('pylos_nav_sections')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {
+      aiGateway: true,
+      tools: true,
+      observability: true,
+      accessControl: true,
+      devTools: true,
+      settings: true,
+    }
+  })
+
+  const toggleSection = (section: string) => {
+    if (collapsed) setCollapsed(false)
+    setExpandedSections(prev => {
+      const next = { ...prev, [section]: !prev[section] }
+      try {
+        localStorage.setItem('pylos_nav_sections', JSON.stringify(next))
+      } catch {}
+      return next
+    })
+  }
+
+  // Auto-expand section if current route is inside it
+  useEffect(() => {
+    const p = location.pathname
+    setExpandedSections(prev => {
+      let changed = false
+      const next = { ...prev }
+      if (!next.aiGateway && AI_GATEWAY.some(i => i.to === p || (i.to !== '/' && p.startsWith(i.to)))) {
+        next.aiGateway = true
+        changed = true
+      }
+      if (!next.tools && NAV_TOOLS.some(i => i.to === p || p.startsWith(i.to))) {
+        next.tools = true
+        changed = true
+      }
+      if (!next.observability && OBSERVABILITY.some(i => i.to === p || p.startsWith(i.to))) {
+        next.observability = true
+        changed = true
+      }
+      if (!next.accessControl && GOVERNANCE.some(i => i.to === p || p.startsWith(i.to))) {
+        next.accessControl = true
+        changed = true
+      }
+      if (!next.devTools && DEVELOPER_TOOLS.some(i => i.to === p || p.startsWith(i.to))) {
+        next.devTools = true
+        changed = true
+      }
+      if (!next.settings && SETTINGS_SUB.some(i => i.to === p || p.startsWith(i.to))) {
+        next.settings = true
+        changed = true
+      }
+      if (changed) {
+        try {
+          localStorage.setItem('pylos_nav_sections', JSON.stringify(next))
+        } catch {}
+        return next
+      }
+      return prev
+    })
+  }, [location.pathname])
 
   const userJson = typeof window !== 'undefined' ? localStorage.getItem('pylos_user') : null;
   const user = userJson ? JSON.parse(userJson) : null;
@@ -170,43 +279,46 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
           
           {/* AI GATEWAY SECTION */}
-          {(!collapsed || isOpen) ? (
-            <div className="px-3 pt-2 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-              AI Gateway
-            </div>
-          ) : (
-            <div className="mx-3 mt-2 mb-2 border-t border-zinc-800/50" />
-          )}
+          <SectionHeader
+            title="AI Gateway"
+            count={AI_GATEWAY.length}
+            isExpanded={expandedSections.aiGateway}
+            onToggle={() => toggleSection('aiGateway')}
+            isCollapsed={collapsed}
+            isOpen={isOpen}
+            topSpacing={false}
+          />
 
-          {AI_GATEWAY.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                ${isActive
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
-                  <Icon size={18} className="flex-shrink-0" />
-                  {(!collapsed || isOpen) && <span>{label}</span>}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {(expandedSections.aiGateway || (collapsed && !isOpen)) &&
+            AI_GATEWAY.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+                  ${isActive
+                    ? 'bg-zinc-800 text-white'
+                    : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
+                    <Icon size={18} className="flex-shrink-0" />
+                    {(!collapsed || isOpen) && <span>{label}</span>}
+                  </>
+                )}
+              </NavLink>
+            ))}
 
           {/* Tools Dropdown */}
           <div className="flex flex-col mt-1">
             <button
               onClick={() => {
                 if (collapsed) setCollapsed(false);
-                setToolsExpanded(!toolsExpanded);
+                toggleSection('tools');
               }}
               className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 w-full"
             >
@@ -215,10 +327,10 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                 {(!collapsed || isOpen) && <span>Tools</span>}
               </div>
               {(!collapsed || isOpen) && (
-                toolsExpanded ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
+                expandedSections.tools ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
               )}
             </button>
-            {toolsExpanded && (!collapsed || isOpen) && (
+            {(expandedSections.tools || (collapsed && !isOpen)) && (
               <div className="flex flex-col mt-1 ml-4 space-y-1 border-l border-zinc-800/50 pl-2">
                 {NAV_TOOLS.map(({ to, icon: Icon, label }) => (
                   <NavLink
@@ -247,48 +359,17 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           </div>
 
           {/* OBSERVABILITY SECTION */}
-          {(!collapsed || isOpen) ? (
-            <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-              Observability
-            </div>
-          ) : (
-            <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
-          )}
+          <SectionHeader
+            title="Observability"
+            count={OBSERVABILITY.length}
+            isExpanded={expandedSections.observability}
+            onToggle={() => toggleSection('observability')}
+            isCollapsed={collapsed}
+            isOpen={isOpen}
+          />
 
-          {OBSERVABILITY.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                ${isActive
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
-                  <Icon size={18} className="flex-shrink-0" />
-                  {(!collapsed || isOpen) && <span>{label}</span>}
-                </>
-              )}
-            </NavLink>
-          ))}
-
-          {/* GOVERNANCE & ACCESS CONTROL SECTION */}
-          {isAdmin() && <>
-            {(!collapsed || isOpen) ? (
-              <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Governance & Access
-              </div>
-            ) : (
-              <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
-            )}
-
-            {GOVERNANCE.map(({ to, icon: Icon, label }) => (
+          {(expandedSections.observability || (collapsed && !isOpen)) &&
+            OBSERVABILITY.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -310,100 +391,141 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                 )}
               </NavLink>
             ))}
-          </>}
 
-          {/* DEVELOPER TOOLS SECTION */}
-          {(!collapsed || isOpen) ? (
-            <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-              Developer Tools
-            </div>
-          ) : (
-            <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
+          {/* ACCESS CONTROL & GOVERNANCE SECTION */}
+          {isAdmin() && (
+            <>
+              <SectionHeader
+                title="Access Control"
+                count={GOVERNANCE.length}
+                isExpanded={expandedSections.accessControl}
+                onToggle={() => toggleSection('accessControl')}
+                isCollapsed={collapsed}
+                isOpen={isOpen}
+              />
+
+              {(expandedSections.accessControl || (collapsed && !isOpen)) &&
+                GOVERNANCE.map(({ to, icon: Icon, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+                      ${isActive
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
+                        <Icon size={18} className="flex-shrink-0" />
+                        {(!collapsed || isOpen) && <span>{label}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                ))}
+            </>
           )}
 
-          {DEVELOPER_TOOLS.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                ${isActive
-                  ? 'bg-zinc-800 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
-                  <Icon size={18} className="flex-shrink-0" />
-                  {(!collapsed || isOpen) && <span>{label}</span>}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {/* DEVELOPER TOOLS SECTION */}
+          <SectionHeader
+            title="Developer Tools"
+            count={DEVELOPER_TOOLS.length}
+            isExpanded={expandedSections.devTools}
+            onToggle={() => toggleSection('devTools')}
+            isCollapsed={collapsed}
+            isOpen={isOpen}
+          />
+
+          {(expandedSections.devTools || (collapsed && !isOpen)) &&
+            DEVELOPER_TOOLS.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+                  ${isActive
+                    ? 'bg-zinc-800 text-white'
+                    : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
+                    <Icon size={18} className="flex-shrink-0" />
+                    {(!collapsed || isOpen) && <span>{label}</span>}
+                  </>
+                )}
+              </NavLink>
+            ))}
 
           {/* SETTINGS SECTION */}
-          {isAdmin() && <>
-            {(!collapsed || isOpen) ? (
-              <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Settings
-              </div>
-            ) : (
-              <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
-            )}
-
-            <div className="flex flex-col mt-1">
-              <button
-                onClick={() => {
-                  if (collapsed) setCollapsed(false);
-                  setSettingsExpanded(!settingsExpanded);
-                }}
-                className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 w-full"
-              >
-                <div className="flex items-center gap-3">
-                  <Settings size={18} className="flex-shrink-0" />
-                  {(!collapsed || isOpen) && (
-                    <span className="flex items-center">
-                      Settings
-                      <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-semibold ml-2">New</span>
-                    </span>
-                  )}
+          {isAdmin() && (
+            <>
+              {(!collapsed || isOpen) ? (
+                <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                  Settings
                 </div>
-                {(!collapsed || isOpen) && (
-                  settingsExpanded ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
-                )}
-              </button>
-              {settingsExpanded && (!collapsed || isOpen) && (
-                <div className="flex flex-col mt-1 ml-4 space-y-1 border-l border-zinc-800/50 pl-2">
-                  {SETTINGS_SUB.map(({ to, icon: Icon, label, hasDot }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                        ${isActive
-                          ? 'bg-zinc-800 text-white'
-                          : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                        }`
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0 absolute -ml-4" />}
-                          <Icon size={16} className="flex-shrink-0" />
-                          <span className="flex-1 truncate">{label}</span>
-                          {hasDot && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 ml-1 animate-pulse" />}
-                        </>
-                      )}
-                    </NavLink>
-                  ))}
-                </div>
+              ) : (
+                <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
               )}
-            </div>
-          </>}
+
+              <div className="flex flex-col mt-1">
+                <button
+                  onClick={() => {
+                    if (collapsed) setCollapsed(false);
+                    toggleSection('settings');
+                  }}
+                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 w-full"
+                >
+                  <div className="flex items-center gap-3">
+                    <Settings size={18} className="flex-shrink-0" />
+                    {(!collapsed || isOpen) && (
+                      <span className="flex items-center">
+                        Settings
+                        <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-semibold ml-2">New</span>
+                      </span>
+                    )}
+                  </div>
+                  {(!collapsed || isOpen) && (
+                    expandedSections.settings ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
+                  )}
+                </button>
+                {(expandedSections.settings || (collapsed && !isOpen)) && (
+                  <div className="flex flex-col mt-1 ml-4 space-y-1 border-l border-zinc-800/50 pl-2">
+                    {SETTINGS_SUB.map(({ to, icon: Icon, label, hasDot }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        onClick={onClose}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+                          ${isActive
+                            ? 'bg-zinc-800 text-white'
+                            : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
+                          }`
+                        }
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0 absolute -ml-4" />}
+                            <Icon size={16} className="flex-shrink-0" />
+                            <span className="flex-1 truncate">{label}</span>
+                            {hasDot && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 ml-1 animate-pulse" />}
+                          </>
+                        )}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
         </nav>
 
