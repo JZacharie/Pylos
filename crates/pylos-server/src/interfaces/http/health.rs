@@ -19,6 +19,8 @@ pub async fn root() -> impl IntoResponse {
 pub async fn health_check() -> impl IntoResponse {
     Json(json!({
         "status": "ok",
-        "version": env!("CARGO_PKG_VERSION")
+        "version": env!("CARGO_PKG_VERSION"),
+        "build_date": env!("PYLOS_BUILD_DATE"),
+        "git_sha": option_env!("PYLOS_GIT_SHA")
     }))
 }

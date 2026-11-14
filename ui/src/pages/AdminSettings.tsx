@@ -4,7 +4,7 @@ import { configApi, getErrorMessage } from '../lib/api'
 import {
   Shield, Server, RotateCcw, AlertTriangle,
   Check, X, Rocket, FileText, Clock,
-  Eye, EyeOff,
+  Eye, EyeOff, ExternalLink,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,6 +33,9 @@ interface QueueConfig {
 
 interface SystemInfo {
   version: string
+  build_date?: string | null
+  git_sha?: string | null
+  changelog_url?: string | null
   config_file_path: string
   last_config_reload: number | null
 }
@@ -267,9 +270,36 @@ export default function AdminSettings() {
 
         {/* System Information */}
         <SectionCard title="System Information" icon={<FileText size={15} className="text-purple-400" />}>
-          <ConfigRow label="Version" value={system?.version ?? '—'} />
+          <ConfigRow
+            label="Version"
+            value={
+              system?.version
+                ? `v${system.version}${system.git_sha ? ` (${system.git_sha})` : ''}`
+                : '—'
+            }
+          />
+          <ConfigRow
+            label="Date de compilation"
+            value={
+              system?.build_date
+                ? new Date(system.build_date).toLocaleString()
+                : '—'
+            }
+          />
           <ConfigRow label="Config File" value={system?.config_file_path ?? '—'} />
           <ConfigRow label="Last Reload" value={formatTimestamp(system?.last_config_reload ?? null)} />
+          <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/50 last:border-0">
+            <span className="text-xs text-zinc-400">Changelog & Fonctionnalités</span>
+            <a
+              href={system?.changelog_url ?? 'https://github.com/JZacharie/Pylos/releases'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              Voir les nouveautés
+              <ExternalLink size={12} />
+            </a>
+          </div>
         </SectionCard>
       </div>
 

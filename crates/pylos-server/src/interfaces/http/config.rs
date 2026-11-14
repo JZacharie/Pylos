@@ -21,6 +21,31 @@ pub async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
     let env = std::env::var("PYLOS_ENV").unwrap_or_else(|_| "production".to_string());
     if let Some(obj) = val.as_object_mut() {
         obj.insert("environment".to_string(), serde_json::Value::String(env));
+        let sys_entry = obj
+            .entry("system".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(sys) = sys_entry.as_object_mut() {
+            sys.insert(
+                "version".to_string(),
+                serde_json::Value::String(env!("CARGO_PKG_VERSION").to_string()),
+            );
+            sys.insert(
+                "build_date".to_string(),
+                serde_json::Value::String(env!("PYLOS_BUILD_DATE").to_string()),
+            );
+            if let Some(sha) = option_env!("PYLOS_GIT_SHA") {
+                sys.insert(
+                    "git_sha".to_string(),
+                    serde_json::Value::String(sha.to_string()),
+                );
+            }
+            sys.insert(
+                "changelog_url".to_string(),
+                serde_json::Value::String(
+                    "https://github.com/JZacharie/Pylos/releases".to_string(),
+                ),
+            );
+        }
     }
     Json(val)
 }
