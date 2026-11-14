@@ -71,6 +71,17 @@ pub trait Provider: Send + Sync {
 pub trait LlmPlugin: Send + Sync {
     fn name(&self) -> &str;
 
+    /// Priorité d'exécution dans le pipeline (plus petit = exécuté plus tôt en `pre_hook`,
+    /// et plus tard en `post_hook` / `post_stream_chunk`).
+    /// Ordre recommandé :
+    /// - `-100..=-10` : Gouvernance, Rate-Limit (-80), Budget (-70), Sécurité/Guardrails (-50)
+    /// - `0..=49`    : Caches & Routage (défaut 0)
+    /// - `50..=99`   : Transformations / Structured Output (50)
+    /// - `100..`     : Observabilité / OTel (100)
+    fn priority(&self) -> i32 {
+        0
+    }
+
     async fn pre_hook(
         &self,
         request: &mut PylosRequest,
@@ -87,6 +98,16 @@ pub trait LlmPlugin: Send + Sync {
         ctx: &mut crate::domain::request::RequestContext,
     ) -> Result<(), PylosError> {
         let _ = (request, response, ctx);
+        Ok(())
+    }
+
+    /// Post-traitement synchrone appliqué à chaque chunk de streaming avant envoi au client.
+    fn post_stream_chunk(
+        &self,
+        chunk: &mut crate::domain::request::StreamChunk,
+        ctx: &mut crate::domain::request::RequestContext,
+    ) -> Result<(), PylosError> {
+        let _ = (chunk, ctx);
         Ok(())
     }
 }

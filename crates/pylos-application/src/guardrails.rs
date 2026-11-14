@@ -507,6 +507,10 @@ impl LlmPlugin for GuardrailsPlugin {
         "guardrails"
     }
 
+    fn priority(&self) -> i32 {
+        -50
+    }
+
     async fn pre_hook(
         &self,
         request: &mut PylosRequest,
@@ -804,6 +808,25 @@ impl LlmPlugin for GuardrailsPlugin {
             }
         }
 
+        Ok(())
+    }
+
+    fn post_stream_chunk(
+        &self,
+        chunk: &mut pylos_core::domain::request::StreamChunk,
+        ctx: &mut RequestContext,
+    ) -> Result<(), PylosError> {
+        if let Some(serialized) = ctx.headers.get("x-pii-mapping") {
+            if let Ok(pii_map) = serde_json::from_str::<HashMap<String, String>>(serialized) {
+                if !pii_map.is_empty() {
+                    for choice in &mut chunk.choices {
+                        if let Some(ref mut content) = choice.delta.content {
+                            *content = self.restore_text(content, &pii_map);
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
