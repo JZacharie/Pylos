@@ -367,6 +367,117 @@ impl ProviderConfig {
     }
 }
 
+/// Capacités normalisées supportées par un provider (#140)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ProviderCapabilities {
+    pub chat: bool,
+    pub streaming: bool,
+    pub tools: bool,
+    pub vision: bool,
+    pub embeddings: bool,
+    pub images: bool,
+}
+
+impl ProviderKind {
+    /// Retourne la matrice de capacités normalisées du provider (#140).
+    pub fn capabilities(&self) -> ProviderCapabilities {
+        match self {
+            ProviderKind::OpenAI | ProviderKind::Azure => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: true,
+                embeddings: true,
+                images: true,
+            },
+            ProviderKind::Anthropic => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: true,
+                embeddings: false,
+                images: false,
+            },
+            ProviderKind::Gemini | ProviderKind::Vertex => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: true,
+                embeddings: true,
+                images: true,
+            },
+            ProviderKind::Bedrock | ProviderKind::OpenRouter => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: true,
+                embeddings: true,
+                images: false,
+            },
+            ProviderKind::Cohere => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: false,
+                embeddings: true,
+                images: false,
+            },
+            ProviderKind::Mistral => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: true,
+                embeddings: true,
+                images: false,
+            },
+            ProviderKind::Groq | ProviderKind::Fireworks | ProviderKind::XAI | ProviderKind::Antigravity => {
+                ProviderCapabilities {
+                    chat: true,
+                    streaming: true,
+                    tools: true,
+                    vision: true,
+                    embeddings: false,
+                    images: false,
+                }
+            }
+            ProviderKind::DeepSeek | ProviderKind::Nebius | ProviderKind::Lemonade => {
+                ProviderCapabilities {
+                    chat: true,
+                    streaming: true,
+                    tools: true,
+                    vision: false,
+                    embeddings: false,
+                    images: false,
+                }
+            }
+            ProviderKind::Ollama => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: true,
+                embeddings: true,
+                images: false,
+            },
+            ProviderKind::Cerebras | ProviderKind::Perplexity => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: false,
+                vision: false,
+                embeddings: false,
+                images: false,
+            },
+            ProviderKind::Custom(_) => ProviderCapabilities {
+                chat: true,
+                streaming: true,
+                tools: true,
+                vision: false,
+                embeddings: true,
+                images: false,
+            },
+        }
+    }
+}
+
 /// Cible de routing : provider + modèle optionnel
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RoutingTarget {
@@ -384,5 +495,22 @@ impl RoutingTarget {
             model_override: None,
             weight: 1.0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_provider_capabilities_contract() {
+        assert!(ProviderKind::OpenAI.capabilities().tools);
+        assert!(ProviderKind::OpenAI.capabilities().embeddings);
+        assert!(ProviderKind::Anthropic.capabilities().tools);
+        assert!(!ProviderKind::Anthropic.capabilities().embeddings);
+        assert!(!ProviderKind::Perplexity.capabilities().tools);
+        assert!(!ProviderKind::Cerebras.capabilities().tools);
+        assert!(ProviderKind::Ollama.capabilities().embeddings);
+        assert!(ProviderKind::Antigravity.capabilities().tools);
     }
 }

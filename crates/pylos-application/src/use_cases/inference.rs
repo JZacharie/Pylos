@@ -314,7 +314,8 @@ impl InferenceOrchestrator {
         } else {
             request.model.clone()
         };
-        let ordered = self.select_and_order_providers(&providers, &model, &ctx);
+        let mut ordered = self.select_and_order_providers(&providers, &model, &ctx);
+        ordered.retain(|(_, cfg)| cfg.kind.capabilities().embeddings);
 
         for (provider, config) in ordered {
             if provider.name() == "antigravity" {
@@ -476,7 +477,14 @@ impl InferenceOrchestrator {
         } else {
             request.model().to_string()
         };
-        let ordered = self.select_and_order_providers(&providers, &model, &ctx);
+        let mut ordered = self.select_and_order_providers(&providers, &model, &ctx);
+        let requires_tools = matches!(
+            &request,
+            PylosRequest::ChatCompletion(req) if req.tools.as_ref().is_some_and(|t| !t.is_empty())
+        );
+        if requires_tools {
+            ordered.retain(|(_, cfg)| cfg.kind.capabilities().tools);
+        }
 
         for (provider, config) in &ordered {
             if ctx.tried_providers.contains(&provider.name().to_string()) {
@@ -711,7 +719,14 @@ impl InferenceOrchestrator {
         } else {
             request.model().to_string()
         };
-        let ordered_stream = self.select_and_order_providers(&providers, &stream_model, &ctx);
+        let mut ordered_stream = self.select_and_order_providers(&providers, &stream_model, &ctx);
+        let requires_tools = matches!(
+            &request,
+            PylosRequest::ChatCompletion(req) if req.tools.as_ref().is_some_and(|t| !t.is_empty())
+        );
+        if requires_tools {
+            ordered_stream.retain(|(_, cfg)| cfg.kind.capabilities().tools);
+        }
 
         for (provider, config) in &ordered_stream {
             if ctx.tried_providers.contains(&provider.name().to_string()) {

@@ -576,7 +576,7 @@ impl LlmPlugin for RagPlugin {
     async fn pre_hook(
         &self,
         request: &mut PylosRequest,
-        _ctx: &mut RequestContext,
+        ctx: &mut RequestContext,
     ) -> Result<Option<PylosResponse>, PylosError> {
         let chat_req = match request {
             PylosRequest::ChatCompletion(ref req) => req,
@@ -724,10 +724,181 @@ impl LlmPlugin for RagPlugin {
                 if let Some(ctx_msg) = Self::build_context_message(route, &final_context) {
                     req.messages.insert(0, ctx_msg);
                 }
+                let citations: Vec<RagCitation> = search_results
+                    .iter()
+                    .enumerate()
+                    .take(5)
+                    .map(|(i, (text, score))| RagCitation {
+                        id: i + 1,
+                        source: format!("{}:chunk-{}", collection_name, i + 1),
+                        score: *score,
+                        excerpt: text.chars().take(160).collect(),
+                    })
+                    .collect();
+                let reranked = rerank_citations(&user_query, citations, 3);
+                if let Ok(json) = serde_json::to_string(&reranked) {
+                    ctx.headers.insert("x-pylos-rag-citations".to_string(), json);
+                }
             }
             req.model = self.config.pylos_model.clone();
         }
 
         Ok(None)
+    }
+
+    async fn post_hook(
+        &self,
+        _request: &PylosRequest,
+        response: &mut PylosResponse,
+        ctx: &mut RequestContext,
+    ) -> Result<(), PylosError> {
+        let Some(raw) = ctx.headers.get("x-pylos-rag-citations") else {
+            return Ok(());
+        };
+        let Ok(citations) = serde_json::from_str::<Vec<RagCitation>>(raw) else {
+            return Ok(());
+        };
+        if citations.is_empty() {
+            return Ok(());
+        }
+        if let PylosResponse::ChatCompletion(ref mut chat_resp) = response {
+            if let Some(choice) = chat_resp.choices.first_mut() {
+                let footer = format_citations_footer(&citations);
+                let existing = choice.message.content.take().unwrap_or_default();
+                choice.message.content = Some(format!("{existing}\n\n{footer}"));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Configuration du reranking RAG (#138)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RerankConfig {
+    pub enabled: bool,
+    pub model: Option<String>,
+    pub top_k: usize,
+}
+
+impl Default for RerankConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            model: None,
+            top_k: 3,
+        }
+    }
+}
+
+/// Citation source renvoyée avec les chunks récupérés (#138)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct RagCitation {
+    pub id: usize,
+    pub source: String,
+    pub score: f64,
+    pub excerpt: String,
+}
+
+/// Cas d'évaluation RAG pour le calcul de rappel (`Recall@K`) (#138)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RagEvalCase {
+    pub query: String,
+    pub expected_sources: Vec<String>,
+}
+
+/// Rerank hybride (score vectoriel + chevauchement lexical normalisé) et troncature à `top_k` (#138).
+pub fn rerank_citations(query: &str, mut citations: Vec<RagCitation>, top_k: usize) -> Vec<RagCitation> {
+    let q_terms: std::collections::HashSet<String> = query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.len() >= 3)
+        .map(|t| t.to_ascii_lowercase())
+        .collect();
+
+    citations.sort_by(|a, b| {
+        let score_a = hybrid_score(a, &q_terms);
+        let score_b = hybrid_score(b, &q_terms);
+        score_b
+            .partial_cmp(&score_a)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    citations.truncate(top_k);
+    citations
+}
+
+fn hybrid_score(c: &RagCitation, q_terms: &std::collections::HashSet<String>) -> f64 {
+    if q_terms.is_empty() {
+        return c.score;
+    }
+    let lower = c.excerpt.to_ascii_lowercase();
+    let hits = q_terms.iter().filter(|t| lower.contains(t.as_str())).count();
+    let lexical_bonus = (hits as f64) / (q_terms.len() as f64) * 0.35;
+    c.score + lexical_bonus
+}
+
+pub fn format_citations_footer(citations: &[RagCitation]) -> String {
+    let lines: Vec<String> = citations
+        .iter()
+        .map(|c| format!("[{}] {} (score {:.2})", c.id, c.source, c.score))
+        .collect();
+    format!("Sources:\n{}", lines.join("\n"))
+}
+
+/// Calcule la métrique `Recall@K` sur un jeu d'évaluation RAG (#138).
+pub fn evaluate_recall_at_k(
+    cases: &[RagEvalCase],
+    retrieved_by_query: &[Vec<String>],
+    k: usize,
+) -> f64 {
+    if cases.is_empty() || cases.len() != retrieved_by_query.len() {
+        return 0.0;
+    }
+    let mut total_recall = 0.0;
+    for (case, retrieved) in cases.iter().zip(retrieved_by_query.iter()) {
+        if case.expected_sources.is_empty() {
+            total_recall += 1.0;
+            continue;
+        }
+        let top_k: std::collections::HashSet<&str> =
+            retrieved.iter().take(k).map(|s| s.as_str()).collect();
+        let hits = case
+            .expected_sources
+            .iter()
+            .filter(|exp| top_k.contains(exp.as_str()))
+            .count();
+        total_recall += hits as f64 / case.expected_sources.len() as f64;
+    }
+    total_recall / cases.len() as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rerank_citations_and_eval_recall() {
+        let chunks = vec![
+            RagCitation {
+                id: 1,
+                source: "doc-generic".into(),
+                score: 0.80,
+                excerpt: "General overview of cloud deployments.".into(),
+            },
+            RagCitation {
+                id: 2,
+                source: "doc-quota".into(),
+                score: 0.75,
+                excerpt: "QuotaGuard rotates Antigravity accounts before soft_cap.".into(),
+            },
+        ];
+        let reranked = rerank_citations("QuotaGuard Antigravity soft_cap", chunks, 1);
+        assert_eq!(reranked.len(), 1);
+        assert_eq!(reranked[0].source, "doc-quota");
+
+        let cases = vec![RagEvalCase {
+            query: "QuotaGuard".into(),
+            expected_sources: vec!["doc-quota".into()],
+        }];
+        let recall = evaluate_recall_at_k(&cases, &[vec!["doc-quota".into()]], 1);
+        assert!((recall - 1.0).abs() < f64::EPSILON);
     }
 }

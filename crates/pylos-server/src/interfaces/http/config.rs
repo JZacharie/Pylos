@@ -77,6 +77,12 @@ pub async fn reload_config(State(state): State<AppState>) -> impl IntoResponse {
                     .update_providers(summary.runtime_providers)
                     .await;
             }
+            state.metrics.record_admin_audit(
+                "admin",
+                "config_reload",
+                "success",
+                &format!("providers_reloaded={:?}", summary.providers_reloaded),
+            );
 
             Json(json!({
                 "changed": summary.changed,

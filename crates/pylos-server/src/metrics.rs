@@ -41,6 +41,15 @@ pub struct Metrics {
 
     /// Nombre d'octets économisés grâce à la compression / Caveman
     pub compression_saved_bytes_total: IntCounterVec,
+
+    /// Requêtes par tenant / Virtual Key à cardinalité maîtrisée (#139)
+    pub tenant_requests_total: IntCounterVec,
+
+    /// Histogramme des coûts d'inférence en USD par provider et tenant (#139)
+    pub inference_cost_usd: HistogramVec,
+
+    /// Journal d'audit des actions d'administration (#139)
+    pub admin_audit_events_total: IntCounterVec,
 }
 
 impl Metrics {
@@ -130,6 +139,31 @@ impl Metrics {
         )
         .expect("Failed to register compression_saved_bytes_total");
 
+        let tenant_requests_total = register_int_counter_vec_with_registry!(
+            "pylos_tenant_requests_total",
+            "Total inference requests per tenant (bounded cardinality)",
+            &["tenant"],
+            registry
+        )
+        .expect("Failed to register tenant_requests_total");
+
+        let inference_cost_usd = register_histogram_vec_with_registry!(
+            "pylos_inference_cost_usd",
+            "Estimated inference cost in USD per provider and tenant",
+            &["provider", "tenant"],
+            vec![0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0],
+            registry
+        )
+        .expect("Failed to register inference_cost_usd");
+
+        let admin_audit_events_total = register_int_counter_vec_with_registry!(
+            "pylos_admin_audit_events_total",
+            "Total audited admin actions by action and outcome",
+            &["action", "outcome"],
+            registry
+        )
+        .expect("Failed to register admin_audit_events_total");
+
         Self {
             registry: Arc::new(registry),
             inference_requests_total,
@@ -142,6 +176,9 @@ impl Metrics {
             inference_ttft_seconds,
             inference_tps,
             compression_saved_bytes_total,
+            tenant_requests_total,
+            inference_cost_usd,
+            admin_audit_events_total,
         }
     }
 
@@ -192,6 +229,36 @@ impl Metrics {
         self.compression_saved_bytes_total
             .with_label_values(&[provider, model])
             .inc_by(count);
+    }
+
+    /// Enregistre une requête et son coût estimé pour un tenant (cardinalité bornée) (#139)
+    pub fn record_tenant_usage(&self, provider: &str, tenant: Option<&str>, cost_usd: f64) {
+        let label = tenant
+            .filter(|s| !s.is_empty() && s.len() <= 64)
+            .unwrap_or("anonymous");
+        self.tenant_requests_total.with_label_values(&[label]).inc();
+        if cost_usd >= 0.0 {
+            self.inference_cost_usd
+                .with_label_values(&[provider, label])
+                .observe(cost_usd);
+        }
+    }
+
+    /// Journalise et comptabilise une action d'administration (#139)
+    pub fn record_admin_audit(&self, actor: &str, action: &str, outcome: &str, detail: &str) {
+        self.admin_audit_events_total
+            .with_label_values(&[action, outcome])
+            .inc();
+        tracing::info!(
+            target: "pylos_admin_audit",
+            actor = actor,
+            action = action,
+            outcome = outcome,
+            detail = detail,
+            "[AdminAudit] action={} outcome={}",
+            action,
+            outcome
+        );
     }
 
     /// Incrémente le gauge des requêtes en cours

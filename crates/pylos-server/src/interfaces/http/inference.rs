@@ -350,6 +350,9 @@ async fn complete_response(
                 guardrails_info_from_response(&finish_reason, &output_preview, &final_ctx);
             let provider = guess_provider(&resp.model);
             let vk_name = vk_info.map(|v| v.name);
+            state
+                .metrics
+                .record_tenant_usage(&provider, vk_name.as_deref(), 0.0);
 
             info!(
                 request_id = %request_id,
