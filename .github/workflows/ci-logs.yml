@@ -1,4 +1,4 @@
-name: CI Logs to OpenObserve
+name: "05 · Telemetry — CI Logs to OpenObserve"
 
 # Expédie les logs de chaque run CI vers OpenObserve (O2) une fois le run terminé.
 #
@@ -17,10 +17,11 @@ name: CI Logs to OpenObserve
 on:
   workflow_run:
     workflows:
-      - CI
-      - PR Tests
-      - MegaLinter
-      - CodeQL
+      - "00 · Security — Secret-Guard (Push & PR)"
+      - "01 · Lint — MegaLinter (Push & PR)"
+      - "02 · PR — Tests & Checks (Pull Request)"
+      - "02 · Main — CI Build & Tests (Push main)"
+      - "03 · Security — CodeQL SAST (Push, PR & Weekly)"
     types: [completed]
 
 # Lecture des logs du run déclencheur, rien de plus.

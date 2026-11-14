@@ -1,4 +1,4 @@
-name: PR Tests
+name: "02 · PR — Tests & Checks (Pull Request)"
 
 on:
   workflow_dispatch:

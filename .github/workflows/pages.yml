@@ -1,4 +1,4 @@
-name: Documentation (GitHub Pages)
+name: "04 · Docs — GitHub Pages (Push site/)"
 
 # Construit le dossier `site/` avec Jekyll et le publie sur GitHub Pages.
 #
