@@ -26,7 +26,7 @@ env:
 jobs:
   check:
     name: Check Rust (Clippy & Tests)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust
@@ -51,11 +51,11 @@ jobs:
 
   check-ui:
     name: Check UI (TypeScript & Build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -79,7 +79,7 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     permissions:
@@ -133,7 +133,7 @@ jobs:
   merge-manifest:
     name: Merge Multi-Arch Manifests
     needs: [check, build-and-push]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -169,12 +169,12 @@ jobs:
   deploy-dev:
     name: Deploy Dev (restart pods)
     needs: [merge-manifest]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Configure kubectl
         env:

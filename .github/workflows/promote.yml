@@ -6,7 +6,7 @@ on:
 jobs:
   promote:
     name: 🚀 Promote Dev to Production
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -32,7 +32,7 @@ jobs:
           docker buildx imagetools create -t ghcr.io/jzacharie/pylos-ui:latest ghcr.io/jzacharie/pylos-ui:dev
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Configure kubectl
         env:

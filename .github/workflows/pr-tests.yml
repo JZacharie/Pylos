@@ -31,7 +31,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       ui: ${{ steps.filter.outputs.ui }}
@@ -77,7 +77,7 @@ jobs:
     name: Rust Lint
     needs: [changes]
     if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.should-skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
@@ -108,7 +108,7 @@ jobs:
     name: Rust Tests
     needs: [changes]
     if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.should-skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner
         uses: step-security/harden-runner@v2
@@ -137,7 +137,7 @@ jobs:
     name: Security Audit
     needs: [changes]
     if: needs.changes.outputs.rust == 'true' && needs.changes.outputs.should-skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -157,14 +157,14 @@ jobs:
     name: UI Build
     needs: [changes]
     if: needs.changes.outputs.ui == 'true' && needs.changes.outputs.should-skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -188,7 +188,7 @@ jobs:
     name: Run Tests
     needs: [changes, rust-lint, rust-tests, security-audit, ui-build]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Evaluate results
         id: eval
