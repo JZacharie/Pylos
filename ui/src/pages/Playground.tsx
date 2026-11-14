@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { api, getBaseUrl } from '../lib/api'
@@ -70,8 +71,20 @@ function ModelSelect({
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'all' | 'favorites' | string>('all')
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const updatePosition = useCallback(() => {
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const width = Math.min(480, window.innerWidth - 24)
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))
+    const top = rect.bottom + 6
+    const maxHeight = Math.max(260, window.innerHeight - top - 16)
+    setCoords({ top, left, width, maxHeight })
+  }, [])
 
   // Parse current value
   let selectedProvider = ''
@@ -94,7 +107,11 @@ function ModelSelect({
   // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setIsOpen(false)
       }
     }
@@ -103,6 +120,22 @@ function ModelSelect({
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isOpen])
+
+  // Position portal dropdown & keep aligned on resize/scroll
+  useEffect(() => {
+    if (!isOpen) return
+    updatePosition()
+    function handleScroll(e: Event) {
+      if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return
+      updatePosition()
+    }
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', handleScroll, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', handleScroll, true)
+    }
+  }, [isOpen, updatePosition])
 
   // Close on Escape & focus input on open
   useEffect(() => {
@@ -215,11 +248,20 @@ function ModelSelect({
         )}
       </div>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+      {/* Dropdown Menu (portaled to body so it isn't clipped by the narrow w-64 sidebar) */}
+      {isOpen && coords && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            top: coords.top,
+            left: coords.left,
+            width: coords.width,
+            maxHeight: coords.maxHeight,
+          }}
+          className="fixed z-50 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 rounded-xl shadow-2xl shadow-black/80 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+        >
           {/* Search bar */}
-          <div className="p-2 border-b border-zinc-800/80 bg-zinc-900/90">
+          <div className="p-2.5 border-b border-zinc-800/80 bg-zinc-900/90 flex-shrink-0">
             <div className="relative flex items-center">
               <Search size={14} className="absolute left-2.5 text-zinc-400 pointer-events-none" />
               <input
@@ -241,15 +283,15 @@ function ModelSelect({
               )}
             </div>
 
-            {/* Provider Filter Chips */}
-            <div className="flex items-center gap-1 mt-2 overflow-x-auto pb-0.5 pt-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {/* Provider Filter Chips (wrapped so all providers are visible at a glance) */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 transition-colors ${
+                className={`text-[11px] px-2.5 py-0.5 rounded-full flex-shrink-0 transition-colors ${
                   activeTab === 'all'
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-medium'
-                    : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    : 'bg-zinc-800/60 text-zinc-400 border border-transparent hover:text-zinc-200 hover:bg-zinc-800'
                 }`}
               >
                 All ({models.length})
@@ -258,10 +300,10 @@ function ModelSelect({
                 <button
                   type="button"
                   onClick={() => setActiveTab('favorites')}
-                  className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 transition-colors ${
+                  className={`text-[11px] px-2.5 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 transition-colors ${
                     activeTab === 'favorites'
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-medium'
-                      : 'bg-zinc-800/60 text-zinc-400 hover:text-amber-300 hover:bg-zinc-800'
+                      : 'bg-zinc-800/60 text-zinc-400 border border-transparent hover:text-amber-300 hover:bg-zinc-800'
                   }`}
                 >
                   <Star size={9} fill="currentColor" className="text-amber-400" />
@@ -276,15 +318,15 @@ function ModelSelect({
                     key={prov}
                     type="button"
                     onClick={() => setActiveTab(isActive ? 'all' : prov)}
-                    className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 transition-colors ${
+                    className={`text-[11px] px-2.5 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1.5 transition-colors ${
                       isActive
-                        ? 'bg-zinc-700/80 text-zinc-100 border border-zinc-600 font-medium'
-                        : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                        ? 'bg-zinc-700/90 text-zinc-100 border border-zinc-500 font-medium'
+                        : 'bg-zinc-800/60 text-zinc-400 border border-transparent hover:text-zinc-200 hover:bg-zinc-800'
                     }`}
                   >
                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: providerColor(prov) }} />
                     <span className="capitalize">{prov}</span>
-                    <span className="text-zinc-500 text-[9px]">({count})</span>
+                    <span className="text-zinc-400 text-[10px]">({count})</span>
                   </button>
                 )
               })}
@@ -292,7 +334,7 @@ function ModelSelect({
           </div>
 
           {/* Model list grouped by provider */}
-          <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/40">
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-zinc-800/40">
             {Object.keys(grouped).length === 0 ? (
               <div className="py-8 text-center text-xs text-zinc-500">
                 No models found {searchQuery ? `matching "${searchQuery}"` : ''}
@@ -372,7 +414,8 @@ function ModelSelect({
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -608,8 +651,10 @@ export default function Playground() {
     const saved = localStorage.getItem('pylos-playground-max-tokens')
     return saved !== null ? parseInt(saved, 10) : 512
   })
-  const [cavemanMode, setCavemanMode] = useState<'off' | 'lite' | 'full' | 'ultra' | 'wenyan' | 'spaghetti'>(() => {
-    return (localStorage.getItem('pylos-playground-caveman-mode') as any) || 'off'
+  type CavemanMode = 'off' | 'lite' | 'full' | 'ultra' | 'wenyan' | 'spaghetti'
+  const [cavemanMode, setCavemanMode] = useState<CavemanMode>(() => {
+    const saved = localStorage.getItem('pylos-playground-caveman-mode')
+    return (saved as CavemanMode | null) || 'off'
   })
   const [cavemanCompress, setCavemanCompress] = useState(() => {
     return localStorage.getItem('pylos-playground-caveman-compress') === 'true'
@@ -695,47 +740,54 @@ export default function Playground() {
   const models = modelsData ?? []
 
   // Sync streaming flag with selected model capabilities
-  useEffect(() => {
-    if (!models || !selectedModel) return
-    const [provider, ...rest] = selectedModel.split('::')
-    const modelId = rest.join('::')
-    const mdl = models.find(m => m.provider === provider && m.id === modelId)
-    if (mdl && typeof mdl.supports_streaming === 'boolean') {
-      if (streaming !== mdl.supports_streaming) {
+  const [prevModelSync, setPrevModelSync] = useState<{
+    models: typeof models
+    modelParam: string | null
+    selectedModel: string
+  }>({ models: [], modelParam: null, selectedModel: '' })
+
+  if (
+    prevModelSync.models !== models ||
+    prevModelSync.modelParam !== modelParam ||
+    prevModelSync.selectedModel !== selectedModel
+  ) {
+    setPrevModelSync({ models, modelParam, selectedModel })
+
+    let nextSelected = selectedModel
+    if (models.length && (prevModelSync.models !== models || prevModelSync.modelParam !== modelParam)) {
+      if (modelParam) {
+        const matched = models.find(
+          m => `${m.provider}::${m.id}` === modelParam || `${m.provider}/${m.id}` === modelParam || m.id === modelParam
+        )
+        if (matched) {
+          nextSelected = `${matched.provider}::${matched.id}`
+        }
+      } else if (!nextSelected) {
+        const savedModel = localStorage.getItem('pylos-playground-last-model')
+        const matchedSaved = savedModel ? models.find(m => `${m.provider}::${m.id}` === savedModel) : undefined
+        if (matchedSaved && savedModel) {
+          nextSelected = savedModel
+        } else {
+          const ollama = models.find(m => m.provider === 'ollama-jo3' && m.id === 'llama3.1:8b')
+            ?? models.find(m => m.provider === 'ollama-jo3')
+            ?? models[0]
+          if (ollama) nextSelected = `${ollama.provider}::${ollama.id}`
+        }
+      }
+      if (nextSelected !== selectedModel) {
+        setSelectedModel(nextSelected)
+      }
+    }
+
+    if (models.length && nextSelected) {
+      const [provider, ...rest] = nextSelected.split('::')
+      const modelId = rest.join('::')
+      const mdl = models.find(m => m.provider === provider && m.id === modelId)
+      if (mdl && typeof mdl.supports_streaming === 'boolean' && streaming !== mdl.supports_streaming) {
         setStreaming(mdl.supports_streaming)
       }
     }
-  }, [selectedModel, models])
-
-  useEffect(() => {
-    if (!models.length) return
-
-    if (modelParam) {
-      const matched = models.find(
-        m => `${m.provider}::${m.id}` === modelParam || `${m.provider}/${m.id}` === modelParam || m.id === modelParam
-      )
-      if (matched) {
-        setSelectedModel(`${matched.provider}::${matched.id}`)
-        return
-      }
-    }
-
-    const savedModel = localStorage.getItem('pylos-playground-last-model')
-    if (savedModel) {
-      const matched = models.find(m => `${m.provider}::${m.id}` === savedModel)
-      if (matched) {
-        setSelectedModel(savedModel)
-        return
-      }
-    }
-
-    if (!selectedModel) {
-      const ollama = models.find(m => m.provider === 'ollama-jo3' && m.id === 'llama3.1:8b')
-        ?? models.find(m => m.provider === 'ollama-jo3')
-        ?? models[0]
-      if (ollama) setSelectedModel(`${ollama.provider}::${ollama.id}`)
-    }
-  }, [models, modelParam])
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -1170,7 +1222,7 @@ export default function Playground() {
             <label className="text-xs text-zinc-400">Caveman Output Mode</label>
             <select
               value={cavemanMode}
-              onChange={e => setCavemanMode(e.target.value as any)}
+              onChange={e => setCavemanMode(e.target.value as CavemanMode)}
               disabled={isRunning}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 disabled:opacity-50"
             >
