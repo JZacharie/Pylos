@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
@@ -737,7 +737,7 @@ export default function Playground() {
     staleTime: 60_000,
   })
 
-  const models = modelsData ?? []
+  const models = useMemo(() => modelsData ?? [], [modelsData])
 
   // Sync streaming flag with selected model capabilities
   const [prevModelSync, setPrevModelSync] = useState<{
