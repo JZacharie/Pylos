@@ -857,13 +857,10 @@ pub async fn reload_pricing_data(State(state): State<AppState>) -> impl IntoResp
             .unwrap_or("unknown")
             .to_string();
 
-        let model_id = if key.starts_with(&format!("{}/", litellm_provider)) {
-            key.strip_prefix(&format!("{}/", litellm_provider))
-                .unwrap()
-                .to_string()
-        } else {
-            key.to_string()
-        };
+        let model_id = key
+            .strip_prefix(&format!("{}/", litellm_provider))
+            .unwrap_or(key)
+            .to_string();
 
         let id = format!("{}/{}", litellm_provider, model_id);
 

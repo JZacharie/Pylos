@@ -18,7 +18,7 @@ impl Mem0Plugin {
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
-                .expect("Failed to build reqwest client for Mem0Plugin"),
+                .unwrap_or_else(|_| reqwest::Client::new()),
         }
     }
 

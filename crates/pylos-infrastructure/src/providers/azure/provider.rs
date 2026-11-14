@@ -34,7 +34,7 @@ impl AzureProvider {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(120))
             .build()
-            .expect("Failed to build HTTP client");
+            .unwrap_or_else(|_| Client::new());
         Self { client }
     }
 
@@ -67,7 +67,7 @@ impl AzureProvider {
                 return Some(&key.value);
             }
         }
-        Some(&config.keys.last().unwrap().value)
+        config.keys.last().map(|k| k.value.as_str())
     }
 }
 

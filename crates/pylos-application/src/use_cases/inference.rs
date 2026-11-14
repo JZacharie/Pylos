@@ -917,8 +917,8 @@ fn estimate_stream_usage(request: &PylosRequest, full_content: &str) -> pylos_co
             .sum(),
         _ => 0,
     };
-    let prompt_tokens = ((prompt_chars + 3) / 4) as i32;
-    let completion_tokens = ((full_content.len() + 3) / 4) as i32;
+    let prompt_tokens = prompt_chars.div_ceil(4) as i32;
+    let completion_tokens = full_content.len().div_ceil(4) as i32;
     pylos_core::domain::openai::Usage {
         prompt_tokens,
         completion_tokens,

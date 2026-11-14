@@ -235,7 +235,9 @@ static MOD_CATEGORIES: &[ModCategory] = &[
     },
 ];
 
-static COMPILED_MOD_CATEGORIES: LazyLock<Vec<(&'static str, Vec<(regex::Regex, f64)>)>> =
+type CompiledModCategory = (&'static str, Vec<(regex::Regex, f64)>);
+
+static COMPILED_MOD_CATEGORIES: LazyLock<Vec<CompiledModCategory>> =
     LazyLock::new(|| {
         MOD_CATEGORIES
             .iter()
@@ -350,32 +352,30 @@ pub fn normalize_for_detection(text: &str) -> String {
     normalized.trim().to_string()
 }
 
+#[allow(clippy::expect_used)] // Compile-time static regex literal
+fn static_regex(pattern: &str) -> regex::Regex {
+    regex::Regex::new(pattern).expect("valid static regex")
+}
+
 static RE_EMAIL: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
-static RE_PHONE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\+?\d{1,4}[-.\s]?\(?\d{1,4}?\)?(?:[-.\s]?\d{1,4}){2,5}").unwrap()
-});
-static RE_IBAN: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b[a-zA-Z]{2}\d{2}(?:[ -]*[a-zA-Z0-9]){12,30}\b").unwrap()
-});
+    LazyLock::new(|| static_regex(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"));
+static RE_PHONE: LazyLock<regex::Regex> =
+    LazyLock::new(|| static_regex(r"\+?\d{1,4}[-.\s]?\(?\d{1,4}?\)?(?:[-.\s]?\d{1,4}){2,5}"));
+static RE_IBAN: LazyLock<regex::Regex> =
+    LazyLock::new(|| static_regex(r"\b[a-zA-Z]{2}\d{2}(?:[ -]*[a-zA-Z0-9]){12,30}\b"));
 static RE_SSN: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b[12][ -]*\d{2}[ -]*\d{2}[ -]*\d{2}[ -]*\d{3}[ -]*\d{3}[ -]*\d{2}\b")
-        .unwrap()
+    static_regex(r"\b[12][ -]*\d{2}[ -]*\d{2}[ -]*\d{2}[ -]*\d{3}[ -]*\d{3}[ -]*\d{2}\b")
 });
 static RE_IP: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b").unwrap());
+    LazyLock::new(|| static_regex(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"));
 static RE_CC: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\b(?:\d[ -]*?){13,16}\b").unwrap());
+    LazyLock::new(|| static_regex(r"\b(?:\d[ -]*?){13,16}\b"));
 static RE_OPENAI_KEY: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\bsk-[a-zA-Z0-9]{20,}\b").unwrap());
-static RE_JWT: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\b[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]*\b").unwrap()
-});
+    LazyLock::new(|| static_regex(r"\bsk-[a-zA-Z0-9]{20,}\b"));
+static RE_JWT: LazyLock<regex::Regex> =
+    LazyLock::new(|| static_regex(r"\b[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]*\b"));
 static RE_PRIVATE_KEY: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(
-        r"(?s)-----BEGIN [A-Z ]+ PRIVATE KEY-----.*?-----END [A-Z ]+ PRIVATE KEY-----",
-    )
-    .unwrap()
+    static_regex(r"(?s)-----BEGIN [A-Z ]+ PRIVATE KEY-----.*?-----END [A-Z ]+ PRIVATE KEY-----")
 });
 
 pub struct GuardrailsPlugin {

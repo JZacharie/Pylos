@@ -69,8 +69,8 @@ impl LlmPlugin for PromptRegistryPlugin {
         let mut template_call = None;
         if let Some(msg) = chat_req.messages.first() {
             if let Some(ref content) = msg.content {
-                if content.starts_with("pylos://") {
-                    template_call = Some(content.strip_prefix("pylos://").unwrap().to_string());
+                if let Some(stripped) = content.strip_prefix("pylos://") {
+                    template_call = Some(stripped.to_string());
                 }
             }
         }

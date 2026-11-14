@@ -385,14 +385,15 @@ pub async fn add_document(
         if !payload.is_object() {
             payload = json!({});
         }
-        let payload_obj = payload.as_object_mut().unwrap();
-        payload_obj.insert("content".to_string(), Value::String(child_text.clone()));
-        payload_obj.insert(
-            "parent_content".to_string(),
-            Value::String(parent_text.clone()),
-        );
-        payload_obj.insert("chunk_index".to_string(), json!(i));
-        payload_obj.insert("chunk_strategy".to_string(), json!("parent_child"));
+        if let Some(payload_obj) = payload.as_object_mut() {
+            payload_obj.insert("content".to_string(), Value::String(child_text.clone()));
+            payload_obj.insert(
+                "parent_content".to_string(),
+                Value::String(parent_text.clone()),
+            );
+            payload_obj.insert("chunk_index".to_string(), json!(i));
+            payload_obj.insert("chunk_strategy".to_string(), json!("parent_child"));
+        }
 
         let client = get_qdrant_client(10);
         let url = format!(
@@ -408,7 +409,7 @@ pub async fn add_document(
                 {
                     "id": point_id,
                     "vector": embedding_data,
-                    "payload": payload_obj
+                    "payload": payload
                 }
             ]
         });

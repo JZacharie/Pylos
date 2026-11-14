@@ -38,7 +38,9 @@ jobs:
       - name: Create UI stub for rust-embed
         run: mkdir -p ui/dist
       - name: Lint with clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo clippy --workspace --lib --bins --locked -- -D warnings -D clippy::unwrap_used -D clippy::expect_used
       - name: Run tests
         run: cargo test --workspace --locked
       - name: Verify benchmarks (hot_path)

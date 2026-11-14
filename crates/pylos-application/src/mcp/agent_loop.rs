@@ -239,8 +239,10 @@ pub async fn run_agent_loop(
                         );
 
                         // 1. Ajouter le message de l'assistant (avec les tool_calls) à l'historique
-                        let assistant_msg = choice.unwrap().message;
-                        chat_req.messages.push(assistant_msg);
+                        let Some(c) = choice else {
+                            continue;
+                        };
+                        chat_req.messages.push(c.message);
 
                         // 2. Exécuter tous les tool_calls en parallèle (S-MCP-07)
                         let results = execute_tool_calls_parallel(
