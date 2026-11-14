@@ -54,8 +54,20 @@ RUN_REF="$(run_str '.head_branch')"
 RUN_SHA="$(run_str '.head_sha')"
 RUN_ACTOR="$(run_str '.actor.login')"
 RUN_CONCLUSION="$(run_str '.conclusion')"
+RUN_STARTED="$(run_str '.run_started_at')"
+RUN_UPDATED="$(run_str '.updated_at')"
+RUN_PHASE="$(printf '%s' "$RUN_NAME" | sed -n 's/^\([0-9][0-9]\).*/\1/p')"
+RUN_PHASE="${RUN_PHASE:-unknown}"
+RUN_DURATION_MS=0
+if [ -n "$RUN_STARTED" ] && [ -n "$RUN_UPDATED" ]; then
+  s_epoch="$(date -u -d "$RUN_STARTED" +%s 2>/dev/null || echo 0)"
+  e_epoch="$(date -u -d "$RUN_UPDATED" +%s 2>/dev/null || echo 0)"
+  if [ "$e_epoch" -ge "$s_epoch" ] && [ "$s_epoch" -gt 0 ]; then
+    RUN_DURATION_MS=$(( (e_epoch - s_epoch) * 1000 ))
+  fi
+fi
 
-echo "Run #${RUN_NUMBER} « ${RUN_NAME} » (${RUN_CONCLUSION}) — tentative ${RUN_ATTEMPT}"
+echo "Run #${RUN_NUMBER} « ${RUN_NAME} » [phase=${RUN_PHASE}] (${RUN_CONCLUSION}, ${RUN_DURATION_MS}ms) — tentative ${RUN_ATTEMPT}"
 
 # --- Liste des jobs ----------------------------------------------------------
 if ! gh api --paginate \
@@ -113,7 +125,18 @@ while IFS= read -r job_b64; do
   job_id="$(printf '%s' "$job_json" | jq -r '.id')"
   job_name="$(printf '%s' "$job_json" | jq -r '.name')"
   job_conclusion="$(printf '%s' "$job_json" | jq -r '.conclusion // ""')"
+  job_started="$(printf '%s' "$job_json" | jq -r '.started_at // ""')"
   job_completed="$(printf '%s' "$job_json" | jq -r '.completed_at // ""')"
+  steps_count="$(printf '%s' "$job_json" | jq -r '(.steps // []) | length')"
+  failed_steps_count="$(printf '%s' "$job_json" | jq -r '[(.steps // [])[] | select(.conclusion == "failure")] | length')"
+  job_duration_ms=0
+  if [ -n "$job_started" ] && [ -n "$job_completed" ]; then
+    js_epoch="$(date -u -d "$job_started" +%s 2>/dev/null || echo 0)"
+    jc_epoch="$(date -u -d "$job_completed" +%s 2>/dev/null || echo 0)"
+    if [ "$jc_epoch" -ge "$js_epoch" ] && [ "$js_epoch" -gt 0 ]; then
+      job_duration_ms=$(( (jc_epoch - js_epoch) * 1000 ))
+    fi
+  fi
 
   # Horodatage de repli (microsecondes) pour les lignes sans date exploitable.
   if [ -n "$job_completed" ]; then
@@ -139,6 +162,7 @@ while IFS= read -r job_b64; do
 
   jq -R -s -c \
     --arg workflow "$RUN_NAME" \
+    --arg phase "$RUN_PHASE" \
     --arg job "$job_name" \
     --argjson job_id "$job_id" \
     --argjson run_id "$RUN_ID" \
@@ -151,6 +175,7 @@ while IFS= read -r job_b64; do
     --arg actor "$RUN_ACTOR" \
     --arg run_conclusion "$RUN_CONCLUSION" \
     --arg job_conclusion "$job_conclusion" \
+    --argjson job_duration_ms "$job_duration_ms" \
     --argjson fallback_us "$fallback_us" '
       split("\n")
       | map(select(test("\\S")))
@@ -160,6 +185,8 @@ while IFS= read -r job_b64; do
           | ($line | gsub("\u001b\\[[0-9;]*[A-Za-z]"; "")) as $clean
           | {
               _timestamp: (if $sec == null then $fallback_us else ($sec * 1000000) end),
+              record_type: "log",
+              phase: $phase,
               workflow: $workflow,
               job: $job,
               job_id: $job_id,
@@ -173,6 +200,7 @@ while IFS= read -r job_b64; do
               actor: $actor,
               run_conclusion: $run_conclusion,
               job_conclusion: $job_conclusion,
+              duration_ms: $job_duration_ms,
               level: (
                 if ($clean | test("##\\[error\\]")) then "error"
                 elif ($clean | test("##\\[warning\\]")) then "warning"
@@ -184,8 +212,87 @@ while IFS= read -r job_b64; do
       | .[]
     ' "${WORKDIR}/job.log" > "${WORKDIR}/job-records.ndjson"
 
+  jq -n -c \
+    --argjson ts "$fallback_us" \
+    --arg workflow "$RUN_NAME" \
+    --arg phase "$RUN_PHASE" \
+    --arg job "$job_name" \
+    --argjson job_id "$job_id" \
+    --argjson run_id "$RUN_ID" \
+    --argjson run_number "$RUN_NUMBER" \
+    --argjson run_attempt "$RUN_ATTEMPT" \
+    --arg event "$RUN_EVENT" \
+    --arg repo "$GITHUB_REPOSITORY" \
+    --arg ref "$RUN_REF" \
+    --arg sha "$RUN_SHA" \
+    --arg actor "$RUN_ACTOR" \
+    --arg run_conclusion "$RUN_CONCLUSION" \
+    --arg job_conclusion "$job_conclusion" \
+    --argjson duration_ms "$job_duration_ms" \
+    --argjson steps_count "$steps_count" \
+    --argjson failed_steps_count "$failed_steps_count" \
+    '{
+      _timestamp: $ts,
+      record_type: "job_metric",
+      phase: $phase,
+      workflow: $workflow,
+      job: $job,
+      job_id: $job_id,
+      run_id: $run_id,
+      run_number: $run_number,
+      run_attempt: $run_attempt,
+      event: $event,
+      repo: $repo,
+      ref: $ref,
+      sha: $sha,
+      actor: $actor,
+      run_conclusion: $run_conclusion,
+      job_conclusion: $job_conclusion,
+      duration_ms: $duration_ms,
+      steps_count: $steps_count,
+      failed_steps_count: $failed_steps_count,
+      level: (if $job_conclusion == "failure" then "error" else "info" end),
+      message: ("job_metric: " + $job + " [" + $job_conclusion + "] (" + ($duration_ms | tostring) + "ms)")
+    }' >> "${WORKDIR}/job-records.ndjson"
+
   push_records "${WORKDIR}/job-records.ndjson"
 done < "${WORKDIR}/jobs.b64"
+
+run_ts="$(date -u +%s%6N)"
+jq -n -c \
+  --argjson ts "$run_ts" \
+  --arg workflow "$RUN_NAME" \
+  --arg phase "$RUN_PHASE" \
+  --argjson run_id "$RUN_ID" \
+  --argjson run_number "$RUN_NUMBER" \
+  --argjson run_attempt "$RUN_ATTEMPT" \
+  --arg event "$RUN_EVENT" \
+  --arg repo "$GITHUB_REPOSITORY" \
+  --arg ref "$RUN_REF" \
+  --arg sha "$RUN_SHA" \
+  --arg actor "$RUN_ACTOR" \
+  --arg run_conclusion "$RUN_CONCLUSION" \
+  --argjson duration_ms "$RUN_DURATION_MS" \
+  '{
+    _timestamp: $ts,
+    record_type: "run_metric",
+    phase: $phase,
+    workflow: $workflow,
+    job: "_run_summary",
+    run_id: $run_id,
+    run_number: $run_number,
+    run_attempt: $run_attempt,
+    event: $event,
+    repo: $repo,
+    ref: $ref,
+    sha: $sha,
+    actor: $actor,
+    run_conclusion: $run_conclusion,
+    duration_ms: $duration_ms,
+    level: (if $run_conclusion == "failure" then "error" else "info" end),
+    message: ("run_metric: " + $workflow + " #" + ($run_number | tostring) + " [" + $run_conclusion + "] (" + ($duration_ms | tostring) + "ms)")
+  }' > "${WORKDIR}/run-summary.ndjson"
+push_records "${WORKDIR}/run-summary.ndjson"
 
 if [ "$failures" -gt 0 ]; then
   echo "::error::${failures} lot(s) n'ont pas pu être envoyés à OpenObserve" >&2

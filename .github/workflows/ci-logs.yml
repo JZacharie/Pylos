@@ -22,6 +22,7 @@ on:
       - "02 · PR — Tests & Checks (Pull Request)"
       - "02 · Main — CI Build & Tests (Push main)"
       - "03 · Security — CodeQL SAST (Push, PR & Weekly)"
+      - "04 · Release — Promote to Production (Manual)"
     types: [completed]
 
 # Lecture des logs du run déclencheur, rien de plus.

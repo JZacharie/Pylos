@@ -1,0 +1,148 @@
+{
+  "version": 8,
+  "dashboardId": "pylos-ci-observability",
+  "title": "Pylos CI/CD & GitHub Actions Observability",
+  "description": "Structured CI phases (00-05), job durations, failures, and workflow telemetry from githubactions stream (#214).",
+  "tabs": [
+    {
+      "tabId": "default",
+      "name": "CI Overview",
+      "panels": [
+        {
+          "id": "panel_runs_by_phase",
+          "type": "bar",
+          "title": "CI Runs by Phase & Conclusion",
+          "config": {
+            "show_legends": true
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT phase, run_conclusion, COUNT(DISTINCT run_id) AS runs FROM githubactions WHERE record_type = 'run_metric' GROUP BY phase, run_conclusion ORDER BY phase ASC",
+              "customQuery": true,
+              "fields": {
+                "stream": "githubactions",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "phase",
+                    "alias": "phase",
+                    "column": "phase"
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "runs",
+                    "alias": "runs",
+                    "column": "runs",
+                    "aggregationFunction": "sum"
+                  }
+                ],
+                "breakdown": [
+                  {
+                    "label": "run_conclusion",
+                    "alias": "run_conclusion",
+                    "column": "run_conclusion"
+                  }
+                ]
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 8
+          }
+        },
+        {
+          "id": "panel_job_duration_avg",
+          "type": "h-bar",
+          "title": "Average Job Duration (ms)",
+          "config": {
+            "show_legends": false
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT job, AVG(duration_ms) AS avg_duration_ms FROM githubactions WHERE record_type = 'job_metric' GROUP BY job ORDER BY avg_duration_ms DESC LIMIT 15",
+              "customQuery": true,
+              "fields": {
+                "stream": "githubactions",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "job",
+                    "alias": "job",
+                    "column": "job"
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "avg_duration_ms",
+                    "alias": "avg_duration_ms",
+                    "column": "avg_duration_ms",
+                    "aggregationFunction": "avg"
+                  }
+                ]
+              }
+            }
+          ],
+          "layout": {
+            "x": 6,
+            "y": 0,
+            "w": 6,
+            "h": 8
+          }
+        },
+        {
+          "id": "panel_errors_by_workflow",
+          "type": "line",
+          "title": "CI Errors & Warnings by Workflow",
+          "config": {
+            "show_legends": true
+          },
+          "queryType": "sql",
+          "queries": [
+            {
+              "query": "SELECT workflow, level, COUNT(*) AS events FROM githubactions WHERE level IN ('error', 'warning') GROUP BY workflow, level ORDER BY events DESC",
+              "customQuery": true,
+              "fields": {
+                "stream": "githubactions",
+                "stream_type": "logs",
+                "x": [
+                  {
+                    "label": "workflow",
+                    "alias": "workflow",
+                    "column": "workflow"
+                  }
+                ],
+                "y": [
+                  {
+                    "label": "events",
+                    "alias": "events",
+                    "column": "events",
+                    "aggregationFunction": "count"
+                  }
+                ],
+                "breakdown": [
+                  {
+                    "label": "level",
+                    "alias": "level",
+                    "column": "level"
+                  }
+                ]
+              }
+            }
+          ],
+          "layout": {
+            "x": 0,
+            "y": 8,
+            "w": 12,
+            "h": 8
+          }
+        }
+      ]
+    }
+  ]
+}
