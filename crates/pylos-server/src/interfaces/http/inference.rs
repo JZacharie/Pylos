@@ -15,7 +15,7 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use pylos_application::log_store::{build_log_entry_full, LogStatus};
+use pylos_core::domain::logging::{build_log_entry_full, LogStatus};
 use pylos_core::domain::openai::ChatCompletionRequest;
 use pylos_core::domain::request::{PylosRequest, RequestContext, StreamChunk};
 use pylos_core::error::PylosError;

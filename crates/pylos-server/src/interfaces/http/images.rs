@@ -9,7 +9,7 @@ use axum::{
 use serde_json::json;
 use tracing::error;
 
-use pylos_application::log_store::{build_log_entry, LogStatus};
+use pylos_core::domain::logging::{build_log_entry, LogStatus};
 use pylos_core::domain::image::ImageRequest;
 use pylos_core::domain::request::{PylosRequest, PylosResponse, RequestContext};
 use pylos_core::error::PylosError;

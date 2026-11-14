@@ -3,7 +3,7 @@ use std::time::Instant;
 use axum::{extract::Extension, response::IntoResponse, Json};
 use tracing::error;
 
-use pylos_application::log_store::{build_log_entry, LogStatus};
+use pylos_core::domain::logging::{build_log_entry, LogStatus};
 use pylos_core::domain::openai::TextCompletionRequest;
 use pylos_core::domain::request::{PylosRequest, RequestContext};
 

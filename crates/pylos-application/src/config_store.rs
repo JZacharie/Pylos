@@ -10,11 +10,8 @@ use pylos_core::domain::config::{
     BedrockKeyConfig, EnvVar, NetworkConfig, ProviderConfig, ProviderKeyConfig, PylosConfig,
 };
 use pylos_core::domain::provider::ProviderConfig as RuntimeConfig;
+use pylos_core::domain::repositories::ConfigRepository;
 use pylos_core::error::PylosError;
-
-use sqlx::postgres::{PgPool, PgPoolOptions};
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
-use sqlx::Row;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Empreinte hash pour la réconciliation fichier ↔ mémoire
@@ -54,12 +51,6 @@ fn hash_provider(name: &str, provider: &ProviderConfig) -> String {
 // ConfigStore — source de vérité en mémoire avec hot-reload
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Clone)]
-enum Pool {
-    Sqlite(SqlitePool),
-    Postgres(PgPool),
-}
-
 /// État interne du store
 struct ConfigState {
     /// Config complète résolue
@@ -72,8 +63,8 @@ struct ConfigState {
     runtime_providers: Vec<(Arc<dyn pylos_core::domain::traits::Provider>, RuntimeConfig)>,
     /// Chemin du fichier source
     file_path: Option<PathBuf>,
-    /// Pool de base de données (si configuré)
-    db_pool: Option<Pool>,
+    /// Port de persistance (si configuré)
+    db_repo: Option<Arc<dyn ConfigRepository>>,
 }
 
 /// Store de configuration partagé et rechargeable à chaud
@@ -146,71 +137,6 @@ pub fn migrate_config_json(
     Ok((cfg, source_version, migrated))
 }
 
-async fn save_gateway_config_to_pool(pool: &Pool, json: &str, version: u32) {
-    match pool {
-        Pool::Sqlite(p) => {
-            let _ = sqlx::query(
-                "INSERT INTO gateway_config (id, config, config_version) VALUES ('pylos', $1, $2) \
-                 ON CONFLICT(id) DO UPDATE SET config = excluded.config, config_version = excluded.config_version",
-            )
-            .bind(json)
-            .bind(version as i64)
-            .execute(p)
-            .await;
-        }
-        Pool::Postgres(p) => {
-            let val: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
-            let _ = sqlx::query(
-                "INSERT INTO gateway_config (id, config, config_version) VALUES ('pylos', $1, $2) \
-                 ON CONFLICT(id) DO UPDATE SET config = excluded.config, config_version = excluded.config_version",
-            )
-            .bind(&val)
-            .bind(version as i32)
-            .execute(p)
-            .await;
-        }
-    }
-}
-
-async fn backup_gateway_config(
-    pool: &Pool,
-    raw_json: &str,
-    source_version: u32,
-    target_version: u32,
-) {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string());
-    match pool {
-        Pool::Sqlite(p) => {
-            let _ = sqlx::query(
-                "INSERT INTO gateway_config_backups (source_version, target_version, config, backed_up_at) \
-                 VALUES ($1, $2, $3, $4)",
-            )
-            .bind(source_version as i64)
-            .bind(target_version as i64)
-            .bind(raw_json)
-            .bind(&now)
-            .execute(p)
-            .await;
-        }
-        Pool::Postgres(p) => {
-            let val: serde_json::Value = serde_json::from_str(raw_json).unwrap_or_default();
-            let _ = sqlx::query(
-                "INSERT INTO gateway_config_backups (source_version, target_version, config, backed_up_at) \
-                 VALUES ($1, $2, $3, $4)",
-            )
-            .bind(source_version as i32)
-            .bind(target_version as i32)
-            .bind(&val)
-            .bind(&now)
-            .execute(p)
-            .await;
-        }
-    }
-}
-
 impl ConfigStore {
     /// Charge la config depuis un fichier pylos.json
     /// Si le fichier n'existe pas → auto-détection des providers via env vars
@@ -260,7 +186,7 @@ impl ConfigStore {
             provider_hashes,
             runtime_providers,
             file_path: path,
-            db_pool: None,
+            db_repo: None,
         };
 
         Ok(Self {
@@ -278,7 +204,7 @@ impl ConfigStore {
             provider_hashes: HashMap::new(),
             runtime_providers,
             file_path: None,
-            db_pool: None,
+            db_repo: None,
         };
         Self {
             state: Arc::new(RwLock::new(state)),
@@ -303,33 +229,15 @@ impl ConfigStore {
         self.state.read().await.runtime_providers.clone()
     }
 
-    /// Recharge la config depuis la base de données (si configurée) ou le fichier sur disque
+    /// Recharge la config depuis le repository (si configuré) ou le fichier sur disque
     pub async fn reload(&self) -> Result<ReloadSummary, PylosError> {
-        let db_pool = {
+        let db_repo = {
             let state = self.state.read().await;
-            state.db_pool.clone()
+            state.db_repo.clone()
         };
 
-        if let Some(pool) = db_pool {
-            let db_config: Option<String> = match &pool {
-                Pool::Sqlite(p) => {
-                    let row = sqlx::query("SELECT config FROM gateway_config WHERE id = 'pylos'")
-                        .fetch_optional(p)
-                        .await
-                        .unwrap_or(None);
-                    row.map(|r| r.get::<String, _>(0))
-                }
-                Pool::Postgres(p) => {
-                    let row = sqlx::query("SELECT config FROM gateway_config WHERE id = 'pylos'")
-                        .fetch_optional(p)
-                        .await
-                        .unwrap_or(None);
-                    row.map(|r| {
-                        let val: serde_json::Value = r.get(0);
-                        val.to_string()
-                    })
-                }
-            };
+        if let Some(repo) = db_repo {
+            let db_config = repo.load_config_json().await.ok().flatten().map(|(c, _)| c);
 
             if let Some(cfg_str) = db_config {
                 let new_config: PylosConfig = serde_json::from_str(&cfg_str)
@@ -441,122 +349,23 @@ impl ConfigStore {
         })
     }
 
-    /// Initialise le pool de base de données et charge/synchronise la configuration.
-    pub async fn init_database(&self, db_url: &str) -> Result<(), PylosError> {
-        let pool = if db_url.starts_with("postgres") || db_url.starts_with("postgresql") {
-            let p = PgPoolOptions::new()
-                .max_connections(2)
-                .connect(db_url)
-                .await
-                .map_err(|e| {
-                    PylosError::Internal(format!("Failed to connect config Postgres: {}", e))
-                })?;
-            Pool::Postgres(p)
-        } else {
-            let p = SqlitePoolOptions::new()
-                .max_connections(2)
-                .connect(db_url)
-                .await
-                .map_err(|e| {
-                    PylosError::Internal(format!("Failed to connect config SQLite: {}", e))
-                })?;
-            Pool::Sqlite(p)
-        };
-
-        match &pool {
-            Pool::Sqlite(p) => {
-                sqlx::query(
-                    "CREATE TABLE IF NOT EXISTS gateway_config (\
-                        id TEXT PRIMARY KEY, \
-                        config TEXT NOT NULL, \
-                        config_version INTEGER NOT NULL DEFAULT 2\
-                    )",
-                )
-                .execute(p)
-                .await
-                .ok();
-                // Migration de colonne pour les tables existantes sans config_version
-                let _ = sqlx::query(
-                    "ALTER TABLE gateway_config ADD COLUMN config_version INTEGER NOT NULL DEFAULT 1",
-                )
-                .execute(p)
-                .await;
-                sqlx::query(
-                    "CREATE TABLE IF NOT EXISTS gateway_config_backups (\
-                        id INTEGER PRIMARY KEY AUTOINCREMENT, \
-                        source_version INTEGER NOT NULL, \
-                        target_version INTEGER NOT NULL, \
-                        config TEXT NOT NULL, \
-                        backed_up_at TEXT NOT NULL\
-                    )",
-                )
-                .execute(p)
-                .await
-                .ok();
-            }
-            Pool::Postgres(p) => {
-                sqlx::query(
-                    "CREATE TABLE IF NOT EXISTS gateway_config (\
-                        id TEXT PRIMARY KEY, \
-                        config JSONB NOT NULL, \
-                        config_version INTEGER NOT NULL DEFAULT 2\
-                    )",
-                )
-                .execute(p)
-                .await
-                .ok();
-                let _ = sqlx::query(
-                    "ALTER TABLE gateway_config ADD COLUMN IF NOT EXISTS config_version INTEGER NOT NULL DEFAULT 1",
-                )
-                .execute(p)
-                .await;
-                sqlx::query(
-                    "CREATE TABLE IF NOT EXISTS gateway_config_backups (\
-                        id SERIAL PRIMARY KEY, \
-                        source_version INTEGER NOT NULL, \
-                        target_version INTEGER NOT NULL, \
-                        config JSONB NOT NULL, \
-                        backed_up_at TEXT NOT NULL\
-                    )",
-                )
-                .execute(p)
-                .await
-                .ok();
-            }
-        }
-
-        let db_row: Option<(String, Option<u32>)> = match &pool {
-            Pool::Sqlite(p) => {
-                let row = sqlx::query("SELECT config, config_version FROM gateway_config WHERE id = 'pylos'")
-                    .fetch_optional(p)
-                    .await
-                    .unwrap_or(None);
-                row.map(|r| {
-                    let cfg: String = r.get(0);
-                    let ver: Option<i64> = r.try_get(1).ok();
-                    (cfg, ver.map(|v| v as u32))
-                })
-            }
-            Pool::Postgres(p) => {
-                let row = sqlx::query("SELECT config, config_version FROM gateway_config WHERE id = 'pylos'")
-                    .fetch_optional(p)
-                    .await
-                    .unwrap_or(None);
-                row.map(|r| {
-                    let val: serde_json::Value = r.get(0);
-                    let ver: Option<i32> = r.try_get(1).ok();
-                    (val.to_string(), ver.map(|v| v as u32))
-                })
-            }
-        };
+    /// Attache un repository de persistance (`ConfigRepository`) et charge/synchronise la configuration.
+    pub async fn attach_repository(
+        &self,
+        repo: Arc<dyn ConfigRepository>,
+    ) -> Result<(), PylosError> {
+        let db_row = repo
+            .load_config_json()
+            .await?
+            .map(|(cfg, ver)| (cfg, Some(ver as u32)));
 
         let mut state = self.state.write().await;
-        state.db_pool = Some(pool.clone());
+        state.db_repo = Some(repo.clone());
 
         if let Some((cfg_str, db_ver)) = db_row {
             let (mut new_cfg, source_ver, migrated) =
                 migrate_config_json(&cfg_str, db_ver).inspect_err(|e| {
-                    tracing::error!(error = %e, "Failed to migrate gateway_config from database");
+                    tracing::error!(error = %e, "Failed to migrate gateway_config from repository");
                 })?;
 
             if migrated {
@@ -565,25 +374,23 @@ impl ConfigStore {
                     to_version = CURRENT_CONFIG_SCHEMA_VERSION,
                     "Backing up and migrating gateway_config schema"
                 );
-                backup_gateway_config(
-                    &pool,
-                    &cfg_str,
-                    source_ver,
-                    CURRENT_CONFIG_SCHEMA_VERSION,
-                )
-                .await;
+                let _ = repo
+                    .backup_config_json(
+                        &cfg_str,
+                        i64::from(source_ver),
+                        i64::from(CURRENT_CONFIG_SCHEMA_VERSION),
+                    )
+                    .await;
             }
 
-            // Les secrets providers sont chiffrés en base : les déchiffrer avant usage.
             decrypt_config_secrets(&mut new_cfg);
-            info!("Loaded configuration from database; merging missing items from file config");
+            info!("Loaded configuration from repository; merging missing items from file config");
             let mut merged = migrated;
 
-            // Merge missing providers
             for (name, provider) in &state.config.providers {
                 if !new_cfg.providers.contains_key(name) {
                     info!(
-                        "Merging provider {} from file config into database config",
+                        "Merging provider {} from file config into repository config",
                         name
                     );
                     new_cfg.providers.insert(name.clone(), provider.clone());
@@ -591,7 +398,6 @@ impl ConfigStore {
                 }
             }
 
-            // Merge missing virtual keys
             for vk in &state.config.governance.virtual_keys {
                 if !new_cfg
                     .governance
@@ -600,7 +406,7 @@ impl ConfigStore {
                     .any(|v| v.id == vk.id)
                 {
                     info!(
-                        "Merging virtual key {} from file config into database config",
+                        "Merging virtual key {} from file config into repository config",
                         vk.id
                     );
                     new_cfg.governance.virtual_keys.push(vk.clone());
@@ -608,10 +414,11 @@ impl ConfigStore {
                 }
             }
 
-            // If migrated or merged, we write it back to the database so that it's persisted there
             if merged {
                 let json = serialize_config_for_db(&new_cfg);
-                save_gateway_config_to_pool(&pool, &json, CURRENT_CONFIG_SCHEMA_VERSION).await;
+                let _ = repo
+                    .save_config_json(&json, i64::from(CURRENT_CONFIG_SCHEMA_VERSION))
+                    .await;
             }
 
             state.config = new_cfg;
@@ -624,116 +431,38 @@ impl ConfigStore {
             state.provider_hashes = hashes;
             state.runtime_providers = build_runtime_providers(&state.config);
         } else {
-            info!("No configuration found in database, inserting bootstrap configuration");
+            info!("No configuration found in repository, inserting bootstrap configuration");
             let json = serialize_config_for_db(&state.config);
-            save_gateway_config_to_pool(&pool, &json, CURRENT_CONFIG_SCHEMA_VERSION).await;
+            let _ = repo
+                .save_config_json(&json, i64::from(CURRENT_CONFIG_SCHEMA_VERSION))
+                .await;
         }
 
         Ok(())
     }
 
-    /// Récupère le hash du mot de passe admin stocké en base de données.
+    /// Récupère le hash du mot de passe admin stocké via le repository.
     pub async fn get_admin_key_hash(&self) -> Result<Option<String>, PylosError> {
-        let pool = {
+        let repo = {
             let state = self.state.read().await;
-            state.db_pool.clone()
+            state.db_repo.clone()
         };
-
-        let pool = match pool {
-            Some(p) => p,
-            None => return Ok(None),
-        };
-
-        // Create table server_secrets if it does not exist
-        match &pool {
-            Pool::Sqlite(p) => {
-                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-                    .execute(p)
-                    .await
-                    .ok();
-            }
-            Pool::Postgres(p) => {
-                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-                    .execute(p)
-                    .await
-                    .ok();
-            }
+        match repo {
+            Some(r) => r.get_admin_key_hash().await,
+            None => Ok(None),
         }
-
-        // Check if admin_key_hash exists
-        let existing: Option<String> = match &pool {
-            Pool::Sqlite(p) => {
-                let row =
-                    sqlx::query("SELECT value FROM server_secrets WHERE key = 'admin_key_hash'")
-                        .fetch_optional(p)
-                        .await
-                        .unwrap_or(None);
-                row.map(|r| r.get::<String, _>(0))
-            }
-            Pool::Postgres(p) => {
-                let row =
-                    sqlx::query("SELECT value FROM server_secrets WHERE key = 'admin_key_hash'")
-                        .fetch_optional(p)
-                        .await
-                        .unwrap_or(None);
-                row.map(|r| r.get::<String, _>(0))
-            }
-        };
-
-        Ok(existing)
     }
 
-    /// Enregistre le hash du mot de passe admin en base de données.
+    /// Enregistre le hash du mot de passe admin via le repository.
     pub async fn save_admin_key_hash(&self, hash: &str) -> Result<(), PylosError> {
-        let pool = {
+        let repo = {
             let state = self.state.read().await;
-            state.db_pool.clone()
+            state.db_repo.clone()
         };
-
-        let pool = match pool {
-            Some(p) => p,
-            None => {
-                return Err(PylosError::Internal(
-                    "No database connection pool configured".into(),
-                ))
-            }
-        };
-
-        // Create table server_secrets if it does not exist
-        match &pool {
-            Pool::Sqlite(p) => {
-                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-                    .execute(p)
-                    .await
-                    .ok();
-            }
-            Pool::Postgres(p) => {
-                sqlx::query("CREATE TABLE IF NOT EXISTS server_secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-                    .execute(p)
-                    .await
-                    .ok();
-            }
-        }
-
-        // Insert or update hash
-        match &pool {
-            Pool::Sqlite(p) => {
-                sqlx::query("INSERT INTO server_secrets (key, value) VALUES ('admin_key_hash', $1) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-                    .bind(hash)
-                    .execute(p)
-                    .await
-                    .map_err(|e| PylosError::Internal(format!("Failed to save admin key hash: {}", e)))?;
-            }
-            Pool::Postgres(p) => {
-                sqlx::query("INSERT INTO server_secrets (key, value) VALUES ('admin_key_hash', $1) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-                    .bind(hash)
-                    .execute(p)
-                    .await
-                    .map_err(|e| PylosError::Internal(format!("Failed to save admin key hash: {}", e)))?;
-            }
-        }
-
-        Ok(())
+        let repo = repo.ok_or_else(|| {
+            PylosError::Internal("No config repository configured".into())
+        })?;
+        repo.save_admin_key_hash(hash).await
     }
 
     /// Met à jour un provider en mémoire et persiste sur disque
@@ -982,9 +711,11 @@ async fn persist_config_locked(state: &ConfigState) {
     };
     let db_json = serialize_config_for_db(&state.config);
 
-    if let Some(pool) = &state.db_pool {
-        save_gateway_config_to_pool(pool, &db_json, CURRENT_CONFIG_SCHEMA_VERSION).await;
-        debug!("Config persisted to database");
+    if let Some(repo) = &state.db_repo {
+        let _ = repo
+            .save_config_json(&db_json, i64::from(CURRENT_CONFIG_SCHEMA_VERSION))
+            .await;
+        debug!("Config persisted to repository");
     }
 
     let Some(path) = &state.file_path else {
@@ -1715,52 +1446,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_database_migrates_v1_and_creates_backup() {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!("pylos-cfg-mig-{}", nanos));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db_path = dir.join("test.db");
-        let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
-
-        // Seed legacy v1 table without config_version column
-        let pool = SqlitePoolOptions::new().connect(&db_url).await.unwrap();
-        sqlx::query("CREATE TABLE gateway_config (id TEXT PRIMARY KEY, config TEXT NOT NULL)")
-            .execute(&pool)
+    async fn test_attach_repository_migrates_v1_in_memory() {
+        let repo = Arc::new(pylos_core::domain::repositories::InMemoryConfigRepository::new());
+        repo.save_config_json(r#"{"version": 1, "server": {"port": 4242}}"#, 1)
             .await
             .unwrap();
-        let v1_json = r#"{"version": 1, "server": {"port": 4242}}"#;
-        sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1)")
-            .bind(v1_json)
-            .execute(&pool)
-            .await
-            .unwrap();
-        pool.close().await;
 
         let store = ConfigStore::from_config(PylosConfig::default());
-        store.init_database(&db_url).await.unwrap();
+        store.attach_repository(repo.clone()).await.unwrap();
 
         let loaded = store.get().await;
         assert_eq!(loaded.version, CURRENT_CONFIG_SCHEMA_VERSION);
         assert_eq!(loaded.server.port, 4242);
-
-        // Verify config_version updated & backup created
-        let verify_pool = SqlitePoolOptions::new().connect(&db_url).await.unwrap();
-        let ver: i64 = sqlx::query_scalar("SELECT config_version FROM gateway_config WHERE id = 'pylos'")
-            .fetch_one(&verify_pool)
-            .await
-            .unwrap();
-        assert_eq!(ver, CURRENT_CONFIG_SCHEMA_VERSION as i64);
-
-        let backup_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM gateway_config_backups WHERE source_version = 1 AND target_version = 2")
-            .fetch_one(&verify_pool)
-            .await
-            .unwrap();
-        assert_eq!(backup_count, 1);
-
-        verify_pool.close().await;
-        let _ = std::fs::remove_dir_all(&dir);
+        let (_, ver) = repo.load_config_json().await.unwrap().unwrap();
+        assert_eq!(ver, i64::from(CURRENT_CONFIG_SCHEMA_VERSION));
     }
 }

@@ -6,7 +6,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 
-use pylos_application::log_store::LogFilter;
+use pylos_core::domain::logging::{now_ms, LogFilter};
 
 use crate::state::AppState;
 
@@ -30,7 +30,7 @@ impl GuardrailsQuery {
     fn to_filter(&self) -> LogFilter {
         let since_ms = self.since_ms.or_else(|| {
             self.period.as_deref().map(|p| {
-                let now = pylos_application::log_store::now_ms();
+                let now = now_ms();
                 let duration_ms = match p {
                     "1h" => 3_600_000,
                     "6h" => 21_600_000,
@@ -92,7 +92,7 @@ pub async fn get_guardrails_stats(
 ) -> impl IntoResponse {
     let since_ms = query.since_ms.or_else(|| {
         query.period.as_deref().map(|p| {
-            let now = pylos_application::log_store::now_ms();
+            let now = now_ms();
             let duration_ms = match p {
                 "1h" => 3_600_000,
                 "6h" => 21_600_000,

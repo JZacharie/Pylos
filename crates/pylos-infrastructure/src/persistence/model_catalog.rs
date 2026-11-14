@@ -1,31 +1,9 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sqlx::postgres::{PgPool, PgPoolOptions};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
-use sqlx::Row;
 use tracing::info;
 
-#[derive(Clone)]
-enum Pool {
-    Sqlite(SqlitePool),
-    Postgres(PgPool),
-}
-
-impl Pool {
-    async fn run_migrations(&self) -> Result<(), sqlx::Error> {
-        match self {
-            Pool::Sqlite(pool) => sqlx::migrate!("./migrations")
-                .run(pool)
-                .await
-                .map_err(|e| sqlx::Error::Migrate(Box::new(e))),
-            Pool::Postgres(pool) => sqlx::migrate!("./migrations_postgres")
-                .run(pool)
-                .await
-                .map_err(|e| sqlx::Error::Migrate(Box::new(e))),
-        }
-    }
-}
+use super::db_pool::{DbPool, DbRow, DbValue};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ModelInfo {
@@ -79,57 +57,39 @@ pub struct PricingReloadStatus {
 
 #[derive(Clone)]
 pub struct ModelCatalog {
-    pool: Pool,
+    pool: DbPool,
 }
 
 impl ModelCatalog {
     pub async fn open(db_path: &Path) -> Result<Self, sqlx::Error> {
-        let options = SqliteConnectOptions::new()
-            .filename(db_path)
-            .create_if_missing(true)
-            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-            .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
-
-        let pool = SqlitePoolOptions::new()
-            .max_connections(4)
-            .connect_with(options)
-            .await?;
-
-        let catalog = Self {
-            pool: Pool::Sqlite(pool),
-        };
+        let pool = DbPool::open_sqlite(db_path, "model_catalog", 4).await?;
+        let catalog = Self { pool };
         catalog.pool.run_migrations().await?;
         catalog.seed_builtin_models().await;
-
         info!(path = %db_path.display(), "Model catalog opened (SQLite)");
         Ok(catalog)
     }
 
     pub async fn open_postgres(database_url: &str) -> Result<Self, sqlx::Error> {
-        let pool = PgPoolOptions::new()
-            .max_connections(4)
-            .connect(database_url)
-            .await?;
-
-        let catalog = Self {
-            pool: Pool::Postgres(pool),
-        };
+        let pool = DbPool::open_postgres(database_url, "model_catalog").await?;
+        let catalog = Self { pool };
         catalog.pool.run_migrations().await?;
         catalog.seed_builtin_models().await;
-
         info!("Model catalog opened (PostgreSQL)");
         Ok(catalog)
     }
 
-    pub async fn in_memory() -> Result<Self, sqlx::Error> {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(2)
-            .connect("sqlite::memory:")
-            .await?;
+    pub async fn from_pool(pool: DbPool) -> Result<Self, sqlx::Error> {
+        let catalog = Self { pool };
+        catalog.pool.run_migrations().await?;
+        catalog.seed_builtin_models().await;
+        Ok(catalog)
+    }
 
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS model_catalog (
+    pub async fn in_memory() -> Result<Self, sqlx::Error> {
+        let pool = DbPool::in_memory(2).await?;
+        let ddls = [
+            r#"CREATE TABLE IF NOT EXISTS model_catalog (
                 id                      TEXT PRIMARY KEY,
                 provider                TEXT NOT NULL,
                 model_id                TEXT NOT NULL,
@@ -156,9 +116,9 @@ impl ModelCatalog {
                 tags                    TEXT,
                 provider_params         TEXT,
                 organization_id         TEXT
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_uniq ON model_catalog(provider, model_id);
-            CREATE TABLE IF NOT EXISTS model_health (
+            )"#,
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_uniq ON model_catalog(provider, model_id)",
+            r#"CREATE TABLE IF NOT EXISTS model_health (
                 id              TEXT PRIMARY KEY,
                 provider        TEXT NOT NULL,
                 model_id        TEXT NOT NULL,
@@ -166,15 +126,19 @@ impl ModelCatalog {
                 error_details   TEXT,
                 last_check_ms   INTEGER,
                 last_success_ms INTEGER
-            );
-        "#,
-        )
-        .execute(&pool)
-        .await?;
-
-        let catalog = Self {
-            pool: Pool::Sqlite(pool),
-        };
+            )"#,
+            r#"CREATE TABLE IF NOT EXISTS pricing_reload_status (
+                id                INTEGER PRIMARY KEY,
+                source_url        TEXT NOT NULL,
+                last_reload_ms    INTEGER,
+                models_count      INTEGER NOT NULL DEFAULT 0,
+                periodic_schedule TEXT
+            )"#,
+        ];
+        for ddl in ddls {
+            pool.execute(ddl, vec![]).await?;
+        }
+        let catalog = Self { pool };
         catalog.seed_builtin_models().await;
         Ok(catalog)
     }
@@ -185,73 +149,46 @@ impl ModelCatalog {
         include_deprecated: bool,
     ) -> Vec<ModelInfo> {
         let mut sql = String::from("SELECT * FROM model_catalog WHERE 1=1");
-        let mut params: Vec<String> = vec![];
+        let mut params: Vec<DbValue> = vec![];
 
         if let Some(p) = provider {
             sql.push_str(&format!(" AND provider = ${}", params.len() + 1));
-            params.push(p.to_string());
+            params.push(DbValue::Text(p.to_string()));
         }
         if !include_deprecated {
-            match &self.pool {
-                Pool::Sqlite(_) => sql.push_str(" AND is_deprecated = 0 AND enabled = 1"),
-                Pool::Postgres(_) => sql.push_str(" AND is_deprecated = FALSE AND enabled = TRUE"),
-            }
+            sql.push_str(&format!(
+                " AND is_deprecated = ${} AND enabled = ${}",
+                params.len() + 1,
+                params.len() + 2
+            ));
+            params.push(DbValue::Bool(false));
+            params.push(DbValue::Bool(true));
         }
         sql.push_str(" ORDER BY provider, model_id");
 
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                let mut q = sqlx::query(&sql);
-                for p in &params {
-                    q = q.bind(p);
-                }
-                q.fetch_all(pool)
-                    .await
-                    .unwrap_or_default()
-                    .iter()
-                    .map(row_to_model_info_sqlite)
-                    .collect()
-            }
-            Pool::Postgres(pool) => {
-                let mut q = sqlx::query::<sqlx::Postgres>(&sql);
-                for p in &params {
-                    q = q.bind(p);
-                }
-                q.fetch_all(pool)
-                    .await
-                    .unwrap_or_default()
-                    .iter()
-                    .map(row_to_model_info_pg)
-                    .collect()
-            }
-        }
+        self.pool
+            .fetch_all(&sql, params)
+            .await
+            .unwrap_or_default()
+            .iter()
+            .map(row_to_model_info)
+            .collect()
     }
 
     pub async fn get_model(&self, provider: &str, model_id: &str) -> Option<ModelInfo> {
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                sqlx::query("SELECT * FROM model_catalog WHERE provider = $1 AND model_id = $2")
-                    .bind(provider)
-                    .bind(model_id)
-                    .fetch_optional(pool)
-                    .await
-                    .ok()
-                    .flatten()
-                    .as_ref()
-                    .map(row_to_model_info_sqlite)
-            }
-            Pool::Postgres(pool) => sqlx::query::<sqlx::Postgres>(
+        self.pool
+            .fetch_optional(
                 "SELECT * FROM model_catalog WHERE provider = $1 AND model_id = $2",
+                vec![
+                    DbValue::Text(provider.to_string()),
+                    DbValue::Text(model_id.to_string()),
+                ],
             )
-            .bind(provider)
-            .bind(model_id)
-            .fetch_optional(pool)
             .await
             .ok()
             .flatten()
             .as_ref()
-            .map(row_to_model_info_pg),
-        }
+            .map(row_to_model_info)
     }
 
     pub async fn get_pricing(&self, provider: &str, model_id: &str) -> (f64, f64) {
@@ -263,155 +200,86 @@ impl ModelCatalog {
 
     pub async fn upsert_model(&self, model: &ModelInfo) -> Result<(), sqlx::Error> {
         let now = now_ms();
-        let model_access_groups_json = model
+        let model_access_groups_val = model
             .model_access_groups
             .as_ref()
-            .map(|v| serde_json::to_string(v).unwrap_or_default());
-        let guardrails_json = model
+            .and_then(|v| serde_json::to_value(v).ok());
+        let guardrails_val = model
             .guardrails
             .as_ref()
-            .map(|v| serde_json::to_string(v).unwrap_or_default());
-        let tags_json = model
+            .and_then(|v| serde_json::to_value(v).ok());
+        let tags_val = model
             .tags
             .as_ref()
-            .map(|v| serde_json::to_string(v).unwrap_or_default());
-        let provider_params_json = model.provider_params.as_ref().map(|v| v.to_string());
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                sqlx::query(
-                    r#"
-                    INSERT INTO model_catalog
-                        (id, provider, model_id, display_name, context_window, max_output_tokens,
-                         input_price_per_1m_usd, output_price_per_1m_usd,
-                         supports_vision, supports_tools, supports_streaming, supports_embeddings,
-                         is_deprecated, enabled, updated_at_ms,
-                         api_base, tpm, rpm, max_retries, timeout_secs, stream_timeout_secs,
-                         model_access_groups, guardrails, tags, provider_params, organization_id)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                            $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
-                    ON CONFLICT(id) DO UPDATE SET
-                        display_name = excluded.display_name,
-                        context_window = excluded.context_window,
-                        max_output_tokens = excluded.max_output_tokens,
-                        input_price_per_1m_usd = excluded.input_price_per_1m_usd,
-                        output_price_per_1m_usd = excluded.output_price_per_1m_usd,
-                        supports_vision = excluded.supports_vision,
-                        supports_tools = excluded.supports_tools,
-                        supports_streaming = excluded.supports_streaming,
-                        supports_embeddings = excluded.supports_embeddings,
-                        is_deprecated = excluded.is_deprecated,
-                        enabled = excluded.enabled,
-                        updated_at_ms = excluded.updated_at_ms,
-                        api_base = excluded.api_base,
-                        tpm = excluded.tpm,
-                        rpm = excluded.rpm,
-                        max_retries = excluded.max_retries,
-                        timeout_secs = excluded.timeout_secs,
-                        stream_timeout_secs = excluded.stream_timeout_secs,
-                        model_access_groups = excluded.model_access_groups,
-                        guardrails = excluded.guardrails,
-                        tags = excluded.tags,
-                        provider_params = excluded.provider_params,
-                        organization_id = excluded.organization_id
-                    "#,
-                )
-                .bind(&model.id)
-                .bind(&model.provider)
-                .bind(&model.model_id)
-                .bind(&model.display_name)
-                .bind(model.context_window)
-                .bind(model.max_output_tokens)
-                .bind(model.input_price_per_1m_usd)
-                .bind(model.output_price_per_1m_usd)
-                .bind(model.supports_vision as i32)
-                .bind(model.supports_tools as i32)
-                .bind(model.supports_streaming as i32)
-                .bind(model.supports_embeddings as i32)
-                .bind(model.is_deprecated as i32)
-                .bind(model.enabled as i32)
-                .bind(now)
-                .bind(&model.api_base)
-                .bind(model.tpm.map(|v| v as i64))
-                .bind(model.rpm.map(|v| v as i64))
-                .bind(model.max_retries.map(|v| v as i64))
-                .bind(model.timeout_secs.map(|v| v as i64))
-                .bind(model.stream_timeout_secs.map(|v| v as i64))
-                .bind(&model_access_groups_json)
-                .bind(&guardrails_json)
-                .bind(&tags_json)
-                .bind(&provider_params_json)
-                .bind(&model.organization_id)
-                .execute(pool)
-                .await?;
-            }
-            Pool::Postgres(pool) => {
-                sqlx::query::<sqlx::Postgres>(
-                    r#"
-                    INSERT INTO model_catalog
-                        (id, provider, model_id, display_name, context_window, max_output_tokens,
-                         input_price_per_1m_usd, output_price_per_1m_usd,
-                         supports_vision, supports_tools, supports_streaming, supports_embeddings,
-                         is_deprecated, enabled, updated_at_ms,
-                         api_base, tpm, rpm, max_retries, timeout_secs, stream_timeout_secs,
-                         model_access_groups, guardrails, tags, provider_params, organization_id)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                            $16, $17, $18, $19, $20, $21, $22::jsonb, $23::jsonb, $24::jsonb, $25::jsonb, $26)
-                    ON CONFLICT(id) DO UPDATE SET
-                        display_name = excluded.display_name,
-                        context_window = excluded.context_window,
-                        max_output_tokens = excluded.max_output_tokens,
-                        input_price_per_1m_usd = excluded.input_price_per_1m_usd,
-                        output_price_per_1m_usd = excluded.output_price_per_1m_usd,
-                        supports_vision = excluded.supports_vision,
-                        supports_tools = excluded.supports_tools,
-                        supports_streaming = excluded.supports_streaming,
-                        supports_embeddings = excluded.supports_embeddings,
-                        is_deprecated = excluded.is_deprecated,
-                        enabled = excluded.enabled,
-                        updated_at_ms = excluded.updated_at_ms,
-                        api_base = excluded.api_base,
-                        tpm = excluded.tpm,
-                        rpm = excluded.rpm,
-                        max_retries = excluded.max_retries,
-                        timeout_secs = excluded.timeout_secs,
-                        stream_timeout_secs = excluded.stream_timeout_secs,
-                        model_access_groups = excluded.model_access_groups,
-                        guardrails = excluded.guardrails,
-                        tags = excluded.tags,
-                        provider_params = excluded.provider_params,
-                        organization_id = excluded.organization_id
-                    "#,
-                )
-                .bind(&model.id)
-                .bind(&model.provider)
-                .bind(&model.model_id)
-                .bind(&model.display_name)
-                .bind(model.context_window as i32)
-                .bind(model.max_output_tokens as i32)
-                .bind(model.input_price_per_1m_usd)
-                .bind(model.output_price_per_1m_usd)
-                .bind(model.supports_vision)
-                .bind(model.supports_tools)
-                .bind(model.supports_streaming)
-                .bind(model.supports_embeddings)
-                .bind(model.is_deprecated)
-                .bind(model.enabled)
-                .bind(now)
-                .bind(&model.api_base)
-                .bind(model.tpm.map(|v| v as i32))
-                .bind(model.rpm.map(|v| v as i32))
-                .bind(model.max_retries.map(|v| v as i32))
-                .bind(model.timeout_secs.map(|v| v as i32))
-                .bind(model.stream_timeout_secs.map(|v| v as i32))
-                .bind(&model_access_groups_json)
-                .bind(&guardrails_json)
-                .bind(&tags_json)
-                .bind(&provider_params_json)
-                .bind(&model.organization_id)
-                .execute(pool)
-                .await?;
-            }
-        }
+            .and_then(|v| serde_json::to_value(v).ok());
+
+        self.pool
+            .execute(
+                r#"
+                INSERT INTO model_catalog
+                    (id, provider, model_id, display_name, context_window, max_output_tokens,
+                     input_price_per_1m_usd, output_price_per_1m_usd,
+                     supports_vision, supports_tools, supports_streaming, supports_embeddings,
+                     is_deprecated, enabled, updated_at_ms,
+                     api_base, tpm, rpm, max_retries, timeout_secs, stream_timeout_secs,
+                     model_access_groups, guardrails, tags, provider_params, organization_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+                ON CONFLICT(id) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    context_window = excluded.context_window,
+                    max_output_tokens = excluded.max_output_tokens,
+                    input_price_per_1m_usd = excluded.input_price_per_1m_usd,
+                    output_price_per_1m_usd = excluded.output_price_per_1m_usd,
+                    supports_vision = excluded.supports_vision,
+                    supports_tools = excluded.supports_tools,
+                    supports_streaming = excluded.supports_streaming,
+                    supports_embeddings = excluded.supports_embeddings,
+                    is_deprecated = excluded.is_deprecated,
+                    enabled = excluded.enabled,
+                    updated_at_ms = excluded.updated_at_ms,
+                    api_base = excluded.api_base,
+                    tpm = excluded.tpm,
+                    rpm = excluded.rpm,
+                    max_retries = excluded.max_retries,
+                    timeout_secs = excluded.timeout_secs,
+                    stream_timeout_secs = excluded.stream_timeout_secs,
+                    model_access_groups = excluded.model_access_groups,
+                    guardrails = excluded.guardrails,
+                    tags = excluded.tags,
+                    provider_params = excluded.provider_params,
+                    organization_id = excluded.organization_id
+                "#,
+                vec![
+                    DbValue::Text(model.id.clone()),
+                    DbValue::Text(model.provider.clone()),
+                    DbValue::Text(model.model_id.clone()),
+                    DbValue::OptText(model.display_name.clone()),
+                    DbValue::I64(i64::from(model.context_window)),
+                    DbValue::I64(i64::from(model.max_output_tokens)),
+                    DbValue::F64(model.input_price_per_1m_usd),
+                    DbValue::F64(model.output_price_per_1m_usd),
+                    DbValue::Bool(model.supports_vision),
+                    DbValue::Bool(model.supports_tools),
+                    DbValue::Bool(model.supports_streaming),
+                    DbValue::Bool(model.supports_embeddings),
+                    DbValue::Bool(model.is_deprecated),
+                    DbValue::Bool(model.enabled),
+                    DbValue::I64(now),
+                    DbValue::OptText(model.api_base.clone()),
+                    DbValue::OptI64(model.tpm.map(i64::from)),
+                    DbValue::OptI64(model.rpm.map(i64::from)),
+                    DbValue::OptI64(model.max_retries.map(i64::from)),
+                    DbValue::OptI64(model.timeout_secs.map(i64::from)),
+                    DbValue::OptI64(model.stream_timeout_secs.map(i64::from)),
+                    DbValue::OptJson(model_access_groups_val),
+                    DbValue::OptJson(guardrails_val),
+                    DbValue::OptJson(tags_val),
+                    DbValue::OptJson(model.provider_params.clone()),
+                    DbValue::OptText(model.organization_id.clone()),
+                ],
+            )
+            .await?;
         Ok(())
     }
 
@@ -426,70 +294,43 @@ impl ModelCatalog {
     }
 
     pub async fn delete_model(&self, provider: &str, model_id: &str) -> Result<bool, sqlx::Error> {
-        let rows_affected = match &self.pool {
-            Pool::Sqlite(pool) => {
-                sqlx::query("DELETE FROM model_catalog WHERE provider = $1 AND model_id = $2")
-                    .bind(provider)
-                    .bind(model_id)
-                    .execute(pool)
-                    .await?
-                    .rows_affected()
-            }
-            Pool::Postgres(pool) => sqlx::query::<sqlx::Postgres>(
+        let rows_affected = self
+            .pool
+            .execute(
                 "DELETE FROM model_catalog WHERE provider = $1 AND model_id = $2",
+                vec![
+                    DbValue::Text(provider.to_string()),
+                    DbValue::Text(model_id.to_string()),
+                ],
             )
-            .bind(provider)
-            .bind(model_id)
-            .execute(pool)
-            .await?
-            .rows_affected(),
-        };
+            .await?;
         Ok(rows_affected > 0)
     }
 
     pub async fn delete_models_by_provider(&self, provider: &str) -> Result<u64, sqlx::Error> {
-        let rows_affected = match &self.pool {
-            Pool::Sqlite(pool) => sqlx::query("DELETE FROM model_catalog WHERE provider = $1")
-                .bind(provider)
-                .execute(pool)
-                .await?
-                .rows_affected(),
-            Pool::Postgres(pool) => {
-                sqlx::query::<sqlx::Postgres>("DELETE FROM model_catalog WHERE provider = $1")
-                    .bind(provider)
-                    .execute(pool)
-                    .await?
-                    .rows_affected()
-            }
-        };
-        Ok(rows_affected)
+        self.pool
+            .execute(
+                "DELETE FROM model_catalog WHERE provider = $1",
+                vec![DbValue::Text(provider.to_string())],
+            )
+            .await
     }
 
     pub async fn get_pricing_status(&self) -> Result<PricingReloadStatus, sqlx::Error> {
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                let row = sqlx::query("SELECT source_url, last_reload_ms, models_count, periodic_schedule FROM pricing_reload_status WHERE id = 1")
-                    .fetch_one(pool)
-                    .await?;
-                Ok(PricingReloadStatus {
-                    source_url: row.try_get("source_url")?,
-                    last_reload_ms: row.try_get("last_reload_ms").ok(),
-                    models_count: row.try_get::<i64, _>("models_count")? as i32,
-                    periodic_schedule: row.try_get("periodic_schedule").ok(),
-                })
-            }
-            Pool::Postgres(pool) => {
-                let row = sqlx::query("SELECT source_url, last_reload_ms, models_count, periodic_schedule FROM pricing_reload_status WHERE id = 1")
-                    .fetch_one(pool)
-                    .await?;
-                Ok(PricingReloadStatus {
-                    source_url: row.try_get("source_url")?,
-                    last_reload_ms: row.try_get("last_reload_ms").ok(),
-                    models_count: row.try_get::<i32, _>("models_count")?,
-                    periodic_schedule: row.try_get("periodic_schedule").ok(),
-                })
-            }
-        }
+        let row = self
+            .pool
+            .fetch_optional(
+                "SELECT source_url, last_reload_ms, models_count, periodic_schedule FROM pricing_reload_status WHERE id = 1",
+                vec![],
+            )
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?;
+        Ok(PricingReloadStatus {
+            source_url: row.get_str("source_url"),
+            last_reload_ms: row.get_opt_i64("last_reload_ms"),
+            models_count: row.get_i64("models_count") as i32,
+            periodic_schedule: row.get_opt_str("periodic_schedule"),
+        })
     }
 
     pub async fn update_pricing_status(
@@ -499,230 +340,106 @@ impl ModelCatalog {
         models_count: i32,
         periodic_schedule: Option<&str>,
     ) -> Result<(), sqlx::Error> {
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                sqlx::query(
-                    r#"
-                    INSERT INTO pricing_reload_status (id, source_url, last_reload_ms, models_count, periodic_schedule)
-                    VALUES (1, $1, $2, $3, $4)
-                    ON CONFLICT(id) DO UPDATE SET
-                        source_url = excluded.source_url,
-                        last_reload_ms = excluded.last_reload_ms,
-                        models_count = excluded.models_count,
-                        periodic_schedule = excluded.periodic_schedule
-                    "#,
-                )
-                .bind(source_url)
-                .bind(last_reload_ms)
-                .bind(models_count as i64)
-                .bind(periodic_schedule)
-                .execute(pool)
-                .await?;
-            }
-            Pool::Postgres(pool) => {
-                sqlx::query(
-                    r#"
-                    INSERT INTO pricing_reload_status (id, source_url, last_reload_ms, models_count, periodic_schedule)
-                    VALUES (1, $1, $2, $3, $4)
-                    ON CONFLICT(id) DO UPDATE SET
-                        source_url = excluded.source_url,
-                        last_reload_ms = excluded.last_reload_ms,
-                        models_count = excluded.models_count,
-                        periodic_schedule = excluded.periodic_schedule
-                    "#,
-                )
-                .bind(source_url)
-                .bind(last_reload_ms)
-                .bind(models_count)
-                .bind(periodic_schedule)
-                .execute(pool)
-                .await?;
-            }
-        }
+        self.pool
+            .execute(
+                r#"
+                INSERT INTO pricing_reload_status (id, source_url, last_reload_ms, models_count, periodic_schedule)
+                VALUES (1, $1, $2, $3, $4)
+                ON CONFLICT(id) DO UPDATE SET
+                    source_url = excluded.source_url,
+                    last_reload_ms = excluded.last_reload_ms,
+                    models_count = excluded.models_count,
+                    periodic_schedule = excluded.periodic_schedule
+                "#,
+                vec![
+                    DbValue::Text(source_url.to_string()),
+                    DbValue::OptI64(last_reload_ms),
+                    DbValue::I64(i64::from(models_count)),
+                    DbValue::OptText(periodic_schedule.map(str::to_string)),
+                ],
+            )
+            .await?;
         Ok(())
     }
 
     pub async fn list_model_health(&self) -> Result<Vec<ModelHealth>, sqlx::Error> {
-        let sql = "SELECT id, provider, model_id, health_status, error_details, last_check_ms, last_success_ms FROM model_health";
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                let rows = sqlx::query(sql).fetch_all(pool).await?;
-                Ok(rows
-                    .iter()
-                    .map(|r| ModelHealth {
-                        id: r.try_get("id").unwrap_or_default(),
-                        provider: r.try_get("provider").unwrap_or_default(),
-                        model_id: r.try_get("model_id").unwrap_or_default(),
-                        health_status: r
-                            .try_get("health_status")
-                            .unwrap_or_else(|_| "none".to_string()),
-                        error_details: r.try_get("error_details").ok(),
-                        last_check_ms: r.try_get::<Option<i64>, _>("last_check_ms").unwrap_or(None),
-                        last_success_ms: r
-                            .try_get::<Option<i64>, _>("last_success_ms")
-                            .unwrap_or(None),
-                    })
-                    .collect())
-            }
-            Pool::Postgres(pool) => {
-                let rows = sqlx::query::<sqlx::Postgres>(sql).fetch_all(pool).await?;
-                Ok(rows
-                    .iter()
-                    .map(|r| ModelHealth {
-                        id: r.try_get("id").unwrap_or_default(),
-                        provider: r.try_get("provider").unwrap_or_default(),
-                        model_id: r.try_get("model_id").unwrap_or_default(),
-                        health_status: r
-                            .try_get("health_status")
-                            .unwrap_or_else(|_| "none".to_string()),
-                        error_details: r.try_get("error_details").ok(),
-                        last_check_ms: r.try_get::<Option<i64>, _>("last_check_ms").unwrap_or(None),
-                        last_success_ms: r
-                            .try_get::<Option<i64>, _>("last_success_ms")
-                            .unwrap_or(None),
-                    })
-                    .collect())
-            }
-        }
+        let rows = self
+            .pool
+            .fetch_all(
+                "SELECT id, provider, model_id, health_status, error_details, last_check_ms, last_success_ms FROM model_health",
+                vec![],
+            )
+            .await?;
+        Ok(rows
+            .iter()
+            .map(|r| ModelHealth {
+                id: r.get_str("id"),
+                provider: r.get_str("provider"),
+                model_id: r.get_str("model_id"),
+                health_status: r
+                    .get_opt_str("health_status")
+                    .unwrap_or_else(|| "none".to_string()),
+                error_details: r.get_opt_str("error_details"),
+                last_check_ms: r.get_opt_i64("last_check_ms"),
+                last_success_ms: r.get_opt_i64("last_success_ms"),
+            })
+            .collect())
     }
 
     pub async fn update_model_health(&self, health: &ModelHealth) -> Result<(), sqlx::Error> {
-        let sql = r#"
-            INSERT INTO model_health (id, provider, model_id, health_status, error_details, last_check_ms, last_success_ms)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT(id) DO UPDATE SET
-                health_status = excluded.health_status,
-                error_details = excluded.error_details,
-                last_check_ms = excluded.last_check_ms,
-                last_success_ms = excluded.last_success_ms
-        "#;
-        match &self.pool {
-            Pool::Sqlite(pool) => {
-                sqlx::query(sql)
-                    .bind(&health.id)
-                    .bind(&health.provider)
-                    .bind(&health.model_id)
-                    .bind(&health.health_status)
-                    .bind(&health.error_details)
-                    .bind(health.last_check_ms)
-                    .bind(health.last_success_ms)
-                    .execute(pool)
-                    .await?;
-            }
-            Pool::Postgres(pool) => {
-                sqlx::query(sql)
-                    .bind(&health.id)
-                    .bind(&health.provider)
-                    .bind(&health.model_id)
-                    .bind(&health.health_status)
-                    .bind(&health.error_details)
-                    .bind(health.last_check_ms)
-                    .bind(health.last_success_ms)
-                    .execute(pool)
-                    .await?;
-            }
-        }
+        self.pool
+            .execute(
+                r#"
+                INSERT INTO model_health (id, provider, model_id, health_status, error_details, last_check_ms, last_success_ms)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT(id) DO UPDATE SET
+                    health_status = excluded.health_status,
+                    error_details = excluded.error_details,
+                    last_check_ms = excluded.last_check_ms,
+                    last_success_ms = excluded.last_success_ms
+                "#,
+                vec![
+                    DbValue::Text(health.id.clone()),
+                    DbValue::Text(health.provider.clone()),
+                    DbValue::Text(health.model_id.clone()),
+                    DbValue::Text(health.health_status.clone()),
+                    DbValue::OptText(health.error_details.clone()),
+                    DbValue::OptI64(health.last_check_ms),
+                    DbValue::OptI64(health.last_success_ms),
+                ],
+            )
+            .await?;
         Ok(())
     }
 }
 
-fn parse_json_array(val: Option<&str>) -> Option<Vec<String>> {
-    val.and_then(|v| serde_json::from_str(v).ok())
-}
-
-fn parse_json_value(val: Option<&str>) -> Option<serde_json::Value> {
-    val.and_then(|v| serde_json::from_str(v).ok())
-}
-
-fn row_to_model_info_sqlite(row: &sqlx::sqlite::SqliteRow) -> ModelInfo {
+fn row_to_model_info(row: &DbRow) -> ModelInfo {
     ModelInfo {
-        id: row.try_get("id").unwrap_or_default(),
-        provider: row.try_get("provider").unwrap_or_default(),
-        model_id: row.try_get("model_id").unwrap_or_default(),
-        display_name: row.try_get("display_name").ok(),
-        context_window: row.try_get::<i64, _>("context_window").unwrap_or(0) as u32,
-        max_output_tokens: row.try_get::<i64, _>("max_output_tokens").unwrap_or(0) as u32,
-        input_price_per_1m_usd: row.try_get("input_price_per_1m_usd").unwrap_or(0.0),
-        output_price_per_1m_usd: row.try_get("output_price_per_1m_usd").unwrap_or(0.0),
-        supports_vision: row.try_get::<i64, _>("supports_vision").unwrap_or(0) != 0,
-        supports_tools: row.try_get::<i64, _>("supports_tools").unwrap_or(1) != 0,
-        supports_streaming: row.try_get::<i64, _>("supports_streaming").unwrap_or(1) != 0,
-        supports_embeddings: row.try_get::<i64, _>("supports_embeddings").unwrap_or(0) != 0,
-        is_deprecated: row.try_get::<i64, _>("is_deprecated").unwrap_or(0) != 0,
-        enabled: row.try_get::<i64, _>("enabled").unwrap_or(1) != 0,
-        api_base: row.try_get("api_base").ok(),
-        tpm: row
-            .try_get::<Option<i64>, _>("tpm")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        rpm: row
-            .try_get::<Option<i64>, _>("rpm")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        max_retries: row
-            .try_get::<Option<i64>, _>("max_retries")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        timeout_secs: row
-            .try_get::<Option<i64>, _>("timeout_secs")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        stream_timeout_secs: row
-            .try_get::<Option<i64>, _>("stream_timeout_secs")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        model_access_groups: parse_json_array(row.try_get("model_access_groups").ok()),
-        guardrails: parse_json_array(row.try_get("guardrails").ok()),
-        tags: parse_json_array(row.try_get("tags").ok()),
-        provider_params: parse_json_value(row.try_get("provider_params").ok()),
-        organization_id: row.try_get("organization_id").ok(),
-    }
-}
-
-fn row_to_model_info_pg(row: &sqlx::postgres::PgRow) -> ModelInfo {
-    ModelInfo {
-        id: row.try_get("id").unwrap_or_default(),
-        provider: row.try_get("provider").unwrap_or_default(),
-        model_id: row.try_get("model_id").unwrap_or_default(),
-        display_name: row.try_get("display_name").ok(),
-        context_window: row.try_get::<i32, _>("context_window").unwrap_or(0) as u32,
-        max_output_tokens: row.try_get::<i32, _>("max_output_tokens").unwrap_or(0) as u32,
-        input_price_per_1m_usd: row.try_get("input_price_per_1m_usd").unwrap_or(0.0),
-        output_price_per_1m_usd: row.try_get("output_price_per_1m_usd").unwrap_or(0.0),
-        supports_vision: row.try_get::<bool, _>("supports_vision").unwrap_or(false),
-        supports_tools: row.try_get::<bool, _>("supports_tools").unwrap_or(true),
-        supports_streaming: row.try_get::<bool, _>("supports_streaming").unwrap_or(true),
-        supports_embeddings: row
-            .try_get::<bool, _>("supports_embeddings")
-            .unwrap_or(false),
-        is_deprecated: row.try_get::<bool, _>("is_deprecated").unwrap_or(false),
-        enabled: row.try_get::<bool, _>("enabled").unwrap_or(true),
-        api_base: row.try_get("api_base").ok(),
-        tpm: row
-            .try_get::<Option<i32>, _>("tpm")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        rpm: row
-            .try_get::<Option<i32>, _>("rpm")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        max_retries: row
-            .try_get::<Option<i32>, _>("max_retries")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        timeout_secs: row
-            .try_get::<Option<i32>, _>("timeout_secs")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        stream_timeout_secs: row
-            .try_get::<Option<i32>, _>("stream_timeout_secs")
-            .unwrap_or(None)
-            .map(|v| v as u32),
-        model_access_groups: parse_json_array(row.try_get("model_access_groups").ok()),
-        guardrails: parse_json_array(row.try_get("guardrails").ok()),
-        tags: parse_json_array(row.try_get("tags").ok()),
-        provider_params: parse_json_value(row.try_get("provider_params").ok()),
-        organization_id: row.try_get("organization_id").ok(),
+        id: row.get_str("id"),
+        provider: row.get_str("provider"),
+        model_id: row.get_str("model_id"),
+        display_name: row.get_opt_str("display_name"),
+        context_window: row.get_i64("context_window") as u32,
+        max_output_tokens: row.get_i64("max_output_tokens") as u32,
+        input_price_per_1m_usd: row.get_f64("input_price_per_1m_usd"),
+        output_price_per_1m_usd: row.get_f64("output_price_per_1m_usd"),
+        supports_vision: row.get_bool("supports_vision"),
+        supports_tools: row.get_bool("supports_tools"),
+        supports_streaming: row.get_bool("supports_streaming"),
+        supports_embeddings: row.get_bool("supports_embeddings"),
+        is_deprecated: row.get_bool("is_deprecated"),
+        enabled: row.get_bool("enabled"),
+        api_base: row.get_opt_str("api_base"),
+        tpm: row.get_opt_i64("tpm").map(|v| v as u32),
+        rpm: row.get_opt_i64("rpm").map(|v| v as u32),
+        max_retries: row.get_opt_i64("max_retries").map(|v| v as u32),
+        timeout_secs: row.get_opt_i64("timeout_secs").map(|v| v as u32),
+        stream_timeout_secs: row.get_opt_i64("stream_timeout_secs").map(|v| v as u32),
+        model_access_groups: row.get_json("model_access_groups"),
+        guardrails: row.get_json("guardrails"),
+        tags: row.get_json("tags"),
+        provider_params: row.get_json("provider_params"),
+        organization_id: row.get_opt_str("organization_id"),
     }
 }
 

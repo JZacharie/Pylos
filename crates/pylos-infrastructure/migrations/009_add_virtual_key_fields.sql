@@ -1,0 +1,10 @@
+ALTER TABLE virtual_keys ADD COLUMN team_alias TEXT;
+ALTER TABLE virtual_keys ADD COLUMN team_id TEXT;
+ALTER TABLE virtual_keys ADD COLUMN organization_id TEXT;
+ALTER TABLE virtual_keys ADD COLUMN user_email TEXT;
+ALTER TABLE virtual_keys ADD COLUMN user_id TEXT;
+ALTER TABLE virtual_keys ADD COLUMN created_at INTEGER;
+ALTER TABLE virtual_keys ADD COLUMN created_by TEXT;
+ALTER TABLE virtual_keys ADD COLUMN updated_at INTEGER;
+ALTER TABLE virtual_keys ADD COLUMN last_active INTEGER;
+ALTER TABLE virtual_keys ADD COLUMN expires_at INTEGER;

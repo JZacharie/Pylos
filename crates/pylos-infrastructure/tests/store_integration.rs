@@ -2,7 +2,7 @@
 // Vérifie que tous les stores s'initialisent et interagissent correctement
 // avec le pool SQLite in-memory.
 
-use pylos_application::{BudgetStore, ModelCatalog, RateLimitStore, VirtualKeyStore};
+use pylos_infrastructure::{BudgetStore, ModelCatalog, RateLimitStore, VirtualKeyStore};
 use pylos_core::domain::config::{
     BudgetConfig, Duration, EnvVar, RateLimitConfig, VirtualKeyConfig, VkProviderConfig,
 };
@@ -225,4 +225,86 @@ async fn test_budget_reset_after_period() {
     let usage = budget.get_usage("vk-budget-test").await;
     assert_eq!(usage.len(), 1);
     assert!((usage[0].current_usd - 5.0).abs() < 0.001);
+}
+
+#[tokio::test]
+async fn test_config_repository_sqlite_roundtrip_and_backup() {
+    use pylos_core::domain::repositories::ConfigRepository;
+    use pylos_infrastructure::{DbPool, SqlConfigRepository};
+
+    let pool = DbPool::in_memory(2).await.expect("in_memory pool");
+    let repo = SqlConfigRepository::from_pool(pool).await;
+
+    assert!(repo.load_config_json().await.expect("load empty").is_none());
+    repo.save_config_json(r#"{"version":1}"#, 1)
+        .await
+        .expect("save v1");
+    repo.backup_config_json(r#"{"version":1}"#, 1, 2)
+        .await
+        .expect("backup v1->v2");
+    repo.save_config_json(r#"{"version":2}"#, 2)
+        .await
+        .expect("save v2");
+
+    let loaded = repo.load_config_json().await.expect("load v2").expect("some");
+    assert_eq!(loaded.1, 2);
+
+    repo.save_admin_key_hash("hash-abc")
+        .await
+        .expect("save admin hash");
+    assert_eq!(
+        repo.get_admin_key_hash().await.expect("get admin hash"),
+        Some("hash-abc".to_string())
+    );
+}
+
+async fn verify_log_repo(log_store: &dyn pylos_core::domain::repositories::LogRepository) {
+    use pylos_core::domain::logging::{LogEntry, LogFilter, LogStatus};
+
+    let entry = LogEntry {
+        id: "dual-test-1".into(),
+        timestamp: 1_700_000_000_000,
+        provider: "openai".into(),
+        model: "gpt-4o-mini".into(),
+        object: "chat.completion".into(),
+        status: LogStatus::Success,
+        latency_ms: 42.0,
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        total_tokens: 15,
+        cost_usd: 0.0001,
+        finish_reason: Some("stop".into()),
+        error_message: None,
+        virtual_key: None,
+        is_stream: false,
+        input_preview: Some("hi".into()),
+        output_preview: Some("hello".into()),
+        compression_saved_bytes: 0,
+        guardrail_triggered: None,
+        guardrail_type: None,
+        guardrail_detail: None,
+        obfuscated_input: None,
+        pii_mapping: None,
+        moderation_scores: None,
+        caveman_input: None,
+    };
+    log_store.push(entry).await;
+    let (items, total) = log_store.list(10, 0, &LogFilter::default()).await;
+    assert!(total >= 1);
+    assert!(items.iter().any(|e| e.id == "dual-test-1"));
+}
+
+#[tokio::test]
+async fn test_dual_backend_sql_stores_sqlite_and_optional_postgres() {
+    use pylos_infrastructure::SqlLogStore;
+
+    let sqlite_store = SqlLogStore::in_memory().await.expect("in_memory SqlLogStore");
+    verify_log_repo(&sqlite_store).await;
+
+    if let Ok(pg_url) = std::env::var("PYLOS_TEST_POSTGRES_URL") {
+        let pg_store = SqlLogStore::open_postgres(&pg_url)
+            .await
+            .expect("open_postgres SqlLogStore");
+        verify_log_repo(&pg_store).await;
+    }
 }

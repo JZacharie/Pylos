@@ -6,7 +6,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 
-use pylos_application::log_store::{LogFilter, LogStatus};
+use pylos_core::domain::logging::{now_ms, LogFilter, LogStatus};
 
 use crate::state::AppState;
 
@@ -44,7 +44,7 @@ impl LogsQuery {
 
         let since_ms = self.since_ms.or_else(|| {
             self.period.as_deref().map(|p| {
-                let now = pylos_application::log_store::now_ms();
+                let now = now_ms();
                 let duration_ms = match p {
                     "1h" => 3_600_000,
                     "6h" => 21_600_000,

@@ -2,12 +2,19 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use pylos_application::{
-    BudgetPlugin, BudgetStore, ConfigStore, GuardrailsPlugin, InferenceOrchestrator, LogStore,
-    McpServerStore, ModelCatalog, OrganizationStore, OtelConfig, PgLogStore, PrefixCachePlugin,
-    RateLimitPlugin, RateLimitStore, SearchToolStore, SemanticCachePlugin, SmartRouterPlugin,
-    StructuredOutputPlugin, VirtualKeyStore,
+    BudgetPlugin, ConfigStore, GuardrailsPlugin, InferenceOrchestrator, OtelConfig,
+    PrefixCachePlugin, RateLimitPlugin, SemanticCachePlugin, SmartRouterPlugin,
+    StructuredOutputPlugin,
+};
+use pylos_core::domain::logging::{
+    GuardrailsBreakdown, GuardrailsTimeline, HistogramBucket, LogEntry, LogFilter, LogStats,
+    TokenBucket,
 };
 use pylos_core::domain::traits::{LlmPlugin, Provider};
+use pylos_infrastructure::{
+    BudgetStore, LogStore, McpServerStore, ModelCatalog, OrganizationStore, PgLogStore,
+    RateLimitStore, SearchToolStore, SystemPromptStore, VirtualKeyStore,
+};
 
 use crate::metrics::Metrics;
 
@@ -18,51 +25,35 @@ pub enum LogStoreVariant {
 }
 
 impl LogStoreVariant {
-    pub async fn push(&self, entry: pylos_application::log_store::LogEntry) {
+    pub async fn push(&self, entry: LogEntry) {
         match self {
             Self::Sqlite(s) => s.push(entry).await,
             Self::Postgres(s) => s.push(entry).await,
         }
     }
 
-    pub async fn list(
-        &self,
-        limit: usize,
-        offset: usize,
-        filter: &pylos_application::log_store::LogFilter,
-    ) -> (Vec<pylos_application::log_store::LogEntry>, u64) {
+    pub async fn list(&self, limit: usize, offset: usize, filter: &LogFilter) -> (Vec<LogEntry>, u64) {
         match self {
             Self::Sqlite(s) => s.list(limit, offset, filter).await,
             Self::Postgres(s) => s.list(limit, offset, filter).await,
         }
     }
 
-    pub async fn stats(
-        &self,
-        filter: &pylos_application::log_store::LogFilter,
-    ) -> pylos_application::log_store::LogStats {
+    pub async fn stats(&self, filter: &LogFilter) -> LogStats {
         match self {
             Self::Sqlite(s) => s.stats(filter).await,
             Self::Postgres(s) => s.stats(filter).await,
         }
     }
 
-    pub async fn histogram(
-        &self,
-        filter: &pylos_application::log_store::LogFilter,
-        bucket_secs: i64,
-    ) -> Vec<pylos_application::log_store::HistogramBucket> {
+    pub async fn histogram(&self, filter: &LogFilter, bucket_secs: i64) -> Vec<HistogramBucket> {
         match self {
             Self::Sqlite(s) => s.histogram(filter, bucket_secs).await,
             Self::Postgres(s) => s.histogram(filter, bucket_secs).await,
         }
     }
 
-    pub async fn token_histogram(
-        &self,
-        filter: &pylos_application::log_store::LogFilter,
-        bucket_secs: i64,
-    ) -> Vec<pylos_application::log_store::TokenBucket> {
+    pub async fn token_histogram(&self, filter: &LogFilter, bucket_secs: i64) -> Vec<TokenBucket> {
         match self {
             Self::Sqlite(s) => s.token_histogram(filter, bucket_secs).await,
             Self::Postgres(s) => s.token_histogram(filter, bucket_secs).await,
@@ -73,28 +64,22 @@ impl LogStoreVariant {
         &self,
         limit: usize,
         offset: usize,
-        filter: &pylos_application::log_store::LogFilter,
-    ) -> (Vec<pylos_application::log_store::LogEntry>, u64) {
+        filter: &LogFilter,
+    ) -> (Vec<LogEntry>, u64) {
         match self {
             Self::Sqlite(s) => s.list_guardrails(limit, offset, filter).await,
             Self::Postgres(s) => s.list_guardrails(limit, offset, filter).await,
         }
     }
 
-    pub async fn guardrails_stats(
-        &self,
-        filter: &pylos_application::log_store::LogFilter,
-    ) -> pylos_application::log_store::GuardrailsBreakdown {
+    pub async fn guardrails_stats(&self, filter: &LogFilter) -> GuardrailsBreakdown {
         match self {
             Self::Sqlite(s) => s.guardrails_stats(filter).await,
             Self::Postgres(s) => s.guardrails_stats(filter).await,
         }
     }
 
-    pub async fn guardrails_breakdown(
-        &self,
-        filter: &pylos_application::log_store::LogFilter,
-    ) -> pylos_application::log_store::GuardrailsBreakdown {
+    pub async fn guardrails_breakdown(&self, filter: &LogFilter) -> GuardrailsBreakdown {
         match self {
             Self::Sqlite(s) => s.guardrails_breakdown(filter).await,
             Self::Postgres(s) => s.guardrails_breakdown(filter).await,
@@ -103,9 +88,9 @@ impl LogStoreVariant {
 
     pub async fn guardrails_timeline(
         &self,
-        filter: &pylos_application::log_store::LogFilter,
+        filter: &LogFilter,
         bucket_secs: i64,
-    ) -> Vec<pylos_application::log_store::GuardrailsTimeline> {
+    ) -> Vec<GuardrailsTimeline> {
         match self {
             Self::Sqlite(s) => s.guardrails_timeline(filter, bucket_secs).await,
             Self::Postgres(s) => s.guardrails_timeline(filter, bucket_secs).await,
@@ -124,7 +109,7 @@ pub struct AppState {
     pub budget_store: Arc<BudgetStore>,
     pub rate_limit_store: Arc<RateLimitStore>,
     pub vk_store: Arc<VirtualKeyStore>,
-    pub system_prompt_store: Arc<pylos_application::SystemPromptStore>,
+    pub system_prompt_store: Arc<SystemPromptStore>,
     pub org_store: Arc<OrganizationStore>,
     pub search_tool_store: Arc<SearchToolStore>,
     pub mcp_server_store: Arc<McpServerStore>,
@@ -156,7 +141,7 @@ impl AppState {
         Arc<BudgetStore>,
         Arc<RateLimitStore>,
         Arc<VirtualKeyStore>,
-        Arc<pylos_application::SystemPromptStore>,
+        Arc<SystemPromptStore>,
         Arc<OrganizationStore>,
         Arc<SearchToolStore>,
         Arc<McpServerStore>,
@@ -188,7 +173,7 @@ impl AppState {
                 anyhow::anyhow!("Failed to open PostgreSQL virtual key store: {}", e)
             })?);
         let pg_prompts = Arc::new(
-            pylos_application::SystemPromptStore::open_postgres(db_url)
+            SystemPromptStore::open_postgres(db_url)
                 .await
                 .map_err(|e| {
                     anyhow::anyhow!("Failed to open PostgreSQL system prompt store: {}", e)
@@ -210,8 +195,15 @@ impl AppState {
                 anyhow::anyhow!("Failed to open PostgreSQL MCP server store: {}", e)
             })?);
 
-        if let Err(e) = config_store.init_database(db_url).await {
-            tracing::warn!(error = %e, "Failed to initialize PostgreSQL config store");
+        match pylos_infrastructure::SqlConfigRepository::open(db_url).await {
+            Ok(repo) => {
+                if let Err(e) = config_store.attach_repository(Arc::new(repo)).await {
+                    tracing::warn!(error = %e, "Failed to initialize PostgreSQL config store");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to open PostgreSQL config store");
+            }
         }
 
         Ok((
@@ -236,7 +228,7 @@ impl AppState {
         Arc<BudgetStore>,
         Arc<RateLimitStore>,
         Arc<VirtualKeyStore>,
-        Arc<pylos_application::SystemPromptStore>,
+        Arc<SystemPromptStore>,
         Arc<OrganizationStore>,
         Arc<SearchToolStore>,
         Arc<McpServerStore>,
@@ -294,7 +286,7 @@ impl AppState {
 
         let prompts_db_path = data_dir.join("pylos-prompts.db");
         let sqlite_prompts = Arc::new(
-            pylos_application::SystemPromptStore::open(&prompts_db_path)
+            SystemPromptStore::open(&prompts_db_path)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to open system prompt store: {}", e))?,
         );
@@ -316,8 +308,15 @@ impl AppState {
         let config_db_path = data_dir.join("pylos-config.db");
         let sqlite_config_db_url =
             format!("sqlite://{}?mode=rwc", config_db_path.to_string_lossy());
-        if let Err(e) = config_store.init_database(&sqlite_config_db_url).await {
-            tracing::warn!(error = %e, "Failed to initialize SQLite config store");
+        match pylos_infrastructure::SqlConfigRepository::open(&sqlite_config_db_url).await {
+            Ok(repo) => {
+                if let Err(e) = config_store.attach_repository(Arc::new(repo)).await {
+                    tracing::warn!(error = %e, "Failed to initialize SQLite config store");
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to open SQLite config store");
+            }
         }
 
         Ok((
@@ -372,7 +371,9 @@ impl AppState {
         let mut plugins: Vec<Arc<dyn LlmPlugin>> = Vec::new();
         plugins.push(Arc::new(pylos_application::CacheAlignerPlugin::new()));
 
-        plugins.push(Arc::new(BudgetPlugin::new(Arc::clone(budget_store))));
+        plugins.push(Arc::new(BudgetPlugin::new(
+            Arc::clone(budget_store) as Arc<dyn pylos_core::domain::repositories::BudgetRepository>,
+        )));
         tracing::info!("Budget plugin enabled");
 
         // StructuredOutputPlugin — check for optional correction config
@@ -412,7 +413,10 @@ impl AppState {
         // Toujours enregistre : l'application des quotas ne doit pas dependre d'une
         // heuristique de configuration, et le store persistant est partage entre
         // repliques (contrairement a l'ancien compteur en memoire).
-        plugins.push(Arc::new(RateLimitPlugin::new(Arc::clone(rate_limit_store))));
+        plugins.push(Arc::new(RateLimitPlugin::new(
+            Arc::clone(rate_limit_store)
+                as Arc<dyn pylos_core::domain::repositories::RateLimitRepository>,
+        )));
         tracing::info!("Rate limit plugin enabled");
 
         for plugin_cfg in &cfg.plugins {

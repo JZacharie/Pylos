@@ -1,0 +1,11 @@
+ALTER TABLE model_catalog ADD COLUMN api_base TEXT;
+ALTER TABLE model_catalog ADD COLUMN tpm INTEGER;
+ALTER TABLE model_catalog ADD COLUMN rpm INTEGER;
+ALTER TABLE model_catalog ADD COLUMN max_retries INTEGER;
+ALTER TABLE model_catalog ADD COLUMN timeout_secs INTEGER;
+ALTER TABLE model_catalog ADD COLUMN stream_timeout_secs INTEGER;
+ALTER TABLE model_catalog ADD COLUMN model_access_groups TEXT;
+ALTER TABLE model_catalog ADD COLUMN guardrails TEXT;
+ALTER TABLE model_catalog ADD COLUMN tags TEXT;
+ALTER TABLE model_catalog ADD COLUMN provider_params TEXT;
+ALTER TABLE model_catalog ADD COLUMN organization_id TEXT;

@@ -1,0 +1,1 @@
+ALTER TABLE requests ADD COLUMN IF NOT EXISTS compression_saved_bytes INTEGER NOT NULL DEFAULT 0;

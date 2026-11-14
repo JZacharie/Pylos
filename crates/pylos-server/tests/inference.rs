@@ -6,9 +6,10 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use tower::ServiceExt; // for oneshot
 
-use pylos_application::{
-    BudgetStore, ConfigStore, InferenceOrchestrator, LogStore, ModelCatalog, OrganizationStore,
-    RateLimitStore, SearchToolStore, SystemPromptStore,
+use pylos_application::{ConfigStore, InferenceOrchestrator};
+use pylos_infrastructure::{
+    BudgetStore, LogStore, McpServerStore, ModelCatalog, OrganizationStore, RateLimitStore,
+    SearchToolStore, SystemPromptStore, VirtualKeyStore,
 };
 use pylos_core::domain::openai::{
     ChatCompletionChoice, ChatCompletionMessage, ChatCompletionResponse, MessageRole, Usage,
@@ -148,7 +149,7 @@ async fn test_chat_completions_unary() {
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
 
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -168,7 +169,7 @@ async fn test_chat_completions_unary() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -236,7 +237,7 @@ async fn test_chat_completions_stream() {
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
 
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -256,7 +257,7 @@ async fn test_chat_completions_stream() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -332,7 +333,7 @@ async fn test_image_generations() {
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
 
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -352,7 +353,7 @@ async fn test_image_generations() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -494,7 +495,7 @@ async fn test_a2a_allowed_models_routing() {
     let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -514,7 +515,7 @@ async fn test_a2a_allowed_models_routing() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -693,7 +694,7 @@ async fn test_semantic_caching_flow() {
     let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -713,7 +714,7 @@ async fn test_semantic_caching_flow() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -849,7 +850,7 @@ async fn test_structured_outputs_validation() {
     let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -869,7 +870,7 @@ async fn test_structured_outputs_validation() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -980,7 +981,7 @@ async fn test_inference_queuing_and_timeout() {
     let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -1001,7 +1002,7 @@ async fn test_inference_queuing_and_timeout() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -1137,7 +1138,7 @@ async fn test_virtual_key_cannot_escape_provider_restrictions() {
     let budget_store = Arc::new(BudgetStore::in_memory().await.unwrap());
     let rate_limit_store = Arc::new(RateLimitStore::in_memory().await.unwrap());
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -1186,7 +1187,7 @@ async fn test_virtual_key_cannot_escape_provider_restrictions() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -1341,7 +1342,7 @@ async fn state_with(
         None => Arc::new(RateLimitStore::in_memory().await.unwrap()),
     };
     let vk_store = Arc::new(
-        pylos_application::VirtualKeyStore::in_memory()
+        VirtualKeyStore::in_memory()
             .await
             .unwrap(),
     );
@@ -1364,7 +1365,7 @@ async fn state_with(
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -1782,7 +1783,7 @@ async fn test_guardrails_blocking_mode_http() {
         budget_store: Arc::new(BudgetStore::in_memory().await.unwrap()),
         rate_limit_store: Arc::new(RateLimitStore::in_memory().await.unwrap()),
         vk_store: Arc::new(
-            pylos_application::VirtualKeyStore::in_memory()
+            VirtualKeyStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -1790,7 +1791,7 @@ async fn test_guardrails_blocking_mode_http() {
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
         mcp_server_store: Arc::new(
-            pylos_application::McpServerStore::in_memory()
+            McpServerStore::in_memory()
                 .await
                 .unwrap(),
         ),
@@ -1906,11 +1907,11 @@ async fn test_malformed_inputs_do_not_panic_server() {
         model_catalog: Arc::new(ModelCatalog::in_memory().await.unwrap()),
         budget_store: Arc::new(BudgetStore::in_memory().await.unwrap()),
         rate_limit_store: Arc::new(RateLimitStore::in_memory().await.unwrap()),
-        vk_store: Arc::new(pylos_application::VirtualKeyStore::in_memory().await.unwrap()),
+        vk_store: Arc::new(VirtualKeyStore::in_memory().await.unwrap()),
         system_prompt_store: Arc::new(SystemPromptStore::in_memory().await.unwrap()),
         org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
         search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
-        mcp_server_store: Arc::new(pylos_application::McpServerStore::in_memory().await.unwrap()),
+        mcp_server_store: Arc::new(McpServerStore::in_memory().await.unwrap()),
         mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
         admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
         setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),

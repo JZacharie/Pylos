@@ -1,7 +1,9 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod persistence;
 pub mod providers;
 
+pub use persistence::*;
 pub use providers::AnthropicProvider;
 pub use providers::AntigravityProvider;
 pub use providers::AzureProvider;

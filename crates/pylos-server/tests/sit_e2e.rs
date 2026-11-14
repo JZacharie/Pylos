@@ -8,8 +8,10 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 use pylos_application::{
-    BudgetPlugin, BudgetStore, ConfigStore, GuardrailsPlugin, InferenceOrchestrator, LogStore,
-    McpServerStore, McpToolRegistry, ModelCatalog, OrganizationStore, RateLimitStore,
+    BudgetPlugin, ConfigStore, GuardrailsPlugin, InferenceOrchestrator, McpToolRegistry,
+};
+use pylos_infrastructure::{
+    BudgetStore, LogStore, McpServerStore, ModelCatalog, OrganizationStore, RateLimitStore,
     SearchToolStore, SystemPromptStore, VirtualKeyStore,
 };
 use pylos_core::domain::config::{

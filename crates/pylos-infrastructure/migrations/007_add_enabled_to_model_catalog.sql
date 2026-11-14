@@ -1,0 +1,1 @@
+ALTER TABLE model_catalog ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;

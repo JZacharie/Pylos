@@ -25,3 +25,6 @@ aws-sdk-sts = { workspace = true }
 aws-credential-types = { workspace = true }
 aws-smithy-types = { workspace = true }
 async-stream = { workspace = true }
+sqlx = { workspace = true }
+rusqlite = { workspace = true }
+sha2 = "0.10"

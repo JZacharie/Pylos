@@ -4,9 +4,10 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use pylos_application::use_cases::inference::InferenceOrchestrator;
-use pylos_application::{
-    BudgetStore, ConfigStore, LogStore, McpServerStore, McpToolRegistry, ModelCatalog,
-    OrganizationStore, RateLimitStore, SearchToolStore, SystemPromptStore, VirtualKeyStore,
+use pylos_application::{ConfigStore, McpToolRegistry};
+use pylos_infrastructure::{
+    BudgetStore, LogStore, McpServerStore, ModelCatalog, OrganizationStore, RateLimitStore,
+    SearchToolStore, SystemPromptStore, VirtualKeyStore,
 };
 use pylos_core::domain::mcp_server::{
     McpServer, McpServerStatus, McpServerType, McpTransportConfig,
