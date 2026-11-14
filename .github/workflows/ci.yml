@@ -61,6 +61,11 @@ jobs:
         run: npm ci --prefix ui
       - name: Verify UI build
         run: npm run build --prefix ui
+      - name: Run UI tests
+        run: npm test --prefix ui
+      - name: Lint UI
+        continue-on-error: true
+        run: npm run lint --prefix ui
 
   build-and-push:
     name: Build & Push (${{ matrix.arch }})
