@@ -15,7 +15,6 @@ import {
   Layers,
   CreditCard,
   FileBadge,
-  Wrench,
   Search,
   Database,
   ShieldCheck,
@@ -312,50 +311,39 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               </NavLink>
             ))}
 
-          {/* Tools Dropdown */}
-          <div className="flex flex-col mt-1">
-            <button
-              onClick={() => {
-                if (collapsed) setCollapsed(false);
-                toggleSection('tools');
-              }}
-              className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 w-full"
-            >
-              <div className="flex items-center gap-3">
-                <Wrench size={18} className="flex-shrink-0" />
-                {(!collapsed || isOpen) && <span>Tools</span>}
-              </div>
-              {(!collapsed || isOpen) && (
-                expandedSections.tools ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
-              )}
-            </button>
-            {(expandedSections.tools || (collapsed && !isOpen)) && (
-              <div className="flex flex-col mt-1 ml-4 space-y-1 border-l border-zinc-800/50 pl-2">
-                {NAV_TOOLS.map(({ to, icon: Icon, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                      ${isActive
-                        ? 'bg-zinc-800 text-white'
-                        : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0 absolute -ml-4" />}
-                        <Icon size={16} className="flex-shrink-0" />
-                        <span>{label}</span>
-                      </>
-                    )}
-                  </NavLink>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* TOOLS SECTION */}
+          <SectionHeader
+            title="Tools"
+            count={NAV_TOOLS.length}
+            isExpanded={expandedSections.tools}
+            onToggle={() => toggleSection('tools')}
+            isCollapsed={collapsed}
+            isOpen={isOpen}
+          />
+
+          {(expandedSections.tools || (collapsed && !isOpen)) &&
+            NAV_TOOLS.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+                  ${isActive
+                    ? 'bg-zinc-800 text-white'
+                    : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
+                    <Icon size={18} className="flex-shrink-0" />
+                    {(!collapsed || isOpen) && <span>{label}</span>}
+                  </>
+                )}
+              </NavLink>
+            ))}
 
           {/* OBSERVABILITY SECTION */}
           <SectionHeader
@@ -466,63 +454,43 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           {/* SETTINGS SECTION */}
           {isAdmin() && (
             <>
-              {(!collapsed || isOpen) ? (
-                <div className="px-3 pt-6 pb-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                  Settings
-                </div>
-              ) : (
-                <div className="mx-3 mt-6 mb-2 border-t border-zinc-800/50" />
-              )}
+              <SectionHeader
+                title="Settings"
+                count={SETTINGS_SUB.length}
+                isExpanded={expandedSections.settings}
+                onToggle={() => toggleSection('settings')}
+                isCollapsed={collapsed}
+                isOpen={isOpen}
+              />
 
-              <div className="flex flex-col mt-1">
-                <button
-                  onClick={() => {
-                    if (collapsed) setCollapsed(false);
-                    toggleSection('settings');
-                  }}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100 w-full"
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings size={18} className="flex-shrink-0" />
-                    {(!collapsed || isOpen) && (
-                      <span className="flex items-center">
-                        Settings
-                        <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-semibold ml-2">New</span>
-                      </span>
-                    )}
-                  </div>
-                  {(!collapsed || isOpen) && (
-                    expandedSections.settings ? <ChevronUp size={16} className="opacity-70" /> : <ChevronDown size={16} className="opacity-70" />
-                  )}
-                </button>
-                {(expandedSections.settings || (collapsed && !isOpen)) && (
-                  <div className="flex flex-col mt-1 ml-4 space-y-1 border-l border-zinc-800/50 pl-2">
-                    {SETTINGS_SUB.map(({ to, icon: Icon, label, hasDot }) => (
-                      <NavLink
-                        key={to}
-                        to={to}
-                        onClick={onClose}
-                        className={({ isActive }) =>
-                          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
-                          ${isActive
-                            ? 'bg-zinc-800 text-white'
-                            : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
-                          }`
-                        }
-                      >
-                        {({ isActive }) => (
+              {(expandedSections.settings || (collapsed && !isOpen)) &&
+                SETTINGS_SUB.map(({ to, icon: Icon, label, hasDot }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    onClick={onClose}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors
+                      ${isActive
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100'
+                      }`
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0" />}
+                        <Icon size={18} className="flex-shrink-0" />
+                        {(!collapsed || isOpen) && (
                           <>
-                            {isActive && <div className="w-1 h-1 rounded-full bg-emerald-500 flex-shrink-0 absolute -ml-4" />}
-                            <Icon size={16} className="flex-shrink-0" />
                             <span className="flex-1 truncate">{label}</span>
                             {hasDot && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 ml-1 animate-pulse" />}
                           </>
                         )}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      </>
+                    )}
+                  </NavLink>
+                ))}
             </>
           )}
 
