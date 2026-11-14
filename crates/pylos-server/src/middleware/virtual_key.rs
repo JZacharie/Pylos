@@ -123,7 +123,7 @@ pub async fn virtual_key_middleware(
             .virtual_keys
             .iter()
             .find(|v| v.id == "vk-admin");
-        let (vk_id, vk_name, provider_configs, allowed_tools, denied_tools) =
+        let (vk_id, vk_name, mut provider_configs, allowed_tools, denied_tools) =
             if let Some(vk_cfg) = static_admin {
                 (
                     vk_cfg.id.clone(),
@@ -146,6 +146,19 @@ pub async fn virtual_key_middleware(
                     None,
                 )
             };
+        // L'administrateur doit toujours pouvoir tester le quota global Antigravity depuis le Playground (#215)
+        if cfg.providers.contains_key("antigravity")
+            && !provider_configs
+                .iter()
+                .any(|p| p.provider == "*" || p.provider == "antigravity")
+        {
+            provider_configs.push(pylos_core::domain::config::VkProviderConfig {
+                provider: "antigravity".to_string(),
+                weight: 1.0,
+                allowed_models: vec!["*".to_string()],
+                key_names: vec!["*".to_string()],
+            });
+        }
         req.extensions_mut().insert(Some(VirtualKeyInfo {
             id: vk_id,
             name: vk_name,

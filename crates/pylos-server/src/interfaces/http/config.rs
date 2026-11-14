@@ -19,8 +19,21 @@ pub async fn get_config(State(state): State<AppState>) -> impl IntoResponse {
     let cfg = state.config_store.get().await;
     let mut val = redact_config(&cfg);
     let env = std::env::var("PYLOS_ENV").unwrap_or_else(|_| "production".to_string());
+    let admin_key_configured = state.admin_key_hash.read().await.is_some();
+    let google_oauth_enabled =
+        state.google_client_id.is_some() && state.google_client_secret.is_some();
+    let jwt_secret_configured = !state.jwt_secret.is_empty();
     if let Some(obj) = val.as_object_mut() {
         obj.insert("environment".to_string(), serde_json::Value::String(env));
+        obj.insert(
+            "auth".to_string(),
+            serde_json::json!({
+                "google_oauth_enabled": google_oauth_enabled,
+                "google_client_id": state.google_client_id,
+                "admin_key_configured": admin_key_configured,
+                "jwt_secret_configured": jwt_secret_configured,
+            }),
+        );
         let sys_entry = obj
             .entry("system".to_string())
             .or_insert_with(|| serde_json::json!({}));

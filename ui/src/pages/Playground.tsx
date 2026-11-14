@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { api, getBaseUrl, type ProviderAvailability } from '../lib/api'
+import { api, getBaseUrl, quotasApi, type ProviderAvailability } from '../lib/api'
 import { formatLatency, formatCost, providerColor } from '../lib/utils'
 import {
   Send, StopCircle, Trash2, ChevronDown,
@@ -758,6 +758,18 @@ export default function Playground() {
     staleTime: 60_000,
   })
 
+  const [selectedAgyAccount, setSelectedAgyAccount] = useState<string>('')
+  const { data: quotasData } = useQuery({
+    queryKey: ['quotas'],
+    queryFn: quotasApi.get,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+  const agyAccounts = useMemo(
+    () => (quotasData?.accounts ?? []).filter(a => a.provider === 'antigravity'),
+    [quotasData],
+  )
+
   const models = useMemo(() => modelsData ?? [], [modelsData])
 
   // Sync streaming flag with selected model capabilities
@@ -869,6 +881,9 @@ export default function Playground() {
         headers['x-pylos-force-provider'] = provider
         headers['x-pylos-force-model'] = model
       }
+      if (provider === 'antigravity' && selectedAgyAccount) {
+        headers['x-pylos-agy-account'] = selectedAgyAccount
+      }
       if (bypassGuardrails) {
         headers['x-bypass-guardrails'] = 'true'
       }
@@ -879,6 +894,7 @@ export default function Playground() {
         const resp = await fetch(endpoint, {
           method: 'POST',
           headers,
+          credentials: 'include',
           body: JSON.stringify(payload),
           signal: abortRef.current.signal,
         })
@@ -1134,6 +1150,35 @@ export default function Playground() {
                   onToggleFavorite={toggleFavorite}
                 />
             }
+
+            {currentProvider === 'antigravity' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-500/30 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-medium text-indigo-300">Quota Global Antigravity</span>
+                  {agyAccounts.length > 0 && (
+                    <span className="font-mono text-emerald-400">
+                      {Math.max(...agyAccounts.map(a => a.remaining_pct)).toFixed(0)}% libre
+                    </span>
+                  )}
+                </div>
+                {agyAccounts.length > 0 && (
+                  <select
+                    value={selectedAgyAccount}
+                    onChange={e => setSelectedAgyAccount(e.target.value)}
+                    disabled={isRunning}
+                    aria-label="Compte Antigravity"
+                    className="w-full bg-zinc-900 border border-zinc-700/80 rounded-md px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Rotation automatique (meilleur quota)</option>
+                    {agyAccounts.map(acc => (
+                      <option key={acc.account} value={acc.account}>
+                        {acc.account} ({acc.remaining_pct.toFixed(0)}% · {acc.used_requests}/{acc.soft_cap})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
 
             {/* Quick Switch Favorites */}
             {favorites.length > 0 && (
