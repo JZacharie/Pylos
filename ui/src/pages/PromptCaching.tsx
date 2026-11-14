@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, type ComponentType } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Database, Zap, Clock, Save, RotateCcw,
   HardDrive, Activity, Hash, BarChart3, Target, Server
 } from 'lucide-react'
-import { configApi } from '../lib/api'
+import { configApi, getErrorMessage } from '../lib/api'
 
 interface PrefixCacheConfig {
   enabled: boolean
@@ -39,7 +39,15 @@ interface CacheAlignerConfig {
 interface CachePlugin {
   name: string
   enabled: boolean
-  config: Record<string, any>
+  config: {
+    ttl_seconds?: number
+    max_capacity?: number
+    min_prefix_length?: number
+    collection_name?: string
+    similarity_threshold?: number
+    embedding_model?: string
+    stats?: { hits: number; misses: number; entries: number }
+  }
 }
 
 function ToggleSwitch({ enabled, onToggle, size = 'md' }: {
@@ -65,7 +73,7 @@ function ToggleSwitch({ enabled, onToggle, size = 'md' }: {
 }
 
 function StatCard({ icon: Icon, label, value, sub }: {
-  icon: any
+  icon: ComponentType<{ size?: number; className?: string }>
   label: string
   value: string | number
   sub?: string
@@ -109,7 +117,9 @@ export default function PromptCaching() {
     enabled: false,
   })
 
-  useEffect(() => {
+  const [prevConfigData, setPrevConfigData] = useState(configData)
+  if (configData !== prevConfigData) {
+    setPrevConfigData(configData)
     if (configData && configData.plugins) {
       const prefixPlugin = configData.plugins.find((p: CachePlugin) => p.name === 'prefix_cache')
       if (prefixPlugin) {
@@ -139,7 +149,7 @@ export default function PromptCaching() {
         setCacheAligner({ enabled: alignerPlugin.enabled })
       }
     }
-  }, [configData])
+  }
 
   const reloadMutation = useMutation({
     mutationFn: configApi.reload,
@@ -147,8 +157,8 @@ export default function PromptCaching() {
       queryClient.invalidateQueries({ queryKey: ['config'] })
       alert('Configuration reloaded successfully')
     },
-    onError: (error: any) => {
-      alert(`Failed to reload: ${error.message}`)
+    onError: (error: unknown) => {
+      alert(`Failed to reload: ${getErrorMessage(error)}`)
     }
   })
 

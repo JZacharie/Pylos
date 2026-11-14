@@ -399,6 +399,10 @@ impl pylos_core::domain::traits::LlmPlugin for RateLimitPlugin {
         "rate_limit"
     }
 
+    fn priority(&self) -> i32 {
+        -80
+    }
+
     async fn pre_hook(
         &self,
         _request: &mut pylos_core::domain::request::PylosRequest,

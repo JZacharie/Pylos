@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Send, Clock, Check, X, Copy, History, Code,
   ChevronDown,
@@ -99,6 +99,24 @@ function tryFormatJson(raw: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+async function executeTimedRequest(path: string, method: string, headers: Record<string, string>, body?: string) {
+  const start = performance.now()
+  try {
+    const fetchInit: RequestInit = { method, headers }
+    if (method === 'POST' && body?.trim()) {
+      fetchInit.body = body
+    }
+    const resp = await fetch(path, fetchInit)
+    const timeMs = performance.now() - start
+    const text = await resp.text()
+    return { ok: true as const, status: resp.status, statusText: resp.statusText, body: text, timeMs }
+  } catch (err: unknown) {
+    const timeMs = performance.now() - start
+    const msg = err instanceof Error ? err.message : String(err)
+    return { ok: false as const, status: 0, statusText: 'Network Error', body: msg, timeMs }
+  }
+}
+
 export default function ApiPlayground() {
   const [selectedId, setSelectedId] = useState('chat')
   const [headers, setHeaders] = useState<Header[]>(() => {
@@ -121,11 +139,12 @@ export default function ApiPlayground() {
 
   const endpoint = ENDPOINTS.find(e => e.id === selectedId)!
 
-  useEffect(() => {
-    const ep = ENDPOINTS.find(e => e.id === selectedId)
+  function selectEndpoint(id: string) {
+    setSelectedId(id)
+    const ep = ENDPOINTS.find(e => e.id === id)
     if (ep) setBody(ep.defaultBody)
     setResponse(null)
-  }, [selectedId])
+  }
 
   function updateHeader(index: number, field: keyof Header, value: string | boolean) {
     setHeaders(prev => prev.map((h, i) => i === index ? { ...h, [field]: value } : h))
@@ -157,67 +176,27 @@ export default function ApiPlayground() {
       headerObj[h.key.trim()] = h.value
     }
 
-    const start = performance.now()
-
-    try {
-      const fetchInit: RequestInit = {
+    const result = await executeTimedRequest(endpoint.path, endpoint.method, headerObj, body)
+    setResponse({
+      status: result.status,
+      statusText: result.statusText,
+      body: result.body,
+      timeMs: result.timeMs,
+    })
+    setHistory(prev => [
+      {
+        id: Date.now(),
+        endpoint: endpoint.path,
         method: endpoint.method,
-        headers: headerObj,
-      }
-
-      if (endpoint.method === 'POST' && body.trim()) {
-        fetchInit.body = body
-      }
-
-      const resp = await fetch(endpoint.path, fetchInit)
-      const timeMs = performance.now() - start
-      const text = await resp.text()
-
-      setResponse({
-        status: resp.status,
-        statusText: resp.statusText,
-        body: text,
-        timeMs,
-      })
-
-      setHistory(prev => [
-        {
-          id: Date.now(),
-          endpoint: endpoint.path,
-          method: endpoint.method,
-          status: resp.status,
-          statusText: resp.statusText,
-          timeMs,
-          timestamp: Date.now(),
-          responseBody: text,
-        },
-        ...prev,
-      ].slice(0, MAX_HISTORY))
-    } catch (err: unknown) {
-      const timeMs = performance.now() - start
-      const msg = err instanceof Error ? err.message : String(err)
-      setResponse({
-        status: 0,
-        statusText: 'Network Error',
-        body: msg,
-        timeMs,
-      })
-      setHistory(prev => [
-        {
-          id: Date.now(),
-          endpoint: endpoint.path,
-          method: endpoint.method,
-          status: null,
-          statusText: 'Network Error',
-          timeMs,
-          timestamp: Date.now(),
-          responseBody: msg,
-        },
-        ...prev,
-      ].slice(0, MAX_HISTORY))
-    } finally {
-      setLoading(false)
-    }
+        status: result.ok ? result.status : null,
+        statusText: result.statusText,
+        timeMs: result.timeMs,
+        timestamp: Date.now(),
+        responseBody: result.body,
+      },
+      ...prev,
+    ].slice(0, MAX_HISTORY))
+    setLoading(false)
   }
 
   return (
@@ -243,7 +222,7 @@ export default function ApiPlayground() {
           <div className="relative">
             <select
               value={selectedId}
-              onChange={e => setSelectedId(e.target.value)}
+              onChange={e => selectEndpoint(e.target.value)}
               className="w-full appearance-none bg-zinc-900 border border-zinc-800 rounded-lg
                 px-3 py-2.5 text-sm text-zinc-100 pr-8
                 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20"

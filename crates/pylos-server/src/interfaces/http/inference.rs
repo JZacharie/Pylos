@@ -362,14 +362,18 @@ async fn complete_response(
             let actual_provider = provider.clone();
             let resp_id = resp.id.clone();
             let mut response = Json(resp).into_response();
-            response.headers_mut().insert(
-                axum::http::header::HeaderName::from_static("x-pylos-provider"),
-                axum::http::header::HeaderValue::from_str(&actual_provider).unwrap(),
-            );
-            response.headers_mut().insert(
-                axum::http::header::HeaderName::from_static("x-pylos-model"),
-                axum::http::header::HeaderValue::from_str(&actual_model).unwrap(),
-            );
+            if let Ok(val) = axum::http::header::HeaderValue::from_str(&actual_provider) {
+                response.headers_mut().insert(
+                    axum::http::header::HeaderName::from_static("x-pylos-provider"),
+                    val,
+                );
+            }
+            if let Ok(val) = axum::http::header::HeaderValue::from_str(&actual_model) {
+                response.headers_mut().insert(
+                    axum::http::header::HeaderName::from_static("x-pylos-model"),
+                    val,
+                );
+            }
             if actual_provider == "antigravity" || resp_id.starts_with("chatcmpl-agy-") {
                 let conv_id = resp_id.trim_start_matches("chatcmpl-agy-");
                 if let Ok(val) = axum::http::header::HeaderValue::from_str(conv_id) {
@@ -689,14 +693,18 @@ async fn stream_response(
             let mut response = Sse::new(sse_stream.chain(done_event))
                 .keep_alive(KeepAlive::default())
                 .into_response();
-            response.headers_mut().insert(
-                axum::http::header::HeaderName::from_static("x-pylos-provider"),
-                axum::http::header::HeaderValue::from_str(&actual_provider).unwrap(),
-            );
-            response.headers_mut().insert(
-                axum::http::header::HeaderName::from_static("x-pylos-model"),
-                axum::http::header::HeaderValue::from_str(&model).unwrap(),
-            );
+            if let Ok(val) = axum::http::header::HeaderValue::from_str(&actual_provider) {
+                response.headers_mut().insert(
+                    axum::http::header::HeaderName::from_static("x-pylos-provider"),
+                    val,
+                );
+            }
+            if let Ok(val) = axum::http::header::HeaderValue::from_str(&model) {
+                response.headers_mut().insert(
+                    axum::http::header::HeaderName::from_static("x-pylos-model"),
+                    val,
+                );
+            }
             response
         }
         Err(e) => {

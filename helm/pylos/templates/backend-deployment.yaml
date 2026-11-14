@@ -1,3 +1,12 @@
+{{- if and (gt (int .Values.backend.replicaCount) 1) (not .Values.database.enabled) -}}
+{{- fail "backend.replicaCount > 1 requires database.enabled=true (PostgreSQL) because SQLite and ReadWriteOnce PVCs do not support multi-replica deployments." -}}
+{{- end -}}
+{{- if and .Values.backend.autoscaling.enabled (not .Values.database.enabled) -}}
+{{- fail "backend.autoscaling.enabled=true requires database.enabled=true (PostgreSQL)." -}}
+{{- end -}}
+{{- if and .Values.database.enabled (not .Values.database.url) (not .Values.database.existingSecret) -}}
+{{- fail "database.enabled=true requires either database.url or database.existingSecret to be set." -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,7 +15,9 @@ metadata:
   labels:
     {{- include "pylos.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.backend.autoscaling.enabled }}
   replicas: {{ .Values.backend.replicaCount }}
+  {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -147,16 +158,20 @@ spec:
               mountPath: {{ .Values.backend.dataDir }}
           livenessProbe:
             httpGet:
-              path: /health
+              path: {{ .Values.backend.probes.liveness.path | default "/health" }}
               port: {{ .Values.backend.service.port }}
-            initialDelaySeconds: 10
-            periodSeconds: 15
+            initialDelaySeconds: {{ .Values.backend.probes.liveness.initialDelaySeconds | default 10 }}
+            periodSeconds: {{ .Values.backend.probes.liveness.periodSeconds | default 15 }}
+            timeoutSeconds: {{ .Values.backend.probes.liveness.timeoutSeconds | default 3 }}
+            failureThreshold: {{ .Values.backend.probes.liveness.failureThreshold | default 3 }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: {{ .Values.backend.probes.readiness.path | default "/health" }}
               port: {{ .Values.backend.service.port }}
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            initialDelaySeconds: {{ .Values.backend.probes.readiness.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .Values.backend.probes.readiness.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds | default 3 }}
+            failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold | default 3 }}
           resources: {{ toYaml .Values.backend.resources | nindent 12 }}
       volumes:
         - name: config

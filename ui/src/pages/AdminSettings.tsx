@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { configApi } from '../lib/api'
+import { configApi, getErrorMessage } from '../lib/api'
 import {
   Shield, Server, RotateCcw, AlertTriangle,
   Check, X, Rocket, FileText, Clock,
@@ -126,8 +126,8 @@ export default function AdminSettings() {
       refetch()
       setTimeout(() => setActionMessage(null), 4000)
     },
-    onError: (err: any) => {
-      setActionMessage(`Error: ${err.response?.data?.error || err.message}`)
+    onError: (err: unknown) => {
+      setActionMessage(`Error: ${getErrorMessage(err)}`)
       setTimeout(() => setActionMessage(null), 5000)
     },
   })
@@ -142,8 +142,8 @@ export default function AdminSettings() {
       const res = await configApi.promote()
       setActionMessage(res.message || 'Promotion started successfully!')
       setTimeout(() => setActionMessage(null), 5000)
-    } catch (err: any) {
-      setActionMessage(`Error: ${err.response?.data?.error || err.message}`)
+    } catch (err: unknown) {
+      setActionMessage(`Error: ${getErrorMessage(err)}`)
       setTimeout(() => setActionMessage(null), 7000)
     } finally {
       setIsPromoting(false)

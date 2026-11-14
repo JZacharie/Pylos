@@ -138,7 +138,7 @@ export default function CostTracking() {
     refetchInterval: 60_000,
   })
 
-  const logs = logsQ.data?.logs ?? []
+  const logs = useMemo(() => logsQ.data?.logs ?? [], [logsQ.data?.logs])
   const stats = statsQ.data
 
   // ── Derived data ──────────────────────────────────────────────────────────

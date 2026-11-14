@@ -319,7 +319,7 @@ export default function Logs() {
                     try {
                       const parsed = JSON.parse(selectedLog.pii_mapping);
                       return Object.entries(parsed).map(([k, v]) => `${k} -> ${v}`).join('\n');
-                    } catch (e) {
+                    } catch {
                       return selectedLog.pii_mapping;
                     }
                   })()}

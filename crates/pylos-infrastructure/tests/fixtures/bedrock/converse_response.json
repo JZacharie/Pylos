@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "Hello from Bedrock contract fixture."
+        }
+      ]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {
+    "inputTokens": 11,
+    "outputTokens": 7,
+    "totalTokens": 18
+  }
+}

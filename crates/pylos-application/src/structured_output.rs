@@ -186,6 +186,10 @@ impl LlmPlugin for StructuredOutputPlugin {
         "structured_output"
     }
 
+    fn priority(&self) -> i32 {
+        50
+    }
+
     async fn post_hook(
         &self,
         request: &PylosRequest,
@@ -196,10 +200,6 @@ impl LlmPlugin for StructuredOutputPlugin {
             PylosRequest::ChatCompletion(ref req) => req,
             _ => return Ok(()),
         };
-
-        if chat_req.stream.unwrap_or(false) {
-            return Ok(());
-        }
 
         let response_format = match &chat_req.response_format {
             Some(fmt) => fmt,

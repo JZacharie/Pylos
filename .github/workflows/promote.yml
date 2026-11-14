@@ -1,4 +1,4 @@
-name: Pylos Promotion
+name: "04 · Release — Promote to Production (Manual)"
 
 on:
   workflow_dispatch:

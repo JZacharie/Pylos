@@ -26,11 +26,12 @@ static PROJECT_REQUESTS: OnceLock<CounterVec> = OnceLock::new();
 
 fn get_key_switches_metric() -> &'static IntCounter {
     KEY_SWITCHES.get_or_init(|| {
+        #[allow(clippy::expect_used)] // Static compile-time Prometheus metric descriptor
         let counter = IntCounter::new(
             "pylos_gemini_key_switches_total",
             "Total number of API key switches in the Gemini pool",
         )
-        .unwrap();
+        .expect("static prometheus metric");
         prometheus::register(Box::new(counter.clone())).ok();
         counter
     })
@@ -38,6 +39,7 @@ fn get_key_switches_metric() -> &'static IntCounter {
 
 fn get_project_status_metric() -> &'static IntGaugeVec {
     PROJECT_STATUS.get_or_init(|| {
+        #[allow(clippy::expect_used)] // Static compile-time Prometheus metric descriptor
         let gauge = IntGaugeVec::new(
             Opts::new(
                 "pylos_gemini_project_status",
@@ -45,7 +47,7 @@ fn get_project_status_metric() -> &'static IntGaugeVec {
             ),
             &["project_number"],
         )
-        .unwrap();
+        .expect("static prometheus metric");
         prometheus::register(Box::new(gauge.clone())).ok();
         gauge
     })
@@ -53,6 +55,7 @@ fn get_project_status_metric() -> &'static IntGaugeVec {
 
 fn get_project_requests_metric() -> &'static CounterVec {
     PROJECT_REQUESTS.get_or_init(|| {
+        #[allow(clippy::expect_used)] // Static compile-time Prometheus metric descriptor
         let counter = CounterVec::new(
             Opts::new(
                 "pylos_gemini_requests_total",
@@ -60,7 +63,7 @@ fn get_project_requests_metric() -> &'static CounterVec {
             ),
             &["project_number"],
         )
-        .unwrap();
+        .expect("static prometheus metric");
         prometheus::register(Box::new(counter.clone())).ok();
         counter
     })
@@ -91,7 +94,7 @@ impl GeminiProvider {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(120))
             .build()
-            .expect("Failed to build HTTP client");
+            .unwrap_or_else(|_| Client::new());
 
         let mut keys = Vec::new();
         for suffix in &["AI1", "AI2", "AI3"] {
@@ -142,7 +145,7 @@ impl GeminiProvider {
                 return Some(&key.value);
             }
         }
-        Some(&config.keys.last().unwrap().value)
+        config.keys.last().map(|k| k.value.as_str())
     }
 
     /// Normalise le nom du modèle : "google/gemini-2.0-flash" → "gemini-2.0-flash"
@@ -157,7 +160,7 @@ impl GeminiProvider {
     }
 
     fn get_active_key(&self) -> Result<Option<GeminiKeyInfo>, PylosError> {
-        let mut pool = self.keys_pool.lock().unwrap();
+        let mut pool = self.keys_pool.lock().unwrap_or_else(|e| e.into_inner());
         if pool.is_empty() {
             return Ok(None);
         }
@@ -212,7 +215,7 @@ impl GeminiProvider {
     }
 
     fn mark_key_exhausted(&self, api_key: &str) {
-        let mut pool = self.keys_pool.lock().unwrap();
+        let mut pool = self.keys_pool.lock().unwrap_or_else(|e| e.into_inner());
         let now = std::time::Instant::now();
         let cooldown = now + std::time::Duration::from_secs(60);
 
@@ -285,7 +288,7 @@ impl Provider for GeminiProvider {
                 let gemini_req = to_gemini_request(req);
 
                 let pool_len = {
-                    let pool = self.keys_pool.lock().unwrap();
+                    let pool = self.keys_pool.lock().unwrap_or_else(|e| e.into_inner());
                     pool.len()
                 };
 
@@ -410,7 +413,7 @@ impl Provider for GeminiProvider {
                 let gemini_req = to_gemini_request(req);
 
                 let pool_len = {
-                    let pool = self.keys_pool.lock().unwrap();
+                    let pool = self.keys_pool.lock().unwrap_or_else(|e| e.into_inner());
                     pool.len()
                 };
 
@@ -577,7 +580,7 @@ impl Provider for GeminiProvider {
         let gemini_req = to_gemini_embed_request(model, texts, request.dimensions);
 
         let pool_len = {
-            let pool = self.keys_pool.lock().unwrap();
+            let pool = self.keys_pool.lock().unwrap_or_else(|e| e.into_inner());
             pool.len()
         };
 
@@ -666,7 +669,7 @@ impl Provider for GeminiProvider {
         let url = format!("{}/models", base_url);
 
         let pool_len = {
-            let pool = self.keys_pool.lock().unwrap();
+            let pool = self.keys_pool.lock().unwrap_or_else(|e| e.into_inner());
             pool.len()
         };
 

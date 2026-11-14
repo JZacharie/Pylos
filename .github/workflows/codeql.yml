@@ -1,4 +1,4 @@
-name: "CodeQL"
+name: "03 · Security — CodeQL SAST (Push, PR & Weekly)"
 
 on:
   push:

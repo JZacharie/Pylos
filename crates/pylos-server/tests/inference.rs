@@ -1887,3 +1887,86 @@ async fn test_guardrails_blocking_mode_http() {
         "OK from Mock"
     );
 }
+
+#[tokio::test]
+async fn test_malformed_inputs_do_not_panic_server() {
+    let mock_provider = Arc::new(MockProvider);
+    let mut config = ProviderConfig::new(ProviderKind::OpenAI, vec![]);
+    config.timeout_ms = 1000;
+    let orchestrator = Arc::new(InferenceOrchestrator::new(
+        vec![(mock_provider, config)],
+        vec![],
+    ));
+    let state = AppState {
+        orchestrator,
+        config_store: Arc::new(ConfigStore::load(None).await.unwrap()),
+        metrics: Arc::new(Metrics::new()),
+        vk_registry: Arc::new(pylos_core::domain::virtual_key::VirtualKeyRegistry::new()),
+        log_store: LogStoreVariant::Sqlite(Arc::new(LogStore::new(None, 1, 100))),
+        model_catalog: Arc::new(ModelCatalog::in_memory().await.unwrap()),
+        budget_store: Arc::new(BudgetStore::in_memory().await.unwrap()),
+        rate_limit_store: Arc::new(RateLimitStore::in_memory().await.unwrap()),
+        vk_store: Arc::new(pylos_application::VirtualKeyStore::in_memory().await.unwrap()),
+        system_prompt_store: Arc::new(SystemPromptStore::in_memory().await.unwrap()),
+        org_store: Arc::new(OrganizationStore::in_memory().await.unwrap()),
+        search_tool_store: Arc::new(SearchToolStore::in_memory().await.unwrap()),
+        mcp_server_store: Arc::new(pylos_application::McpServerStore::in_memory().await.unwrap()),
+        mcp_registry: Arc::new(pylos_application::McpToolRegistry::new()),
+        admin_key_hash: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
+        setup_required: std::sync::Arc::new(tokio::sync::RwLock::new(false)),
+        google_client_id: None,
+        google_client_secret: None,
+        google_redirect_uri: None,
+        jwt_secret: "test_secret".to_string(),
+        allowed_origins: vec!["*".into()],
+        inference_semaphore: Arc::new(tokio::sync::Semaphore::new(100)),
+        max_concurrency: 100,
+        max_queue_size: 1000,
+        queue_timeout_ms: 30000,
+    };
+    let app = create_router(state);
+
+    // 1. Invalid JSON body
+    let resp_bad_json = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from("{not-valid-json"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(resp_bad_json.status().is_client_error());
+
+    // 2. Empty JSON object missing required fields
+    let resp_empty = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/chat/completions")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(resp_empty.status().is_client_error());
+
+    // 3. Malformed embeddings request
+    let resp_emb = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/embeddings")
+                .header("content-type", "application/json")
+                .body(Body::from("{\"model\": 12345}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(resp_emb.status().is_client_error());
+}

@@ -50,9 +50,13 @@ pub fn setup_otel() -> Option<SdkTracerProvider> {
         }
     }
 
-    let exporter = http_builder
-        .build()
-        .expect("Échec de la construction de l'exporteur OTLP SpanExporter");
+    let exporter = match http_builder.build() {
+        Ok(exp) => exp,
+        Err(e) => {
+            eprintln!("[pylos] OpenTelemetry — échec construction exporteur OTLP: {}", e);
+            return None;
+        }
+    };
 
     let provider = SdkTracerProvider::builder()
         .with_batch_exporter(exporter)

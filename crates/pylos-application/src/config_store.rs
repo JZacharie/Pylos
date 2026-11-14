@@ -83,6 +83,134 @@ pub struct ConfigStore {
     state: Arc<RwLock<ConfigState>>,
 }
 
+pub const CURRENT_CONFIG_SCHEMA_VERSION: u32 = 2;
+
+/// Migre un JSON de configuration `gateway_config` vers `CURRENT_CONFIG_SCHEMA_VERSION`.
+/// Retourne `(config_migree, source_version, migrated)`.
+/// Échoue de manière explicite (fail-safe) si le JSON est invalide ou si la version est supérieure à la version supportée.
+pub fn migrate_config_json(
+    raw_json: &str,
+    db_version: Option<u32>,
+) -> Result<(PylosConfig, u32, bool), PylosError> {
+    let mut val: serde_json::Value = serde_json::from_str(raw_json).map_err(|e| {
+        PylosError::Internal(format!(
+            "gateway_config JSON invalide (mode fail-safe) : {}",
+            e
+        ))
+    })?;
+
+    let json_version = val
+        .get("version")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+    let source_version = db_version.or(json_version).unwrap_or(1);
+
+    if source_version > CURRENT_CONFIG_SCHEMA_VERSION {
+        return Err(PylosError::Internal(format!(
+            "Version gateway_config non supportée : v{} (max supporté : v{}). Refus de rétrograder la configuration.",
+            source_version, CURRENT_CONFIG_SCHEMA_VERSION
+        )));
+    }
+
+    let mut migrated = false;
+    if source_version < 2 {
+        if let Some(obj) = val.as_object_mut() {
+            obj.insert("version".to_string(), serde_json::json!(2));
+            if !obj.contains_key("server") {
+                obj.insert("server".to_string(), serde_json::json!({}));
+            }
+            if !obj.contains_key("providers") {
+                obj.insert("providers".to_string(), serde_json::json!({}));
+            }
+            if !obj.contains_key("governance") {
+                obj.insert("governance".to_string(), serde_json::json!({}));
+            }
+            if !obj.contains_key("plugins") {
+                obj.insert("plugins".to_string(), serde_json::json!([]));
+            }
+        }
+        migrated = true;
+    }
+
+    let mut cfg: PylosConfig = serde_json::from_value(val).map_err(|e| {
+        PylosError::Internal(format!(
+            "Échec de désérialisation gateway_config après migration v{} -> v{} (mode fail-safe) : {}",
+            source_version, CURRENT_CONFIG_SCHEMA_VERSION, e
+        ))
+    })?;
+    if cfg.version != CURRENT_CONFIG_SCHEMA_VERSION {
+        cfg.version = CURRENT_CONFIG_SCHEMA_VERSION;
+        migrated = true;
+    }
+
+    Ok((cfg, source_version, migrated))
+}
+
+async fn save_gateway_config_to_pool(pool: &Pool, json: &str, version: u32) {
+    match pool {
+        Pool::Sqlite(p) => {
+            let _ = sqlx::query(
+                "INSERT INTO gateway_config (id, config, config_version) VALUES ('pylos', $1, $2) \
+                 ON CONFLICT(id) DO UPDATE SET config = excluded.config, config_version = excluded.config_version",
+            )
+            .bind(json)
+            .bind(version as i64)
+            .execute(p)
+            .await;
+        }
+        Pool::Postgres(p) => {
+            let val: serde_json::Value = serde_json::from_str(json).unwrap_or_default();
+            let _ = sqlx::query(
+                "INSERT INTO gateway_config (id, config, config_version) VALUES ('pylos', $1, $2) \
+                 ON CONFLICT(id) DO UPDATE SET config = excluded.config, config_version = excluded.config_version",
+            )
+            .bind(&val)
+            .bind(version as i32)
+            .execute(p)
+            .await;
+        }
+    }
+}
+
+async fn backup_gateway_config(
+    pool: &Pool,
+    raw_json: &str,
+    source_version: u32,
+    target_version: u32,
+) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string());
+    match pool {
+        Pool::Sqlite(p) => {
+            let _ = sqlx::query(
+                "INSERT INTO gateway_config_backups (source_version, target_version, config, backed_up_at) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(source_version as i64)
+            .bind(target_version as i64)
+            .bind(raw_json)
+            .bind(&now)
+            .execute(p)
+            .await;
+        }
+        Pool::Postgres(p) => {
+            let val: serde_json::Value = serde_json::from_str(raw_json).unwrap_or_default();
+            let _ = sqlx::query(
+                "INSERT INTO gateway_config_backups (source_version, target_version, config, backed_up_at) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(source_version as i32)
+            .bind(target_version as i32)
+            .bind(&val)
+            .bind(&now)
+            .execute(p)
+            .await;
+        }
+    }
+}
+
 impl ConfigStore {
     /// Charge la config depuis un fichier pylos.json
     /// Si le fichier n'existe pas → auto-détection des providers via env vars
@@ -337,35 +465,87 @@ impl ConfigStore {
 
         match &pool {
             Pool::Sqlite(p) => {
-                sqlx::query("CREATE TABLE IF NOT EXISTS gateway_config (id TEXT PRIMARY KEY, config TEXT NOT NULL)")
-                    .execute(p)
-                    .await
-                    .ok();
+                sqlx::query(
+                    "CREATE TABLE IF NOT EXISTS gateway_config (\
+                        id TEXT PRIMARY KEY, \
+                        config TEXT NOT NULL, \
+                        config_version INTEGER NOT NULL DEFAULT 2\
+                    )",
+                )
+                .execute(p)
+                .await
+                .ok();
+                // Migration de colonne pour les tables existantes sans config_version
+                let _ = sqlx::query(
+                    "ALTER TABLE gateway_config ADD COLUMN config_version INTEGER NOT NULL DEFAULT 1",
+                )
+                .execute(p)
+                .await;
+                sqlx::query(
+                    "CREATE TABLE IF NOT EXISTS gateway_config_backups (\
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, \
+                        source_version INTEGER NOT NULL, \
+                        target_version INTEGER NOT NULL, \
+                        config TEXT NOT NULL, \
+                        backed_up_at TEXT NOT NULL\
+                    )",
+                )
+                .execute(p)
+                .await
+                .ok();
             }
             Pool::Postgres(p) => {
-                sqlx::query("CREATE TABLE IF NOT EXISTS gateway_config (id TEXT PRIMARY KEY, config JSONB NOT NULL)")
-                    .execute(p)
-                    .await
-                    .ok();
+                sqlx::query(
+                    "CREATE TABLE IF NOT EXISTS gateway_config (\
+                        id TEXT PRIMARY KEY, \
+                        config JSONB NOT NULL, \
+                        config_version INTEGER NOT NULL DEFAULT 2\
+                    )",
+                )
+                .execute(p)
+                .await
+                .ok();
+                let _ = sqlx::query(
+                    "ALTER TABLE gateway_config ADD COLUMN IF NOT EXISTS config_version INTEGER NOT NULL DEFAULT 1",
+                )
+                .execute(p)
+                .await;
+                sqlx::query(
+                    "CREATE TABLE IF NOT EXISTS gateway_config_backups (\
+                        id SERIAL PRIMARY KEY, \
+                        source_version INTEGER NOT NULL, \
+                        target_version INTEGER NOT NULL, \
+                        config JSONB NOT NULL, \
+                        backed_up_at TEXT NOT NULL\
+                    )",
+                )
+                .execute(p)
+                .await
+                .ok();
             }
         }
 
-        let db_config: Option<String> = match &pool {
+        let db_row: Option<(String, Option<u32>)> = match &pool {
             Pool::Sqlite(p) => {
-                let row = sqlx::query("SELECT config FROM gateway_config WHERE id = 'pylos'")
+                let row = sqlx::query("SELECT config, config_version FROM gateway_config WHERE id = 'pylos'")
                     .fetch_optional(p)
                     .await
                     .unwrap_or(None);
-                row.map(|r| r.get::<String, _>(0))
+                row.map(|r| {
+                    let cfg: String = r.get(0);
+                    let ver: Option<i64> = r.try_get(1).ok();
+                    (cfg, ver.map(|v| v as u32))
+                })
             }
             Pool::Postgres(p) => {
-                let row = sqlx::query("SELECT config FROM gateway_config WHERE id = 'pylos'")
+                let row = sqlx::query("SELECT config, config_version FROM gateway_config WHERE id = 'pylos'")
                     .fetch_optional(p)
                     .await
                     .unwrap_or(None);
                 row.map(|r| {
                     let val: serde_json::Value = r.get(0);
-                    val.to_string()
+                    let ver: Option<i32> = r.try_get(1).ok();
+                    (val.to_string(), ver.map(|v| v as u32))
                 })
             }
         };
@@ -373,91 +553,80 @@ impl ConfigStore {
         let mut state = self.state.write().await;
         state.db_pool = Some(pool.clone());
 
-        if let Some(cfg_str) = db_config {
-            if let Ok(mut new_cfg) = serde_json::from_str::<PylosConfig>(&cfg_str) {
-                // Les secrets providers sont chiffrés en base : les déchiffrer avant usage.
-                decrypt_config_secrets(&mut new_cfg);
-                info!("Loaded configuration from database; merging missing items from file config");
-                let mut merged = false;
+        if let Some((cfg_str, db_ver)) = db_row {
+            let (mut new_cfg, source_ver, migrated) =
+                migrate_config_json(&cfg_str, db_ver).inspect_err(|e| {
+                    tracing::error!(error = %e, "Failed to migrate gateway_config from database");
+                })?;
 
-                // Merge missing providers
-                for (name, provider) in &state.config.providers {
-                    if !new_cfg.providers.contains_key(name) {
-                        info!(
-                            "Merging provider {} from file config into database config",
-                            name
-                        );
-                        new_cfg.providers.insert(name.clone(), provider.clone());
-                        merged = true;
-                    }
-                }
-
-                // Merge missing virtual keys
-                for vk in &state.config.governance.virtual_keys {
-                    if !new_cfg
-                        .governance
-                        .virtual_keys
-                        .iter()
-                        .any(|v| v.id == vk.id)
-                    {
-                        info!(
-                            "Merging virtual key {} from file config into database config",
-                            vk.id
-                        );
-                        new_cfg.governance.virtual_keys.push(vk.clone());
-                        merged = true;
-                    }
-                }
-
-                // If merged, we write it back to the database so that it's persisted there
-                if merged {
-                    let json = serialize_config_for_db(&new_cfg);
-                    match &pool {
-                        Pool::Sqlite(p) => {
-                            let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                                .bind(&json)
-                                .execute(p)
-                                .await;
-                        }
-                        Pool::Postgres(p) => {
-                            let val: serde_json::Value =
-                                serde_json::from_str(&json).unwrap_or_default();
-                            let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                                .bind(&val)
-                                .execute(p)
-                                .await;
-                        }
-                    }
-                }
-
-                state.config = new_cfg;
-                state.config_hash = hash_config(&state.config);
-                state.provider_hashes.clear();
-                let mut hashes = std::collections::HashMap::new();
-                for (name, provider) in &state.config.providers {
-                    hashes.insert(name.clone(), hash_provider(name, provider));
-                }
-                state.provider_hashes = hashes;
-                state.runtime_providers = build_runtime_providers(&state.config);
+            if migrated {
+                info!(
+                    from_version = source_ver,
+                    to_version = CURRENT_CONFIG_SCHEMA_VERSION,
+                    "Backing up and migrating gateway_config schema"
+                );
+                backup_gateway_config(
+                    &pool,
+                    &cfg_str,
+                    source_ver,
+                    CURRENT_CONFIG_SCHEMA_VERSION,
+                )
+                .await;
             }
+
+            // Les secrets providers sont chiffrés en base : les déchiffrer avant usage.
+            decrypt_config_secrets(&mut new_cfg);
+            info!("Loaded configuration from database; merging missing items from file config");
+            let mut merged = migrated;
+
+            // Merge missing providers
+            for (name, provider) in &state.config.providers {
+                if !new_cfg.providers.contains_key(name) {
+                    info!(
+                        "Merging provider {} from file config into database config",
+                        name
+                    );
+                    new_cfg.providers.insert(name.clone(), provider.clone());
+                    merged = true;
+                }
+            }
+
+            // Merge missing virtual keys
+            for vk in &state.config.governance.virtual_keys {
+                if !new_cfg
+                    .governance
+                    .virtual_keys
+                    .iter()
+                    .any(|v| v.id == vk.id)
+                {
+                    info!(
+                        "Merging virtual key {} from file config into database config",
+                        vk.id
+                    );
+                    new_cfg.governance.virtual_keys.push(vk.clone());
+                    merged = true;
+                }
+            }
+
+            // If migrated or merged, we write it back to the database so that it's persisted there
+            if merged {
+                let json = serialize_config_for_db(&new_cfg);
+                save_gateway_config_to_pool(&pool, &json, CURRENT_CONFIG_SCHEMA_VERSION).await;
+            }
+
+            state.config = new_cfg;
+            state.config_hash = hash_config(&state.config);
+            state.provider_hashes.clear();
+            let mut hashes = std::collections::HashMap::new();
+            for (name, provider) in &state.config.providers {
+                hashes.insert(name.clone(), hash_provider(name, provider));
+            }
+            state.provider_hashes = hashes;
+            state.runtime_providers = build_runtime_providers(&state.config);
         } else {
             info!("No configuration found in database, inserting bootstrap configuration");
             let json = serialize_config_for_db(&state.config);
-            match &pool {
-                Pool::Sqlite(p) => {
-                    let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                        .bind(&json)
-                        .execute(p)
-                        .await;
-                }
-                Pool::Postgres(p) => {
-                    let val: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
-                    let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                        .bind(&val)
-                        .execute(p)
-                        .await;
-                }
-            }
+            save_gateway_config_to_pool(&pool, &json, CURRENT_CONFIG_SCHEMA_VERSION).await;
         }
 
         Ok(())
@@ -814,21 +983,7 @@ async fn persist_config_locked(state: &ConfigState) {
     let db_json = serialize_config_for_db(&state.config);
 
     if let Some(pool) = &state.db_pool {
-        match pool {
-            Pool::Sqlite(p) => {
-                let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                    .bind(&db_json)
-                    .execute(p)
-                    .await;
-            }
-            Pool::Postgres(p) => {
-                let val: serde_json::Value = serde_json::from_str(&db_json).unwrap_or_default();
-                let _ = sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1) ON CONFLICT(id) DO UPDATE SET config = excluded.config")
-                    .bind(&val)
-                    .execute(p)
-                    .await;
-            }
-        }
+        save_gateway_config_to_pool(pool, &db_json, CURRENT_CONFIG_SCHEMA_VERSION).await;
         debug!("Config persisted to database");
     }
 
@@ -1538,5 +1693,74 @@ mod tests {
 
         let once = encrypt_envvar_secret(&EnvVar::Literal("sk-x".into()));
         assert_eq!(encrypt_envvar_secret(&once), once);
+    }
+
+    #[test]
+    fn test_migrate_config_v1_to_v2_json() {
+        let v1_json = r#"{"version": 1, "server": {"port": 4000}}"#;
+        let (cfg, src_ver, migrated) = migrate_config_json(v1_json, Some(1)).unwrap();
+        assert_eq!(src_ver, 1);
+        assert!(migrated);
+        assert_eq!(cfg.version, CURRENT_CONFIG_SCHEMA_VERSION);
+        assert_eq!(cfg.server.port, 4000);
+    }
+
+    #[test]
+    fn test_migrate_config_future_version_fails_safely() {
+        let future_json = r#"{"version": 99}"#;
+        let err = migrate_config_json(future_json, Some(99)).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("99"));
+        assert!(msg.contains("Refus de rétrograder"));
+    }
+
+    #[tokio::test]
+    async fn test_init_database_migrates_v1_and_creates_backup() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("pylos-cfg-mig-{}", nanos));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("test.db");
+        let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
+
+        // Seed legacy v1 table without config_version column
+        let pool = SqlitePoolOptions::new().connect(&db_url).await.unwrap();
+        sqlx::query("CREATE TABLE gateway_config (id TEXT PRIMARY KEY, config TEXT NOT NULL)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let v1_json = r#"{"version": 1, "server": {"port": 4242}}"#;
+        sqlx::query("INSERT INTO gateway_config (id, config) VALUES ('pylos', $1)")
+            .bind(v1_json)
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+
+        let store = ConfigStore::from_config(PylosConfig::default());
+        store.init_database(&db_url).await.unwrap();
+
+        let loaded = store.get().await;
+        assert_eq!(loaded.version, CURRENT_CONFIG_SCHEMA_VERSION);
+        assert_eq!(loaded.server.port, 4242);
+
+        // Verify config_version updated & backup created
+        let verify_pool = SqlitePoolOptions::new().connect(&db_url).await.unwrap();
+        let ver: i64 = sqlx::query_scalar("SELECT config_version FROM gateway_config WHERE id = 'pylos'")
+            .fetch_one(&verify_pool)
+            .await
+            .unwrap();
+        assert_eq!(ver, CURRENT_CONFIG_SCHEMA_VERSION as i64);
+
+        let backup_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM gateway_config_backups WHERE source_version = 1 AND target_version = 2")
+            .fetch_one(&verify_pool)
+            .await
+            .unwrap();
+        assert_eq!(backup_count, 1);
+
+        verify_pool.close().await;
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

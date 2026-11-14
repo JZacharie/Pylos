@@ -126,7 +126,7 @@ export default function OldUsage() {
     refetchInterval: 120_000,
   })
 
-  const logs = logsQ.data?.logs ?? []
+  const logs = useMemo(() => logsQ.data?.logs ?? [], [logsQ.data?.logs])
 
   const isLoading = logsQ.isLoading || statsQ.isLoading
   const isEmpty = !isLoading && logs.length === 0

@@ -1,0 +1,19 @@
+{{- if .Values.backend.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "pylos.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "pylos.labels" . | nindent 4 }}
+spec:
+  {{- if hasKey .Values.backend.podDisruptionBudget "minAvailable" }}
+  minAvailable: {{ .Values.backend.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if hasKey .Values.backend.podDisruptionBudget "maxUnavailable" }}
+  maxUnavailable: {{ .Values.backend.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "pylos.labels" . | nindent 6 }}
+{{- end }}

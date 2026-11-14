@@ -18,6 +18,16 @@ export const getBaseUrl = (): string => {
   return '';
 };
 
+export function getErrorMessage(err: unknown, fallback = 'An unexpected error occurred'): string {
+  if (axios.isAxiosError(err)) {
+    const data = err.response?.data as { error?: string; message?: string } | undefined
+    return data?.error || data?.message || err.message || fallback
+  }
+  if (err instanceof Error) return err.message || fallback
+  if (typeof err === 'string') return err || fallback
+  return fallback
+}
+
 export const api = axios.create({
   timeout: 30000,
 })
@@ -389,10 +399,10 @@ export const modelsApi = {
     api.get<{ source_url: string; last_reload_ms: number | null; models_count: number; periodic_schedule: string | null }>('/v1/models/pricing/status').then(r => r.data),
 
   reloadPricingData: () =>
-    api.post<{ success: boolean; message: string; status: any }>('/v1/models/pricing/reload').then(r => r.data),
+    api.post<{ success: boolean; message: string; status: unknown }>('/v1/models/pricing/reload').then(r => r.data),
 
   schedulePricingReload: (schedule: string | null) =>
-    api.post<{ success: boolean; status: any }>('/v1/models/pricing/schedule', { schedule }).then(r => r.data),
+    api.post<{ success: boolean; status: unknown }>('/v1/models/pricing/schedule', { schedule }).then(r => r.data),
 
   getHealth: () =>
     api.get<ModelHealthEntry[]>('/v1/models/health').then(r => r.data),
@@ -498,7 +508,7 @@ export const configApi = {
   get: () => api.get('/config').then(r => r.data),
   reload: () => api.post('/config/reload').then(r => r.data),
   promote: () => api.post<{ success: boolean; message: string }>('/api/github/promote').then(r => r.data),
-  updateGuardrails: (data: { enabled: boolean; config: Record<string, any> }) => 
+  updateGuardrails: (data: { enabled: boolean; config: Record<string, unknown> }) => 
     api.put('/config/guardrails', data).then(r => r.data),
 }
 
