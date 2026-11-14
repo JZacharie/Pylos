@@ -7,7 +7,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 
-use pylos_application::{ModelHealth, ModelInfo};
+use pylos_core::domain::logging::now_ms;
+use pylos_infrastructure::{ModelHealth, ModelInfo};
 use pylos_core::domain::embedding::EmbeddingRequest;
 use pylos_core::domain::openai::{ChatCompletionMessage, ChatCompletionRequest, MessageRole};
 use pylos_core::domain::request::PylosRequest;
@@ -325,7 +326,7 @@ pub async fn list_models(
 }
 
 /// Construit l'objet `pylos` avec la structure complète ModelInfo attendue par le TS
-fn model_info_pylos_field(info: &pylos_application::ModelInfo) -> serde_json::Value {
+fn model_info_pylos_field(info: &ModelInfo) -> serde_json::Value {
     json!({
         "id": info.id,
         "provider": info.provider,
@@ -391,7 +392,7 @@ fn make_minimal_pylos(
 }
 
 /// Convertit un ModelInfo en entrée complète pour l'API /v1/models
-fn model_info_to_entry(info: &pylos_application::ModelInfo) -> serde_json::Value {
+fn model_info_to_entry(info: &ModelInfo) -> serde_json::Value {
     json!({
         "id": info.model_id,
         "provider": info.provider,
@@ -604,11 +605,8 @@ pub async fn pull_provider_models(
         }
     } else if provider_name == "gemini" || provider_name == "google" {
         if let Some(api_key) = provider_cfg.keys.first().and_then(|k| k.value.resolve()) {
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models?key={}",
-                api_key
-            );
-            if let Ok(resp) = client.get(&url).send().await {
+            let url = "https://generativelanguage.googleapis.com/v1beta/models";
+            if let Ok(resp) = client.get(url).header("x-goog-api-key", api_key).send().await {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
                     if let Some(arr) = body["models"].as_array() {
                         for m in arr {
@@ -919,7 +917,7 @@ pub async fn reload_pricing_data(State(state): State<AppState>) -> impl IntoResp
         }
     }
 
-    let now = pylos_application::log_store::now_ms();
+    let now = now_ms();
     current_status.last_reload_ms = Some(now);
     current_status.models_count = upserted_count;
 
@@ -991,7 +989,7 @@ pub async fn run_all_models_health_check(State(state): State<AppState>) -> impl 
                     model_id: model.model_id,
                     health_status: "unhealthy".to_string(),
                     error_details: Some("Health check timed out after 15s".to_string()),
-                    last_check_ms: Some(pylos_application::log_store::now_ms()),
+                    last_check_ms: Some(now_ms()),
                     last_success_ms: None,
                 })
             })
@@ -1013,7 +1011,7 @@ async fn execute_single_health_check(
     provider_name: &str,
     model_id: &str,
 ) -> ModelHealth {
-    let now = pylos_application::log_store::now_ms();
+    let now = now_ms();
     let id = format!("{}/{}", provider_name, model_id);
 
     let providers_arc = state.orchestrator.providers();

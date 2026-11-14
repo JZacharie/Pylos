@@ -110,6 +110,53 @@ fn get_qdrant_client(timeout_secs: u64) -> reqwest::Client {
         .unwrap_or_default()
 }
 
+/// Validate a Qdrant collection name against an ASCII allowlist (`[A-Za-z0-9_-]`, max 128 chars)
+/// and construct a safe Qdrant URL using `Url::path_segments_mut` to prevent SSRF / path traversal.
+fn build_qdrant_collection_url(
+    name: &str,
+    extra_segments: &[&str],
+) -> Result<reqwest::Url, (StatusCode, Json<Value>)> {
+    let valid = !name.is_empty()
+        && name.len() <= 128
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    if !valid {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Invalid collection name. Only alphanumeric, '_' and '-' are allowed." })),
+        ));
+    }
+
+    let safe_name: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+
+    let mut url = reqwest::Url::parse(get_qdrant_url().trim_end_matches('/')).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Invalid Qdrant base URL: {}", e) })),
+        )
+    })?;
+
+    {
+        let mut segments = url.path_segments_mut().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Qdrant base URL cannot be a base" })),
+            )
+        })?;
+        segments.push("collections");
+        segments.push(&safe_name);
+        for seg in extra_segments {
+            segments.push(seg);
+        }
+    }
+
+    Ok(url)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/vector-stores/collections
 // ─────────────────────────────────────────────────────────────────────────────
@@ -221,25 +268,12 @@ pub async fn create_collection(
     State(_state): State<AppState>,
     Json(req): Json<CreateCollectionRequest>,
 ) -> impl IntoResponse {
-    if req.name.is_empty()
-        || !req
-            .name
-            .chars()
-            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
-    {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Invalid collection name. Only alphanumeric, '_' and '-' are allowed." })),
-        )
-            .into_response();
-    }
+    let url = match build_qdrant_collection_url(&req.name, &[]) {
+        Ok(u) => u,
+        Err(resp) => return resp.into_response(),
+    };
 
     let client = get_qdrant_client(5);
-    let url = format!(
-        "{}/collections/{}",
-        get_qdrant_url().trim_end_matches('/'),
-        req.name
-    );
 
     let body = json!({
         "vectors": {
@@ -248,7 +282,7 @@ pub async fn create_collection(
         }
     });
 
-    let resp = match client.put(&url).json(&body).send().await {
+    let resp = match client.put(url).json(&body).send().await {
         Ok(r) => r,
         Err(e) => {
             error!("Failed to create collection: {:?}", e);
@@ -280,14 +314,14 @@ pub async fn delete_collection(
     State(_state): State<AppState>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    let client = get_qdrant_client(5);
-    let url = format!(
-        "{}/collections/{}",
-        get_qdrant_url().trim_end_matches('/'),
-        name
-    );
+    let url = match build_qdrant_collection_url(&name, &[]) {
+        Ok(u) => u,
+        Err(resp) => return resp.into_response(),
+    };
 
-    let resp = match client.delete(&url).send().await {
+    let client = get_qdrant_client(5);
+
+    let resp = match client.delete(url).send().await {
         Ok(r) => r,
         Err(e) => {
             error!("Failed to delete collection: {:?}", e);
@@ -395,12 +429,11 @@ pub async fn add_document(
             payload_obj.insert("chunk_strategy".to_string(), json!("parent_child"));
         }
 
+        let url = match build_qdrant_collection_url(&name, &["points"]) {
+            Ok(u) => u,
+            Err(resp) => return resp.into_response(),
+        };
         let client = get_qdrant_client(10);
-        let url = format!(
-            "{}/collections/{}/points",
-            get_qdrant_url().trim_end_matches('/'),
-            name
-        );
 
         let point_id = format!("doc-{}-chunk-{}", fastrand::u64(..), i);
 
@@ -414,7 +447,7 @@ pub async fn add_document(
             ]
         });
 
-        let resp = match client.put(&url).json(&body).send().await {
+        let resp = match client.put(url).json(&body).send().await {
             Ok(r) => r,
             Err(e) => {
                 error!("Failed to upload point to Qdrant: {:?}", e);
@@ -495,12 +528,11 @@ pub async fn search_collection(
         }
     };
 
+    let url = match build_qdrant_collection_url(&name, &["points", "search"]) {
+        Ok(u) => u,
+        Err(resp) => return resp.into_response(),
+    };
     let client = get_qdrant_client(10);
-    let url = format!(
-        "{}/collections/{}/points/search",
-        get_qdrant_url().trim_end_matches('/'),
-        name
-    );
 
     let body = json!({
         "vector": embedding_data,
@@ -508,7 +540,7 @@ pub async fn search_collection(
         "with_payload": true
     });
 
-    let resp = match client.post(&url).json(&body).send().await {
+    let resp = match client.post(url).json(&body).send().await {
         Ok(r) => r,
         Err(e) => {
             error!("Failed to search Qdrant: {:?}", e);
