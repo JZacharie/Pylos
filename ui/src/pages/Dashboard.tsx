@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { logsApi, configApi } from '../lib/api'
+import { logsApi, configApi, getErrorMessage } from '../lib/api'
 import { StatCard } from '../components/StatCard'
 import { RequestChart, TokenChart } from '../components/Charts'
 import {
@@ -26,8 +26,8 @@ export default function Dashboard() {
       const res = await configApi.promote()
       setPromoteMessage(res.message || "Promotion started successfully!")
       setTimeout(() => setPromoteMessage(null), 5000)
-    } catch (err: any) {
-      const errMsg = err.response?.data?.error || err.message || "Failed to trigger promotion."
+    } catch (err: unknown) {
+      const errMsg = getErrorMessage(err, 'Failed to trigger promotion.')
       setPromoteMessage(`Error: ${errMsg}`)
       setTimeout(() => setPromoteMessage(null), 7000)
     } finally {

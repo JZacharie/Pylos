@@ -36,7 +36,7 @@ import {
   Palette,
   ScrollText,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { healthApi, authApi } from '../lib/api'
 
@@ -187,45 +187,44 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     })
   }
 
-  // Auto-expand section if current route is inside it
-  useEffect(() => {
+  // Auto-expand section if current route is inside it (adjusting state on route change)
+  const [prevPath, setPrevPath] = useState(location.pathname)
+  if (prevPath !== location.pathname) {
+    setPrevPath(location.pathname)
     const p = location.pathname
-    setExpandedSections(prev => {
-      let changed = false
-      const next = { ...prev }
-      if (!next.aiGateway && AI_GATEWAY.some(i => i.to === p || (i.to !== '/' && p.startsWith(i.to)))) {
-        next.aiGateway = true
-        changed = true
-      }
-      if (!next.tools && NAV_TOOLS.some(i => i.to === p || p.startsWith(i.to))) {
-        next.tools = true
-        changed = true
-      }
-      if (!next.observability && OBSERVABILITY.some(i => i.to === p || p.startsWith(i.to))) {
-        next.observability = true
-        changed = true
-      }
-      if (!next.accessControl && GOVERNANCE.some(i => i.to === p || p.startsWith(i.to))) {
-        next.accessControl = true
-        changed = true
-      }
-      if (!next.devTools && DEVELOPER_TOOLS.some(i => i.to === p || p.startsWith(i.to))) {
-        next.devTools = true
-        changed = true
-      }
-      if (!next.settings && SETTINGS_SUB.some(i => i.to === p || p.startsWith(i.to))) {
-        next.settings = true
-        changed = true
-      }
-      if (changed) {
-        try {
-          localStorage.setItem('pylos_nav_sections', JSON.stringify(next))
-        } catch {}
-        return next
-      }
-      return prev
-    })
-  }, [location.pathname])
+    let changed = false
+    const next = { ...expandedSections }
+    if (!next.aiGateway && AI_GATEWAY.some(i => i.to === p || (i.to !== '/' && p.startsWith(i.to)))) {
+      next.aiGateway = true
+      changed = true
+    }
+    if (!next.tools && NAV_TOOLS.some(i => i.to === p || p.startsWith(i.to))) {
+      next.tools = true
+      changed = true
+    }
+    if (!next.observability && OBSERVABILITY.some(i => i.to === p || p.startsWith(i.to))) {
+      next.observability = true
+      changed = true
+    }
+    if (!next.accessControl && GOVERNANCE.some(i => i.to === p || p.startsWith(i.to))) {
+      next.accessControl = true
+      changed = true
+    }
+    if (!next.devTools && DEVELOPER_TOOLS.some(i => i.to === p || p.startsWith(i.to))) {
+      next.devTools = true
+      changed = true
+    }
+    if (!next.settings && SETTINGS_SUB.some(i => i.to === p || p.startsWith(i.to))) {
+      next.settings = true
+      changed = true
+    }
+    if (changed) {
+      setExpandedSections(next)
+      try {
+        localStorage.setItem('pylos_nav_sections', JSON.stringify(next))
+      } catch {}
+    }
+  }
 
   const userJson = typeof window !== 'undefined' ? localStorage.getItem('pylos_user') : null;
   const user = userJson ? JSON.parse(userJson) : null;

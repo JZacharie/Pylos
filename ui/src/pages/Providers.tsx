@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { providersApi, type Provider } from '../lib/api'
+import { providersApi, getErrorMessage, type Provider } from '../lib/api'
 import { providerColor } from '../lib/utils'
 import { Key, Globe, RotateCcw, Plus, Pencil, Trash2, X, Check, AlertTriangle, Sparkles } from 'lucide-react'
 import { ProviderIcon } from '../components/ProviderIcon'
@@ -526,9 +526,9 @@ function ProviderCard({
     try {
       await providersApi.test(provider.name)
       setTestResult('success')
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult('error')
-      setTestError(err.response?.data?.error || err.message || 'Connection failed')
+      setTestError(getErrorMessage(err, 'Connection failed'))
     } finally {
       setTesting(false)
     }

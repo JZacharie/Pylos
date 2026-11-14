@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { vectorStoresApi, modelsApi, type VectorCollection } from '../lib/api'
+import { vectorStoresApi, modelsApi, getErrorMessage, type VectorCollection } from '../lib/api'
 import {
   Database, Plus, Trash2, X, Check, RotateCcw, AlertTriangle, CheckCircle, Search, FileText
 } from 'lucide-react'
@@ -36,7 +36,12 @@ export default function VectorStores() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchModel, setSearchModel] = useState('')
   const [searchLimit, setSearchLimit] = useState(5)
-  const [searchResults, setSearchResults] = useState<any[] | null>(null)
+  interface VectorSearchResult {
+    id: string | number
+    score: number
+    payload?: { content?: string; text?: string; [key: string]: unknown }
+  }
+  const [searchResults, setSearchResults] = useState<VectorSearchResult[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
 
@@ -87,10 +92,10 @@ export default function VectorStores() {
   const indexDocMut = useMutation({
     mutationFn: async () => {
       if (!selectedCol) return
-      let parsedPayload = {}
+      let parsedPayload: Record<string, unknown>
       try {
-        parsedPayload = JSON.parse(docPayload)
-      } catch (e) {
+        parsedPayload = JSON.parse(docPayload) as Record<string, unknown>
+      } catch {
         throw new Error('Invalid JSON format in payload')
       }
       return vectorStoresApi.addDocument(selectedCol.name, {
@@ -128,8 +133,8 @@ export default function VectorStores() {
         limit: searchLimit,
       })
       setSearchResults(results)
-    } catch (e: any) {
-      setSearchError(e.response?.data?.error || e.message || 'Search failed')
+    } catch (e: unknown) {
+      setSearchError(getErrorMessage(e, 'Search failed'))
     } finally {
       setSearchLoading(false)
     }

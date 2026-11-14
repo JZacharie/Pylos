@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ScrollText, Bell, Webhook, Settings, Save, Plus, Trash2,
@@ -54,7 +54,9 @@ export default function LoggingAlerts() {
   const [alerts, setAlerts] = useState<AlertConfig>(DEFAULT_ALERTS)
 
   // Sync from config
-  useEffect(() => {
+  const [prevConfigData, setPrevConfigData] = useState(configData)
+  if (configData !== prevConfigData) {
+    setPrevConfigData(configData)
     if (configData) {
       const logging = configData.logging || {}
       setLogRetentionDays(logging.retention_days ?? 30)
@@ -65,7 +67,7 @@ export default function LoggingAlerts() {
       if (configData.webhooks) setWebhooks(configData.webhooks)
       if (configData.alerts) setAlerts({ ...DEFAULT_ALERTS, ...configData.alerts })
     }
-  }, [configData])
+  }
 
   const saveMutation = useMutation({
     mutationFn: () => configApi.reload(),
