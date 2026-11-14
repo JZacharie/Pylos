@@ -135,11 +135,22 @@ export interface LogsResponse {
   has_logs: boolean
 }
 
+export interface ProviderAvailability {
+  provider: string
+  status: 'available' | 'degraded' | 'unavailable' | 'saturated'
+  selectable: boolean
+  reason?: string | null
+  billing_tier: 'free' | 'quota_subscription' | 'paid'
+  retry_after_secs?: number | null
+  consecutive_failures?: number
+}
+
 export interface Provider {
   name: string
   keys_count: number
   keys: Array<{ name: string; value: string; models: string[]; weight: number }>
   network: { base_url: string | null; timeout_secs: number; max_retries: number }
+  availability?: ProviderAvailability
 }
 
 export interface VirtualKey {

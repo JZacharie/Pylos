@@ -86,10 +86,12 @@ pub async fn reload_config(State(state): State<AppState>) -> impl IntoResponse {
 
 pub async fn list_providers(State(state): State<AppState>) -> impl IntoResponse {
     let cfg = state.config_store.get().await;
+    let availability = state.orchestrator.availability();
     let providers: Vec<_> = cfg
         .providers
         .iter()
         .map(|(name, p)| {
+            let avail = availability.snapshot(name);
             json!({
                 "name": name,
                 "keys_count": p.keys.len(),
@@ -103,7 +105,8 @@ pub async fn list_providers(State(state): State<AppState>) -> impl IntoResponse 
                     "base_url": p.network.base_url,
                     "timeout_secs": p.network.timeout_secs,
                     "max_retries": p.network.max_retries
-                }
+                },
+                "availability": avail
             })
         })
         .collect();

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use crate::provider_availability::ProviderAvailabilityService;
 
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -17,15 +19,6 @@ use pylos_core::domain::traits::{ChunkStream, LlmPlugin, Provider};
 use pylos_core::error::PylosError;
 
 type ProviderList = Vec<(Arc<dyn Provider>, ProviderConfig)>;
-
-const MAX_CONSECUTIVE_FAILURES: u32 = 5;
-const COOLDOWN_SECS: u64 = 30;
-
-#[derive(Debug, Clone, Default)]
-struct CircuitBreakerState {
-    consecutive_failures: u32,
-    last_failure: Option<Instant>,
-}
 
 /// Compteur Round-Robin pour chaque modèle.
 /// Permet de distribuer les requêtes séquentiellement entre les providers
@@ -63,7 +56,7 @@ pub struct InferenceOrchestrator {
     /// Identique au mécanisme atomic.Pointer de bifrost pour les plugins
     providers: Arc<RwLock<ProviderList>>,
     plugins: Vec<Arc<dyn LlmPlugin>>,
-    circuit_breakers: Arc<Mutex<HashMap<String, CircuitBreakerState>>>,
+    availability: Arc<ProviderAvailabilityService>,
     round_robin: RoundRobinState,
 }
 
@@ -72,10 +65,12 @@ impl InferenceOrchestrator {
         // Tri déterministe par priorité explicite (plus petit = exécuté plus tôt en pre_hook,
         // plus tard en post_hook / post_stream_chunk).
         plugins.sort_by_key(|p| p.priority());
+        let availability = Arc::new(ProviderAvailabilityService::new());
+        availability.sync_from_providers(&providers);
         Self {
             providers: Arc::new(RwLock::new(providers)),
             plugins,
-            circuit_breakers: Arc::new(Mutex::new(HashMap::new())),
+            availability,
             round_robin: RoundRobinState::default(),
         }
     }
@@ -84,8 +79,13 @@ impl InferenceOrchestrator {
         self.providers.clone()
     }
 
+    pub fn availability(&self) -> &Arc<ProviderAvailabilityService> {
+        &self.availability
+    }
+
     /// Hot-reload des providers sans interruption de service
     pub async fn update_providers(&self, new_providers: ProviderList) {
+        self.availability.sync_from_providers(&new_providers);
         let mut guard = self.providers.write().await;
         *guard = new_providers;
         info!("Inference providers updated (hot-reload)");
@@ -107,42 +107,12 @@ impl InferenceOrchestrator {
         }
     }
 
-    fn is_circuit_breaker_open(&self, name: &str) -> bool {
-        let breakers = self
-            .circuit_breakers
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(state) = breakers.get(name) {
-            if state.consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
-                if let Some(last_failure) = state.last_failure {
-                    if last_failure.elapsed().as_secs() < COOLDOWN_SECS {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
     fn record_success(&self, name: &str) {
-        let mut breakers = self
-            .circuit_breakers
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(state) = breakers.get_mut(name) {
-            state.consecutive_failures = 0;
-            state.last_failure = None;
-        }
+        self.availability.record_success(name);
     }
 
-    fn record_failure(&self, name: &str) {
-        let mut breakers = self
-            .circuit_breakers
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let state = breakers.entry(name.to_string()).or_default();
-        state.consecutive_failures += 1;
-        state.last_failure = Some(Instant::now());
+    fn record_failure(&self, name: &str, err: &PylosError) {
+        self.availability.record_error(name, err);
     }
 
     /// Weighted random shuffle using the A-Res algorithm.
@@ -211,7 +181,14 @@ impl InferenceOrchestrator {
         );
 
         for &(provider, config) in &allowed_providers {
-            let is_open = self.is_circuit_breaker_open(provider.name());
+            if !self.availability.is_selectable(provider.name()) {
+                debug!(
+                    provider = provider.name(),
+                    model = %model,
+                    "[Routing] Excluding unavailable/saturated provider"
+                );
+                continue;
+            }
 
             let weight = if ctx.virtual_key.is_some() {
                 ctx.provider_configs
@@ -225,15 +202,13 @@ impl InferenceOrchestrator {
 
             let supports = model_supported_by(config, model);
             if supports {
-                supporting.push((provider.clone(), config.clone(), weight, is_open));
+                supporting.push((provider.clone(), config.clone(), weight, false));
             } else {
-                non_supporting.push((provider.clone(), config.clone(), weight, is_open));
+                non_supporting.push((provider.clone(), config.clone(), weight, false));
             }
         }
 
-        let (mut active_supporting, broken_supporting): (Vec<_>, Vec<_>) = supporting
-            .into_iter()
-            .partition(|(_, _, _, is_open)| !*is_open);
+        let mut active_supporting = supporting;
 
         // 3. Round-Robin selection among ACTIVE supporting providers
         let n_active = active_supporting.len();
@@ -259,25 +234,14 @@ impl InferenceOrchestrator {
             );
         }
 
-        // 4. Weighted shuffle for remaining ordering
-        let broken_supporting = Self::weighted_shuffle(broken_supporting);
-        let (active_non_supporting, broken_non_supporting): (Vec<_>, Vec<_>) = non_supporting
-            .into_iter()
-            .partition(|(_, _, _, is_open)| !*is_open);
-        let active_non_supporting = Self::weighted_shuffle(active_non_supporting);
-        let broken_non_supporting = Self::weighted_shuffle(broken_non_supporting);
+        // 4. Weighted shuffle for remaining ordering (only selectable providers)
+        let active_non_supporting = Self::weighted_shuffle(non_supporting);
 
         let mut ordered = Vec::new();
         for (prov, cfg, _, _) in active_supporting {
             ordered.push((prov, cfg));
         }
-        for (prov, cfg, _, _) in broken_supporting {
-            ordered.push((prov, cfg));
-        }
         for (prov, cfg, _, _) in active_non_supporting {
-            ordered.push((prov, cfg));
-        }
-        for (prov, cfg, _, _) in broken_non_supporting {
             ordered.push((prov, cfg));
         }
 
@@ -342,7 +306,7 @@ impl InferenceOrchestrator {
                     continue;
                 }
                 Err(e) => {
-                    self.record_failure(provider.name());
+                    self.record_failure(provider.name(), &e);
                     warn!(provider = provider.name(), error = %e, "Embedding failed");
                     // Ne pas retenter si l'erreur est liée au client (budget, guardrail, requête invalide)
                     if matches!(
@@ -535,7 +499,7 @@ impl InferenceOrchestrator {
                     return Ok((response, ctx));
                 }
                 Err(e) => {
-                    self.record_failure(provider.name());
+                    self.record_failure(provider.name(), &e);
                     warn!(
                         provider = provider.name(),
                         model = %model,
@@ -556,6 +520,13 @@ impl InferenceOrchestrator {
                     last_error = Some(e);
                 }
             }
+        }
+
+        if ordered.is_empty() && !providers.is_empty() {
+            return Err(PylosError::ServiceUnavailable(format!(
+                "No available providers for model '{}'",
+                request.model()
+            )));
         }
 
         Err(last_error
@@ -672,7 +643,7 @@ impl InferenceOrchestrator {
                     return Ok((wrapped, actual_provider, ctx));
                 }
                 Err(e) => {
-                    self.record_failure(provider.name());
+                    self.record_failure(provider.name(), &e);
                     warn!(
                         provider = provider.name(),
                         model = %stream_model,
@@ -693,6 +664,13 @@ impl InferenceOrchestrator {
                     last_error = Some(e);
                 }
             }
+        }
+
+        if ordered_stream.is_empty() && !providers.is_empty() {
+            return Err(PylosError::ServiceUnavailable(format!(
+                "No available providers for model '{}'",
+                request.model()
+            )));
         }
 
         Err(last_error
@@ -1337,5 +1315,84 @@ mod tests {
         assert_eq!(full_text, "Contact alice@example.com now.");
         let u = captured_usage.lock().unwrap().clone().expect("Usage should be forwarded to post_hook");
         assert_eq!(u.total_tokens, 15);
+    }
+
+    struct DummyProvider(&'static str);
+
+    #[async_trait::async_trait]
+    impl Provider for DummyProvider {
+        fn name(&self) -> &str {
+            self.0
+        }
+        async fn complete(
+            &self,
+            _req: &PylosRequest,
+            _cfg: &ProviderConfig,
+        ) -> Result<PylosResponse, PylosError> {
+            Err(PylosError::Internal("unused".into()))
+        }
+        async fn stream(
+            &self,
+            _req: &PylosRequest,
+            _cfg: &ProviderConfig,
+        ) -> Result<ChunkStream, PylosError> {
+            Err(PylosError::Internal("unused".into()))
+        }
+        async fn embed(
+            &self,
+            _req: &EmbeddingRequest,
+            _cfg: &ProviderConfig,
+        ) -> Result<EmbeddingResponse, PylosError> {
+            Err(PylosError::Unsupported("unused".into()))
+        }
+        async fn health_check(&self, _cfg: &ProviderConfig) -> Result<(), PylosError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_unavailable_provider_excluded_and_returns_503_when_none_available() {
+        use pylos_core::domain::provider::{ProviderKey, ProviderKind};
+
+        let make_cfg = |kind: ProviderKind, key: &str| {
+            let mut cfg = ProviderConfig::new(kind, vec![ProviderKey::new(key)]);
+            cfg.max_retries = 0;
+            cfg
+        };
+
+        let providers: ProviderList = vec![
+            (
+                Arc::new(DummyProvider("openai")),
+                make_cfg(ProviderKind::OpenAI, ""), // empty key -> unavailable
+            ),
+            (
+                Arc::new(DummyProvider("anthropic")),
+                make_cfg(ProviderKind::Anthropic, "sk-ant-valid"),
+            ),
+        ];
+
+        let orch = InferenceOrchestrator::new(providers, vec![]);
+        let providers_arc = orch.providers();
+        let guard = providers_arc.read().await;
+        let ctx = RequestContext::default();
+
+        let ordered = orch.select_and_order_providers(&guard, "gpt-4o", &ctx);
+        assert_eq!(ordered.len(), 1);
+        assert_eq!(ordered[0].0.name(), "anthropic");
+
+        // Now mark anthropic unavailable as well -> ordered becomes empty -> ServiceUnavailable
+        orch.availability()
+            .mark_unavailable("anthropic", "401 Unauthorized", Some(60));
+        let ordered_empty = orch.select_and_order_providers(&guard, "gpt-4o", &ctx);
+        assert!(ordered_empty.is_empty());
+        drop(guard);
+
+        let req = PylosRequest::ChatCompletion(ChatCompletionRequest {
+            model: "gpt-4o".into(),
+            messages: vec![],
+            ..Default::default()
+        });
+        let err = orch.complete(req, RequestContext::default()).await.unwrap_err();
+        assert!(matches!(err, PylosError::ServiceUnavailable(_)));
     }
 }

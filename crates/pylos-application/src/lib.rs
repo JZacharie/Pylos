@@ -12,6 +12,7 @@ pub mod memory_plugin;
 pub mod otel_plugin;
 pub mod prefix_cache;
 pub mod prompt_registry;
+pub mod provider_availability;
 pub mod rag_plugin;
 pub mod rate_limit_plugin;
 pub mod semantic_cache;
@@ -36,6 +37,9 @@ pub use memory_plugin::MemoryPlugin;
 pub use otel_plugin::{OtelConfig, OtelPlugin};
 pub use prefix_cache::PrefixCachePlugin;
 pub use prompt_registry::PromptRegistryPlugin;
+pub use provider_availability::{
+    AvailabilityStatus, BillingTier, ProviderAvailabilityService, ProviderStatusSnapshot,
+};
 pub use rag_plugin::{RagConfig, RagPlugin};
 pub use rate_limit_plugin::RateLimitPlugin;
 pub use semantic_cache::SemanticCachePlugin;

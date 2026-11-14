@@ -531,21 +531,49 @@ export default function RouterSettings() {
         </div>
         {providerKeysSummary.length > 0 ? (
           <div className="space-y-3">
-            {providerKeysSummary.map(p => (
-              <div key={p.name} className="flex items-center gap-4 text-sm">
-                <span className="text-zinc-300 font-medium capitalize min-w-[100px]">{p.name}</span>
-                <span className="text-zinc-500 text-xs">
-                  {p.keys} key{p.keys !== 1 ? 's' : ''}
-                </span>
-                <div className="flex-1 bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500/60 rounded-full transition-all"
-                    style={{ width: `${Math.min((p.totalWeight / (providerKeysSummary.reduce((s, x) => s + x.totalWeight, 0) || 1)) * 100, 100)}%` }}
-                  />
+            {providerKeysSummary.map(p => {
+              const provMeta = providersData?.providers?.find(x => x.name === p.name)
+              const avail = provMeta?.availability
+              const status = avail?.status ?? 'available'
+              const badgeCls =
+                status === 'unavailable'
+                  ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                  : status === 'saturated'
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    : status === 'degraded'
+                      ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+                      : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              const statusLabel =
+                status === 'unavailable'
+                  ? 'Indisponible'
+                  : status === 'saturated'
+                    ? 'Saturé'
+                    : status === 'degraded'
+                      ? 'Dégradé'
+                      : 'Disponible'
+
+              return (
+                <div key={p.name} className="flex items-center gap-4 text-sm">
+                  <span className="text-zinc-300 font-medium capitalize min-w-[100px]">{p.name}</span>
+                  <span
+                    title={avail?.reason ?? undefined}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border ${badgeCls}`}
+                  >
+                    {statusLabel}
+                  </span>
+                  <span className="text-zinc-500 text-xs">
+                    {p.keys} key{p.keys !== 1 ? 's' : ''}
+                  </span>
+                  <div className="flex-1 bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500/60 rounded-full transition-all"
+                      style={{ width: `${Math.min((p.totalWeight / (providerKeysSummary.reduce((s, x) => s + x.totalWeight, 0) || 1)) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-zinc-600 font-mono text-xs">w={p.totalWeight.toFixed(1)}</span>
                 </div>
-                <span className="text-zinc-600 font-mono text-xs">w={p.totalWeight.toFixed(1)}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="text-sm text-zinc-600">No providers configured</div>

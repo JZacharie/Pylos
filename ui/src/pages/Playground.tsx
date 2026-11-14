@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { api, getBaseUrl } from '../lib/api'
+import { api, getBaseUrl, type ProviderAvailability } from '../lib/api'
 import { formatLatency, formatCost, providerColor } from '../lib/utils'
 import {
   Send, StopCircle, Trash2, ChevronDown,
@@ -18,6 +18,7 @@ interface Model {
   provider: string
   details?: { family?: string; parameter_size?: string }
   supports_streaming?: boolean
+  availability?: ProviderAvailability
 }
 
 interface Message {
@@ -359,24 +360,34 @@ function ModelSelect({
                       const val = `${provider}::${m.id}`
                       const isSelected = value === val || value === m.id
                       const isFav = favorites.includes(val)
+                      const isUnavailable = m.availability?.selectable === false
 
                       return (
                         <div
                           key={val}
+                          title={isUnavailable ? (m.availability?.reason ?? 'Provider indisponible') : undefined}
                           onClick={() => {
+                            if (isUnavailable) return
                             onChange(val)
                             setIsOpen(false)
                           }}
-                          className={`group px-3 py-1.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                            isSelected
-                              ? 'bg-emerald-500/15 text-emerald-300 font-medium'
-                              : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100'
+                          className={`group px-3 py-1.5 text-xs flex items-center justify-between transition-colors ${
+                            isUnavailable
+                              ? 'opacity-45 cursor-not-allowed text-zinc-500'
+                              : isSelected
+                                ? 'bg-emerald-500/15 text-emerald-300 font-medium cursor-pointer'
+                                : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 cursor-pointer'
                           }`}
                         >
                           <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
                             <span className="truncate font-mono text-[11px] sm:text-xs">
                               {m.id}
                             </span>
+                            {isUnavailable && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30 flex-shrink-0">
+                                {m.availability?.status === 'saturated' ? 'Saturé' : 'Indisponible'}
+                              </span>
+                            )}
                             {m.details?.parameter_size && (
                               <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800/90 text-zinc-400 font-mono flex-shrink-0 border border-zinc-750">
                                 {m.details.parameter_size}
@@ -763,14 +774,16 @@ export default function Playground() {
           nextSelected = `${matched.provider}::${matched.id}`
         }
       } else if (!nextSelected) {
+        const selectable = models.filter(m => m.availability?.selectable !== false)
+        const pool = selectable.length > 0 ? selectable : models
         const savedModel = localStorage.getItem('pylos-playground-last-model')
-        const matchedSaved = savedModel ? models.find(m => `${m.provider}::${m.id}` === savedModel) : undefined
+        const matchedSaved = savedModel ? pool.find(m => `${m.provider}::${m.id}` === savedModel) : undefined
         if (matchedSaved && savedModel) {
           nextSelected = savedModel
         } else {
-          const ollama = models.find(m => m.provider === 'ollama-jo3' && m.id === 'llama3.1:8b')
-            ?? models.find(m => m.provider === 'ollama-jo3')
-            ?? models[0]
+          const ollama = pool.find(m => m.provider === 'ollama-jo3' && m.id === 'llama3.1:8b')
+            ?? pool.find(m => m.provider === 'ollama-jo3')
+            ?? pool[0]
           if (ollama) nextSelected = `${ollama.provider}::${ollama.id}`
         }
       }

@@ -320,6 +320,17 @@ pub async fn list_models(
                 .cmp(b["id"].as_str().unwrap_or("")),
         )
     });
+
+    let availability = state.orchestrator.availability();
+    for entry in &mut models {
+        let prov = entry["provider"].as_str().unwrap_or("").to_string();
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert(
+                "availability".to_string(),
+                serde_json::to_value(availability.snapshot(&prov)).unwrap_or_default(),
+            );
+        }
+    }
     models.dedup_by(|a, b| a["provider"] == b["provider"] && a["id"] == b["id"]);
 
     Json(json!({ "object": "list", "data": models }))
@@ -961,6 +972,11 @@ pub async fn run_model_health_check(
     Json(req): Json<ModelHealthCheckRequest>,
 ) -> impl IntoResponse {
     let health = execute_single_health_check(&state, &req.provider, &req.model_id).await;
+    state.orchestrator.availability().sync_from_model_health(
+        &health.provider,
+        &health.health_status,
+        health.error_details.as_deref(),
+    );
     match state.model_catalog.update_model_health(&health).await {
         Ok(()) => Json(health).into_response(),
         Err(e) => (
@@ -999,6 +1015,11 @@ pub async fn run_all_models_health_check(State(state): State<AppState>) -> impl 
     let mut results = Vec::new();
     for handle in handles {
         if let Ok(health) = handle.await {
+            state.orchestrator.availability().sync_from_model_health(
+                &health.provider,
+                &health.health_status,
+                health.error_details.as_deref(),
+            );
             let _ = state.model_catalog.update_model_health(&health).await;
             results.push(health);
         }

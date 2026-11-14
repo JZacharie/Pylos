@@ -32,6 +32,9 @@ pub enum PylosError {
 
     #[error("Guardrail violation: {0}")]
     GuardrailViolation(String),
+
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
 }
 
 impl From<anyhow::Error> for PylosError {
@@ -77,6 +80,7 @@ impl PylosError {
             PylosError::Unsupported(_) => "unsupported",
             PylosError::BudgetExceeded(_) => "budget_exceeded",
             PylosError::GuardrailViolation(_) => "guardrail_violation",
+            PylosError::ServiceUnavailable(_) => "service_unavailable",
         }
     }
 }

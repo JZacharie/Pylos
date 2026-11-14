@@ -110,6 +110,9 @@ fn embedding_error_response(error: &PylosError) -> axum::response::Response {
         PylosError::AllProvidersFailed(_) | PylosError::ProviderError { .. } => {
             (StatusCode::BAD_GATEWAY, "provider_error")
         }
+        PylosError::ServiceUnavailable(_) => {
+            (StatusCode::SERVICE_UNAVAILABLE, "service_unavailable")
+        }
         PylosError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
     };
 

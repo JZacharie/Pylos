@@ -767,6 +767,9 @@ pub fn error_response(error: &PylosError) -> Response {
         PylosError::Unsupported(_) => (StatusCode::NOT_IMPLEMENTED, "not_implemented"),
         PylosError::BudgetExceeded(_) => (StatusCode::PAYMENT_REQUIRED, "budget_exceeded"),
         PylosError::GuardrailViolation(_) => (StatusCode::BAD_REQUEST, "content_policy_violation"),
+        PylosError::ServiceUnavailable(_) => {
+            (StatusCode::SERVICE_UNAVAILABLE, "service_unavailable")
+        }
         PylosError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
     };
 
