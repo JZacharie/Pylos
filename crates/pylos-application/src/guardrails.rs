@@ -235,7 +235,24 @@ static MOD_CATEGORIES: &[ModCategory] = &[
     },
 ];
 
-fn compute_moderation_scores(text: &str) -> ContentModerationScores {
+static COMPILED_MOD_CATEGORIES: LazyLock<Vec<(&'static str, Vec<(regex::Regex, f64)>)>> =
+    LazyLock::new(|| {
+        MOD_CATEGORIES
+            .iter()
+            .map(|cat| {
+                let compiled = cat
+                    .patterns
+                    .iter()
+                    .filter_map(|(pattern, weight)| {
+                        regex::Regex::new(pattern).ok().map(|re| (re, *weight))
+                    })
+                    .collect();
+                (cat.score_key, compiled)
+            })
+            .collect()
+    });
+
+pub fn compute_moderation_scores(text: &str) -> ContentModerationScores {
     let lower = text.to_lowercase();
     let mut scores = ContentModerationScores {
         racism: 0.0,
@@ -250,16 +267,14 @@ fn compute_moderation_scores(text: &str) -> ContentModerationScores {
         social_risk: 0.0,
     };
 
-    for cat in MOD_CATEGORIES {
+    for (score_key, patterns) in COMPILED_MOD_CATEGORIES.iter() {
         let mut max_weight = 0.0_f64;
-        for (pattern, weight) in cat.patterns {
-            if let Ok(re) = regex::Regex::new(pattern) {
-                if re.is_match(&lower) {
-                    max_weight = max_weight.max(*weight);
-                }
+        for (re, weight) in patterns {
+            if re.is_match(&lower) {
+                max_weight = max_weight.max(*weight);
             }
         }
-        let field = match cat.score_key {
+        let field = match *score_key {
             "racism" => &mut scores.racism,
             "toxicity" => &mut scores.toxicity,
             "harassment" => &mut scores.harassment,
@@ -270,7 +285,7 @@ fn compute_moderation_scores(text: &str) -> ContentModerationScores {
             "illegal" => &mut scores.illegal,
             "personal_data_leak" => &mut scores.personal_data_leak,
             "social_risk" => &mut scores.social_risk,
-            _ => unreachable!(),
+            _ => continue,
         };
         *field = max_weight;
     }

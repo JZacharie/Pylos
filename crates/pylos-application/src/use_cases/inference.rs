@@ -773,7 +773,7 @@ fn model_supported_by(config: &ProviderConfig, model: &str) -> bool {
 }
 
 /// Mappe/traduit un modèle pour un provider de destination en cas de fallback.
-fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[String]) -> String {
+pub fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[String]) -> String {
     // 1. Si le provider a des allowed_models configurés (et que ce n'est pas un wildcard), et que le modèle demandé n'y est pas :
     if !allowed_models.is_empty() && !allowed_models.iter().any(|m| m == "*" || m == model) {
         if let Some(first_allowed) = allowed_models.iter().find(|m| !m.contains('*')) {

@@ -41,6 +41,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run tests
         run: cargo test --workspace --locked
+      - name: Verify benchmarks (hot_path)
+        run: cargo bench -p pylos-application --bench hot_path --locked -- --test
 
   check-ui:
     name: Check UI (TypeScript & Build)
