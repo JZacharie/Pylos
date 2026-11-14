@@ -1,4 +1,4 @@
-name: PR Tests
+name: "02 · PR — Tests & Checks (Pull Request)"
 
 on:
   workflow_dispatch:
@@ -173,6 +173,8 @@ jobs:
         run: npm ci --prefix ui
       - name: Build
         run: npm run build --prefix ui
+      - name: Test (Vitest)
+        run: npm test --prefix ui
       - name: Lint (observation)
         continue-on-error: true
         run: npm run lint --prefix ui

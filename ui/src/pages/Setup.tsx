@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { setupApi } from '../lib/api'
+import { setupApi, getErrorMessage } from '../lib/api'
 import { KeyRound, ShieldAlert, ShieldCheck } from 'lucide-react'
 
 export default function Setup() {
@@ -45,8 +45,8 @@ export default function Setup() {
       // Save it locally to log the user in immediately
       localStorage.setItem('pylos_admin_key', password)
       navigate('/dashboard')
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to configure the admin password.")
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to configure the admin password.'))
     } finally {
       setLoading(false)
     }

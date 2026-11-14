@@ -8,17 +8,16 @@ export default function Callback() {
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
+  const code = searchParams.get('code')
+  const state = searchParams.get('state')
+  const paramError = !code
+    ? 'No authorization code found in URL.'
+    : !state
+      ? 'Missing OAuth state (CSRF protection).'
+      : null
+
   useEffect(() => {
-    const code = searchParams.get('code')
-    const state = searchParams.get('state')
-    if (!code) {
-      setError("No authorization code found in URL.")
-      return
-    }
-    if (!state) {
-      setError("Missing OAuth state (CSRF protection).")
-      return
-    }
+    if (!code || !state) return
 
     // Call backend callback endpoint to exchange code for session token
     const redirectUri = `${window.location.origin}/callback`
@@ -29,17 +28,19 @@ export default function Callback() {
         navigate('/dashboard')
       })
       .catch(err => {
-        const errMsg = err.response?.data?.error || err.message || "Failed to authenticate with Google."
+        const errMsg = err.response?.data?.error || err.message || 'Failed to authenticate with Google.'
         setError(errMsg)
       })
-  }, [searchParams, navigate])
+  }, [code, state, navigate])
+
+  const displayError = paramError ?? error
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/10 via-zinc-950 to-zinc-950 pointer-events-none" />
       
       <div className="w-full max-w-md bg-zinc-900/40 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-8 shadow-2xl relative z-10 text-center">
-        {error ? (
+        {displayError ? (
           <div className="space-y-6">
             <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-500">
               <ShieldAlert size={24} />
@@ -47,7 +48,7 @@ export default function Callback() {
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-white">Authentication Failed</h2>
               <p className="text-zinc-400 text-sm max-w-xs mx-auto break-words">
-                {error}
+                {displayError}
               </p>
             </div>
             <button

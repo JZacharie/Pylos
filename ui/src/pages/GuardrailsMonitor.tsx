@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { guardrailsApi, type GuardrailsBreakdown, type GuardrailsTimeline } from '../lib/api'
+import { guardrailsApi, type GuardrailsBreakdown, type GuardrailsTimeline, type GuardrailsEvent } from '../lib/api'
 import { ShieldAlert, Ban, Search, FileText, AlertTriangle, RefreshCw, Shield } from 'lucide-react'
 
 const PERIODS = [
@@ -113,7 +113,7 @@ function TopKeywords({ breakdown }: { breakdown: GuardrailsBreakdown }) {
   )
 }
 
-function EventsTable({ events, loading }: { events: any[]; loading: boolean }) {
+function EventsTable({ events, loading }: { events: GuardrailsEvent[]; loading: boolean }) {
   if (loading) {
     return (
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
@@ -151,7 +151,7 @@ function EventsTable({ events, loading }: { events: any[]; loading: boolean }) {
                 </td>
               </tr>
             ) : (
-              events.map((e: any) => (
+              events.map((e) => (
                 <tr key={e.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
                   <td className="p-3 text-zinc-400 whitespace-nowrap">{formatDate(e.timestamp)}</td>
                   <td className="p-3">

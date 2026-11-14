@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "id": "cohere-chat-1",
+  "message": {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello from Cohere contract fixture."
+      }
+    ]
+  },
+  "finish_reason": "COMPLETE",
+  "usage": {
+    "tokens": {
+      "input_tokens": 9,
+      "output_tokens": 6
+    }
+  }
+}

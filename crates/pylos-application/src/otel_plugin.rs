@@ -52,6 +52,10 @@ impl LlmPlugin for OtelPlugin {
         "otel"
     }
 
+    fn priority(&self) -> i32 {
+        100
+    }
+
     async fn pre_hook(
         &self,
         request: &mut PylosRequest,

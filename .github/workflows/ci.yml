@@ -1,4 +1,4 @@
-name: CI
+name: "02 · Main — CI Build & Tests (Push main)"
 
 on:
   push:
@@ -38,9 +38,13 @@ jobs:
       - name: Create UI stub for rust-embed
         run: mkdir -p ui/dist
       - name: Lint with clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo clippy --workspace --lib --bins --locked -- -D warnings -D clippy::unwrap_used -D clippy::expect_used
       - name: Run tests
         run: cargo test --workspace --locked
+      - name: Verify benchmarks (hot_path)
+        run: cargo bench -p pylos-application --bench hot_path --locked -- --test
 
   check-ui:
     name: Check UI (TypeScript & Build)
@@ -57,6 +61,11 @@ jobs:
         run: npm ci --prefix ui
       - name: Verify UI build
         run: npm run build --prefix ui
+      - name: Run UI tests
+        run: npm test --prefix ui
+      - name: Lint UI
+        continue-on-error: true
+        run: npm run lint --prefix ui
 
   build-and-push:
     name: Build & Push (${{ matrix.arch }})

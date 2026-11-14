@@ -68,7 +68,10 @@ pub struct InferenceOrchestrator {
 }
 
 impl InferenceOrchestrator {
-    pub fn new(providers: ProviderList, plugins: Vec<Arc<dyn LlmPlugin>>) -> Self {
+    pub fn new(providers: ProviderList, mut plugins: Vec<Arc<dyn LlmPlugin>>) -> Self {
+        // Tri déterministe par priorité explicite (plus petit = exécuté plus tôt en pre_hook,
+        // plus tard en post_hook / post_stream_chunk).
+        plugins.sort_by_key(|p| p.priority());
         Self {
             providers: Arc::new(RwLock::new(providers)),
             plugins,
@@ -770,7 +773,7 @@ fn model_supported_by(config: &ProviderConfig, model: &str) -> bool {
 }
 
 /// Mappe/traduit un modèle pour un provider de destination en cas de fallback.
-fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[String]) -> String {
+pub fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[String]) -> String {
     // 1. Si le provider a des allowed_models configurés (et que ce n'est pas un wildcard), et que le modèle demandé n'y est pas :
     if !allowed_models.is_empty() && !allowed_models.iter().any(|m| m == "*" || m == model) {
         if let Some(first_allowed) = allowed_models.iter().find(|m| !m.contains('*')) {
@@ -892,10 +895,43 @@ fn map_model_for_provider(provider_name: &str, model: &str, allowed_models: &[St
     }
 }
 
-/// Wrap a streaming response to collect chunks and run plugin post-hooks after completion.
-/// Post-hooks run asynchronously after the last chunk is yielded, so the client
-/// receives the stream without additional delay. Post-hook errors are logged but
-/// do not propagate to the client.
+/// Split off a trailing incomplete `[...` placeholder prefix (up to 40 chars)
+/// so PII placeholders split across SSE chunks can be reassembled before unmasking.
+fn split_incomplete_placeholder_tail(text: &str) -> (&str, &str) {
+    if let Some(open_idx) = text.rfind('[') {
+        let after_open = &text[open_idx..];
+        if !after_open.contains(']') && after_open.len() <= 40 {
+            return (&text[..open_idx], after_open);
+        }
+    }
+    (text, "")
+}
+
+/// Estimate token usage when a streaming provider omits the final `usage` field.
+fn estimate_stream_usage(request: &PylosRequest, full_content: &str) -> pylos_core::domain::openai::Usage {
+    let prompt_chars: usize = match request {
+        PylosRequest::ChatCompletion(r) => r
+            .messages
+            .iter()
+            .filter_map(|m| m.content.as_ref().map(|c| c.len()))
+            .sum(),
+        _ => 0,
+    };
+    let prompt_tokens = prompt_chars.div_ceil(4) as i32;
+    let completion_tokens = full_content.len().div_ceil(4) as i32;
+    pylos_core::domain::openai::Usage {
+        prompt_tokens,
+        completion_tokens,
+        total_tokens: prompt_tokens + completion_tokens,
+        ..Default::default()
+    }
+}
+
+/// Wrap a streaming response so that:
+/// 1. Each chunk passes through `post_stream_chunk` (in reverse priority order) BEFORE being yielded
+///    to the client — restoring PII placeholders in real time (even when split across chunks).
+/// 2. Any trailing buffered fragment is flushed at stream end.
+/// 3. Full `post_hook` runs at completion with actual (or estimated) `Usage` for budget/metrics/validation.
 fn wrap_stream_with_post_hooks(
     stream: ChunkStream,
     plugins: Vec<Arc<dyn LlmPlugin>>,
@@ -903,82 +939,151 @@ fn wrap_stream_with_post_hooks(
     ctx: RequestContext,
 ) -> ChunkStream {
     let accumulated = Arc::new(Mutex::new(Vec::<StreamChunk>::new()));
+    let last_usage = Arc::new(Mutex::new(None::<pylos_core::domain::openai::Usage>));
+    let pending_tail = Arc::new(Mutex::new(String::new()));
+    let has_pii_mapping = ctx.headers.contains_key("x-pii-mapping");
+
     let acc = accumulated.clone();
+    let usage_acc = last_usage.clone();
+    let tail_acc = pending_tail.clone();
+    let plugins_for_chunk = plugins.clone();
+    let ctx_for_chunk = Arc::new(Mutex::new(ctx.clone()));
+    let ctx_chunk_handle = ctx_for_chunk.clone();
+
     let collected = stream.map(move |result| {
-        if let Ok(ref chunk) = result {
-            if let Ok(mut guard) = acc.lock() {
-                guard.push(chunk.clone());
+        match result {
+            Ok(mut chunk) => {
+                if let Some(ref u) = chunk.usage {
+                    if let Ok(mut u_guard) = usage_acc.lock() {
+                        *u_guard = Some(u.clone());
+                    }
+                }
+
+                if has_pii_mapping {
+                    if let Ok(mut tail) = tail_acc.lock() {
+                        if let Some(choice) = chunk.choices.first_mut() {
+                            if let Some(ref mut content) = choice.delta.content {
+                                if !tail.is_empty() {
+                                    let combined = format!("{}{}", *tail, content);
+                                    tail.clear();
+                                    *content = combined;
+                                }
+                                let (head, rest) = split_incomplete_placeholder_tail(content);
+                                if !rest.is_empty() {
+                                    *tail = rest.to_string();
+                                    *content = head.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Ok(mut c_guard) = ctx_chunk_handle.lock() {
+                    for plugin in plugins_for_chunk.iter().rev() {
+                        if let Err(e) = plugin.post_stream_chunk(&mut chunk, &mut c_guard) {
+                            warn!(plugin = plugin.name(), error = %e, "Post-stream-chunk error");
+                        }
+                    }
+                }
+
+                if let Ok(mut guard) = acc.lock() {
+                    guard.push(chunk.clone());
+                }
+                Ok(chunk)
             }
+            Err(e) => Err(e),
         }
-        result
     });
 
     let plugins_for_done = plugins.clone();
     let request_for_done = request.clone();
     let accumulated_for_done = accumulated.clone();
+    let usage_for_done = last_usage.clone();
+    let tail_for_done = pending_tail.clone();
 
-    let done_future = async move {
-        let chunks = {
-            let guard = accumulated_for_done
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            guard.clone()
-        };
+    let done_stream = futures::stream::once(async move {
+        let remaining_tail = tail_for_done
+            .lock()
+            .map(|mut t| std::mem::take(&mut *t))
+            .unwrap_or_default();
 
-        if chunks.is_empty() {
-            return;
+        let mut chunks = accumulated_for_done
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+
+        let mut flushed_chunk: Option<StreamChunk> = None;
+        if !remaining_tail.is_empty() {
+            let mut tail_chunk = make_terminal_chunk(request_for_done.model(), &remaining_tail);
+            if let Ok(mut c_guard) = ctx_for_chunk.lock() {
+                for plugin in plugins_for_done.iter().rev() {
+                    if let Err(e) = plugin.post_stream_chunk(&mut tail_chunk, &mut c_guard) {
+                        warn!(plugin = plugin.name(), error = %e, "Post-stream-chunk tail flush error");
+                    }
+                }
+            }
+            chunks.push(tail_chunk.clone());
+            flushed_chunk = Some(tail_chunk);
         }
 
-        let full_content: String = chunks
-            .iter()
-            .flat_map(|c| c.choices.iter())
-            .filter_map(|ch| ch.delta.content.as_ref())
-            .cloned()
-            .collect();
+        if !chunks.is_empty() {
+            let full_content: String = chunks
+                .iter()
+                .flat_map(|c| c.choices.iter())
+                .filter_map(|ch| ch.delta.content.as_ref())
+                .cloned()
+                .collect();
 
-        let model = request_for_done.model().to_string();
-        let last_chunk = chunks.last();
-        let finish_reason = last_chunk
-            .and_then(|c| c.choices.first())
-            .and_then(|ch| ch.finish_reason.clone());
+            let model = request_for_done.model().to_string();
+            let last_chunk = chunks.last();
+            let finish_reason = last_chunk
+                .and_then(|c| c.choices.first())
+                .and_then(|ch| ch.finish_reason.clone());
 
-        let mut response = PylosResponse::ChatCompletion(ChatCompletionResponse {
-            id: chunks.first().map(|c| c.id.clone()).unwrap_or_default(),
-            object: "chat.completion".to_string(),
-            created: chunks.first().map(|c| c.created).unwrap_or(0),
-            model,
-            choices: vec![ChatCompletionChoice {
-                index: 0,
-                message: ChatCompletionMessage {
-                    role: MessageRole::Assistant,
-                    content: Some(full_content),
-                    ..Default::default()
-                },
-                finish_reason,
-            }],
-            usage: None,
-        });
+            let stream_usage = usage_for_done
+                .lock()
+                .ok()
+                .and_then(|g| g.clone())
+                .or_else(|| Some(estimate_stream_usage(&request_for_done, &full_content)));
 
-        let mut ctx = ctx;
-        for plugin in plugins_for_done.iter().rev() {
-            if let Err(e) = plugin
-                .post_hook(&request_for_done, &mut response, &mut ctx)
-                .await
-            {
-                warn!(plugin = plugin.name(), error = %e, "Post-hook stream error");
+            let mut response = PylosResponse::ChatCompletion(ChatCompletionResponse {
+                id: chunks.first().map(|c| c.id.clone()).unwrap_or_default(),
+                object: "chat.completion".to_string(),
+                created: chunks.first().map(|c| c.created).unwrap_or(0),
+                model,
+                choices: vec![ChatCompletionChoice {
+                    index: 0,
+                    message: ChatCompletionMessage {
+                        role: MessageRole::Assistant,
+                        content: Some(full_content),
+                        ..Default::default()
+                    },
+                    finish_reason,
+                }],
+                usage: stream_usage,
+            });
+
+            let mut final_ctx = ctx_for_chunk
+                .lock()
+                .map(|g| g.clone())
+                .unwrap_or(ctx);
+            for plugin in plugins_for_done.iter().rev() {
+                if let Err(e) = plugin
+                    .post_hook(&request_for_done, &mut response, &mut final_ctx)
+                    .await
+                {
+                    warn!(plugin = plugin.name(), error = %e, "Post-hook stream error");
+                }
             }
         }
-    };
 
-    // Chain the collected chunks with a terminal item that triggers post-hooks
-    let done_stream = futures::stream::once(async move {
-        done_future.await;
-        // Return a terminal chunk that ends the stream
-        Err::<StreamChunk, PylosError>(PylosError::Internal("stream-end".into()))
+        match flushed_chunk {
+            Some(c) => Ok(c),
+            None => Err::<StreamChunk, PylosError>(PylosError::Internal("stream-end".into())),
+        }
     });
 
     Box::pin(collected.chain(done_stream).take_while(|item| {
-        // Stop streaming when we hit the synthetic terminal error
         let should_continue =
             !matches!(item, Err(PylosError::Internal(ref msg)) if msg == "stream-end");
         futures::future::ready(should_continue)
@@ -1087,5 +1192,150 @@ mod tests {
             map_model_for_provider("antigravity", "gpt-4o", &[]),
             "gemini-4-argon-medium"
         );
+    }
+
+    #[tokio::test]
+    async fn test_plugin_pipeline_sorts_by_priority() {
+        struct PriorityPlugin {
+            name: &'static str,
+            prio: i32,
+            log: Arc<Mutex<Vec<&'static str>>>,
+        }
+
+        #[async_trait::async_trait]
+        impl LlmPlugin for PriorityPlugin {
+            fn name(&self) -> &str {
+                self.name
+            }
+            fn priority(&self) -> i32 {
+                self.prio
+            }
+            async fn pre_hook(
+                &self,
+                _req: &mut PylosRequest,
+                _ctx: &mut RequestContext,
+            ) -> Result<Option<PylosResponse>, PylosError> {
+                self.log.lock().unwrap().push(self.name);
+                Ok(None)
+            }
+        }
+
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let plugins: Vec<Arc<dyn LlmPlugin>> = vec![
+            Arc::new(PriorityPlugin { name: "otel", prio: 100, log: log.clone() }),
+            Arc::new(PriorityPlugin { name: "guardrails", prio: -50, log: log.clone() }),
+            Arc::new(PriorityPlugin { name: "cache", prio: 10, log: log.clone() }),
+        ];
+        let orch = InferenceOrchestrator::new(vec![], plugins);
+        let mut req = PylosRequest::ChatCompletion(pylos_core::domain::openai::ChatCompletionRequest {
+            model: "gpt-4o".into(),
+            messages: vec![],
+            ..Default::default()
+        });
+        let mut ctx = RequestContext::default();
+        for p in &orch.plugins {
+            let _ = p.pre_hook(&mut req, &mut ctx).await;
+        }
+        assert_eq!(*log.lock().unwrap(), vec!["guardrails", "cache", "otel"]);
+    }
+
+    #[tokio::test]
+    async fn test_streaming_post_hooks_restore_split_pii_and_preserve_usage() {
+        use futures::StreamExt;
+        use pylos_core::domain::config::{PluginConfig, PylosConfig};
+        use pylos_core::domain::openai::{ChatCompletionRequest, Usage};
+        use pylos_core::domain::request::{StreamChoice, StreamDelta};
+
+        // Setup GuardrailsPlugin with PII masking/unmasking
+        let mut cfg = PylosConfig::default();
+        cfg.plugins.push(PluginConfig {
+            name: "guardrails".into(),
+            enabled: true,
+            config: serde_json::json!({ "mask_pii": true }),
+        });
+        let store = Arc::new(crate::config_store::ConfigStore::from_config(cfg));
+        let guardrails = Arc::new(crate::guardrails::GuardrailsPlugin::new(store));
+
+        // Capture post_hook usage in a spy plugin
+        let captured_usage: Arc<Mutex<Option<Usage>>> = Arc::new(Mutex::new(None));
+        struct UsageSpy(Arc<Mutex<Option<Usage>>>);
+        #[async_trait::async_trait]
+        impl LlmPlugin for UsageSpy {
+            fn name(&self) -> &str {
+                "usage_spy"
+            }
+            async fn post_hook(
+                &self,
+                _req: &PylosRequest,
+                resp: &mut PylosResponse,
+                _ctx: &mut RequestContext,
+            ) -> Result<(), PylosError> {
+                if let PylosResponse::ChatCompletion(r) = resp {
+                    *self.0.lock().unwrap() = r.usage.clone();
+                }
+                Ok(())
+            }
+        }
+
+        let mut ctx = RequestContext::default();
+        ctx.headers.insert(
+            "x-pii-mapping".into(),
+            r#"{"[EMAIL_1]":"alice@example.com"}"#.into(),
+        );
+
+        let make_chunk = |text: &str, usage: Option<Usage>| StreamChunk {
+            id: "c1".into(),
+            object: "chat.completion.chunk".into(),
+            created: 1,
+            model: "gpt-4o".into(),
+            choices: vec![StreamChoice {
+                index: 0,
+                delta: StreamDelta {
+                    role: Some("assistant".into()),
+                    content: Some(text.into()),
+                    ..Default::default()
+                },
+                finish_reason: None,
+            }],
+            usage,
+        };
+
+        // Placeholder "[EMAIL_1]" is split across two chunks!
+        let chunks = vec![
+            Ok(make_chunk("Contact [EMA", None)),
+            Ok(make_chunk(
+                "IL_1] now.",
+                Some(Usage {
+                    prompt_tokens: 10,
+                    completion_tokens: 5,
+                    total_tokens: 15,
+                    ..Default::default()
+                }),
+            )),
+        ];
+
+        let req = PylosRequest::ChatCompletion(ChatCompletionRequest {
+            model: "gpt-4o".into(),
+            messages: vec![],
+            stream: Some(true),
+            ..Default::default()
+        });
+
+        let wrapped = wrap_stream_with_post_hooks(
+            Box::pin(futures::stream::iter(chunks)),
+            vec![guardrails, Arc::new(UsageSpy(captured_usage.clone()))],
+            req,
+            ctx,
+        );
+
+        let received: Vec<StreamChunk> = wrapped.map(|r| r.unwrap()).collect().await;
+        let full_text: String = received
+            .iter()
+            .filter_map(|c| c.choices.first().and_then(|ch| ch.delta.content.as_deref()))
+            .collect();
+
+        assert_eq!(full_text, "Contact alice@example.com now.");
+        let u = captured_usage.lock().unwrap().clone().expect("Usage should be forwarded to post_hook");
+        assert_eq!(u.total_tokens, 15);
     }
 }

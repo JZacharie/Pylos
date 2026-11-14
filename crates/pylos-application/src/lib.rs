@@ -1,3 +1,5 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+
 pub mod budget_store;
 pub mod cache_aligner;
 pub mod config_store;

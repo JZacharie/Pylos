@@ -71,22 +71,6 @@ function ruleToForm(r: RoutingRuleConfig): RuleFormState {
   }
 }
 
-function formToRule(f: RuleFormState): RoutingRuleConfig {
-  return {
-    id: f.id,
-    name: f.name,
-    enabled: f.enabled,
-    cel_expression: f.cel_expression,
-    targets: f.targets.map(t => ({
-      provider: t.provider || null,
-      model: t.model || null,
-      weight: t.weight,
-    })),
-    fallbacks: f.fallbacks,
-    priority: f.priority,
-  }
-}
-
 // ─── RuleCard ─────────────────────────────────────────────────────────────────
 
 function RuleCard({
@@ -447,13 +431,12 @@ export default function RouterSettings() {
       // so we save via the reload mechanism after config file changes.
       // For now, we trigger a reload to refresh from the file.
       await reloadMutation.mutateAsync()
-    } catch (e: any) {
-      setMutationError(e.message || 'Failed to save')
+    } catch (e: unknown) {
+      setMutationError(e instanceof Error ? e.message : 'Failed to save')
     }
   }
 
-  const handleDeleteRule = (rule: RoutingRuleConfig) => {
-    routingRules.filter(r => r.id !== rule.id)
+  const handleDeleteRule = (_rule: RoutingRuleConfig) => {
     saveRules()
     setDeletingRule(null)
   }
@@ -603,8 +586,7 @@ export default function RouterSettings() {
         <RuleEditor
           rule={createEmptyRule(routingRules.length)}
           providerNames={providerNames}
-          onSave={form => {
-            [...routingRules, formToRule(form)]
+          onSave={() => {
             saveRules()
             setCreatingRule(false)
           }}
@@ -619,8 +601,7 @@ export default function RouterSettings() {
         <RuleEditor
           rule={ruleToForm(editingRule)}
           providerNames={providerNames}
-          onSave={form => {
-            routingRules.map(r => r.id === editingRule.id ? formToRule(form) : r)
+          onSave={() => {
             saveRules()
             setEditingRule(null)
           }}

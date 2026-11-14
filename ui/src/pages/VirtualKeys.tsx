@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { virtualKeysApi, providersApi, modelsApi, type VirtualKey, type VkBudgetResponse } from '../lib/api'
+import { virtualKeysApi, providersApi, modelsApi, getErrorMessage, type VirtualKey, type VkBudgetResponse } from '../lib/api'
 import { providerColor } from '../lib/utils'
 import {
   KeyRound, CheckCircle, XCircle, Shield, TrendingUp,
@@ -713,8 +713,8 @@ export default function VirtualKeys() {
                                 try {
                                   const res = await virtualKeysApi.revealValue(vk.id)
                                   setRevealedKeys(prev => ({ ...prev, [vk.id]: res.value }))
-                                } catch (err: any) {
-                                  alert('Failed to reveal key: ' + (err.response?.data?.error || err.message))
+                                } catch (err: unknown) {
+                                  alert('Failed to reveal key: ' + getErrorMessage(err))
                                 }
                               }
                             }}

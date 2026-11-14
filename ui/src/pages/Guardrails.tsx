@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Shield, Save, Check, RotateCcw, Search, Info, Activity } from 'lucide-react'
-import { configApi } from '../lib/api'
+import { configApi, getErrorMessage } from '../lib/api'
 
 interface GuardrailItem {
   id: string
@@ -70,7 +70,7 @@ export default function Guardrails() {
   })
 
   const [enabled, setEnabled] = useState(false)
-  const [configValues, setConfigValues] = useState<Record<string, any>>({
+  const [configValues, setConfigValues] = useState<Record<string, unknown>>({
     mask_pii: true,
     mask_secrets: false,
     prevent_prompt_injection: false,
@@ -78,15 +78,17 @@ export default function Guardrails() {
   })
 
   // Sync state when config loads
-  useEffect(() => {
+  const [prevConfigData, setPrevConfigData] = useState(configData)
+  if (configData !== prevConfigData) {
+    setPrevConfigData(configData)
     if (configData && configData.plugins) {
-      const guardrailsPlugin = configData.plugins.find((p: any) => p.name === 'guardrails')
+      const guardrailsPlugin = configData.plugins.find((p: { name: string; enabled: boolean; config?: Record<string, unknown> }) => p.name === 'guardrails')
       if (guardrailsPlugin) {
         setEnabled(guardrailsPlugin.enabled)
         setConfigValues(guardrailsPlugin.config || {})
       }
     }
-  }, [configData])
+  }
 
   const mutation = useMutation({
     mutationFn: configApi.updateGuardrails,
@@ -94,8 +96,8 @@ export default function Guardrails() {
       queryClient.invalidateQueries({ queryKey: ['config'] })
       alert('Guardrails configuration updated successfully')
     },
-    onError: (error: any) => {
-      alert(`Failed to update guardrails: ${error.message}`)
+    onError: (error: unknown) => {
+      alert(`Failed to update guardrails: ${getErrorMessage(error)}`)
     }
   })
 
@@ -412,7 +414,7 @@ export default function Guardrails() {
                 Comma-separated list of keywords. If any of these are found in a user's prompt, the request will be blocked.
               </p>
               <textarea
-                value={(configValues.blocked_keywords || []).join(', ')}
+                value={Array.isArray(configValues.blocked_keywords) ? configValues.blocked_keywords.join(', ') : ''}
                 onChange={(e) => {
                   const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
                   setConfigValues(prev => ({ ...prev, blocked_keywords: arr }))

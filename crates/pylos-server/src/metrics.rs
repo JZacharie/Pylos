@@ -44,6 +44,7 @@ pub struct Metrics {
 }
 
 impl Metrics {
+    #[allow(clippy::expect_used)] // Static compile-time Prometheus metric registration at startup
     pub fn new() -> Self {
         let registry = Registry::new();
 

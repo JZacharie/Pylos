@@ -1,4 +1,4 @@
-name: MegaLinter
+name: "01 · Lint — MegaLinter (Push & PR)"
 
 on:
   push:

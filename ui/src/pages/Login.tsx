@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { authApi } from '../lib/api'
+import { authApi, getErrorMessage } from '../lib/api'
 import { KeyRound, ShieldAlert } from 'lucide-react'
 
 export default function Login() {
@@ -59,9 +59,9 @@ export default function Login() {
         `state=${encodeURIComponent(state)}`
 
       window.location.href = targetUrl
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false)
-      setError(err.response?.data?.error || 'Failed to start Google sign-in.')
+      setError(getErrorMessage(err, 'Failed to start Google sign-in.'))
     }
   }
 

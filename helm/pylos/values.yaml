@@ -30,7 +30,8 @@ qdrant:
 
 backend:
   name: pylos
-  replicaCount: 2
+  # Multi-replica (replicaCount > 1) requires database.enabled=true (PostgreSQL).
+  replicaCount: 1
   existingSecret: "pylos-secret"
   existingSecretKey: "OPENCODE_API_KEY"
   image:
@@ -40,6 +41,31 @@ backend:
   service:
     port: 3000
     type: ClusterIP
+  # Health probes for liveness and readiness checks
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 10
+      periodSeconds: 15
+      timeoutSeconds: 3
+      failureThreshold: 3
+    readiness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+  # Optional HorizontalPodAutoscaler (requires database.enabled=true)
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  # Optional PodDisruptionBudget for safe node drains
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
   resources:
     requests:
       cpu: 100m
@@ -52,6 +78,10 @@ backend:
     accessModes:
       - ReadWriteOnce
     size: 1Gi
+
+# Default NetworkPolicy restricting ingress/egress for backend and UI
+networkPolicy:
+  enabled: true
 
 ui:
   name: pylos-ui

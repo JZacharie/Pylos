@@ -331,6 +331,10 @@ impl pylos_core::domain::traits::LlmPlugin for BudgetPlugin {
         "budget"
     }
 
+    fn priority(&self) -> i32 {
+        -70
+    }
+
     async fn pre_hook(
         &self,
         request: &mut pylos_core::domain::request::PylosRequest,
