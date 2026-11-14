@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::provider_availability::ProviderAvailabilityService;
+use crate::quota_guard::{QuotaGuard, RequestPriority};
 
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -57,6 +58,7 @@ pub struct InferenceOrchestrator {
     providers: Arc<RwLock<ProviderList>>,
     plugins: Vec<Arc<dyn LlmPlugin>>,
     availability: Arc<ProviderAvailabilityService>,
+    quota_guard: Arc<QuotaGuard>,
     round_robin: RoundRobinState,
 }
 
@@ -71,6 +73,7 @@ impl InferenceOrchestrator {
             providers: Arc::new(RwLock::new(providers)),
             plugins,
             availability,
+            quota_guard: Arc::new(QuotaGuard::new()),
             round_robin: RoundRobinState::default(),
         }
     }
@@ -81,6 +84,10 @@ impl InferenceOrchestrator {
 
     pub fn availability(&self) -> &Arc<ProviderAvailabilityService> {
         &self.availability
+    }
+
+    pub fn quota_guard(&self) -> &Arc<QuotaGuard> {
+        &self.quota_guard
     }
 
     /// Hot-reload des providers sans interruption de service
@@ -208,40 +215,77 @@ impl InferenceOrchestrator {
             }
         }
 
-        let mut active_supporting = supporting;
+        let (mut tier1_supporting, mut tier2_supporting): (Vec<_>, Vec<_>) = supporting
+            .into_iter()
+            .partition(|(p, _, _, _)| self.availability.billing_tier(p.name()).is_priority_tier());
 
-        // 3. Round-Robin selection among ACTIVE supporting providers
-        let n_active = active_supporting.len();
-        if n_active > 0 {
-            let rr_index = self.round_robin.select_and_advance(model, n_active);
-            active_supporting.rotate_left(rr_index);
-
-            let selected_provider = &active_supporting[0].0;
+        if !tier1_supporting.is_empty() {
+            let rr_index = self.round_robin.select_and_advance(model, tier1_supporting.len());
+            tier1_supporting.rotate_left(rr_index);
+            self.availability.record_priority_route();
+            let selected_provider = &tier1_supporting[0].0;
             info!(
                 model = %model,
                 selected_provider = %selected_provider.name(),
+                tier = "free_or_quota",
                 round_robin_index = rr_index,
-                total_active_supporting = n_active,
-                "[Routing] Model: {} -> Selected Provider: {} (Round-Robin index: {})",
-                model,
+                "[Routing] Priority Tier 1 selected: {}",
                 selected_provider.name(),
-                rr_index,
             );
+        } else if !tier2_supporting.is_empty() {
+            let rr_index = self.round_robin.select_and_advance(model, tier2_supporting.len());
+            tier2_supporting.rotate_left(rr_index);
+            let has_priority_configured = allowed_providers
+                .iter()
+                .any(|(p, _)| self.availability.billing_tier(p.name()).is_priority_tier());
+            if has_priority_configured {
+                self.availability.record_free_to_paid_fallback();
+                warn!(
+                    model = %model,
+                    reason = "free_providers_saturated",
+                    selected_provider = %tier2_supporting[0].0.name(),
+                    "[FinOps] Free/quota providers unavailable or saturated — falling back to paid tier"
+                );
+            }
         } else {
+            let has_priority_configured = allowed_providers
+                .iter()
+                .any(|(p, _)| self.availability.billing_tier(p.name()).is_priority_tier());
+            let has_paid_fallback = non_supporting
+                .iter()
+                .any(|(p, _, _, _)| !self.availability.billing_tier(p.name()).is_priority_tier());
+            if has_priority_configured && has_paid_fallback {
+                self.availability.record_free_to_paid_fallback();
+                warn!(
+                    model = %model,
+                    reason = "free_providers_saturated",
+                    "[FinOps] Free/quota providers unavailable or saturated — falling back to paid tier"
+                );
+            }
             info!(
                 model = %model,
                 "[Routing] No active supporting providers for model — will try fallback chain"
             );
         }
 
-        // 4. Weighted shuffle for remaining ordering (only selectable providers)
-        let active_non_supporting = Self::weighted_shuffle(non_supporting);
+        // 4. Weighted shuffle for non-supporting fallback ordering (Tier 1 Free/Quota before Tier 2 Paid)
+        let (tier1_non_sup, tier2_non_sup): (Vec<_>, Vec<_>) = non_supporting
+            .into_iter()
+            .partition(|(p, _, _, _)| self.availability.billing_tier(p.name()).is_priority_tier());
+        let tier1_non_sup = Self::weighted_shuffle(tier1_non_sup);
+        let tier2_non_sup = Self::weighted_shuffle(tier2_non_sup);
 
         let mut ordered = Vec::new();
-        for (prov, cfg, _, _) in active_supporting {
+        for (prov, cfg, _, _) in tier1_supporting {
             ordered.push((prov, cfg));
         }
-        for (prov, cfg, _, _) in active_non_supporting {
+        for (prov, cfg, _, _) in tier2_supporting {
+            ordered.push((prov, cfg));
+        }
+        for (prov, cfg, _, _) in tier1_non_sup {
+            ordered.push((prov, cfg));
+        }
+        for (prov, cfg, _, _) in tier2_non_sup {
             ordered.push((prov, cfg));
         }
 
@@ -260,7 +304,7 @@ impl InferenceOrchestrator {
     pub async fn embed(
         &self,
         request: EmbeddingRequest,
-        ctx: RequestContext,
+        mut ctx: RequestContext,
     ) -> Result<EmbeddingResponse, PylosError> {
         let providers = self.providers.read().await;
         let mut last_error: Option<PylosError> = None;
@@ -273,6 +317,28 @@ impl InferenceOrchestrator {
         let ordered = self.select_and_order_providers(&providers, &model, &ctx);
 
         for (provider, config) in ordered {
+            if provider.name() == "antigravity" {
+                let prio = RequestPriority::from_header(ctx.request_priority.as_deref());
+                match self.quota_guard.check_and_consume(
+                    "antigravity",
+                    ctx.antigravity_account.as_deref(),
+                    prio,
+                ) {
+                    Ok(acc) => {
+                        ctx.antigravity_account = Some(acc.clone());
+                        ctx.headers.insert("x-pylos-agy-account".into(), acc);
+                    }
+                    Err(e) => {
+                        warn!(provider = "antigravity", error = %e, "[QuotaGuard] Skipping/shedding antigravity");
+                        if !e.to_string().contains("quota_low_shedding") {
+                            self.availability.mark_saturated("antigravity", 60, e.to_string());
+                        }
+                        last_error = Some(e);
+                        continue;
+                    }
+                }
+            }
+
             let mut req_to_send = request.clone();
             if let Some(forced_m) = &ctx.force_model {
                 req_to_send.model = forced_m.clone();
@@ -417,6 +483,28 @@ impl InferenceOrchestrator {
             );
             ctx.tried_providers.push(provider.name().to_string());
 
+            if provider.name() == "antigravity" {
+                let prio = RequestPriority::from_header(ctx.request_priority.as_deref());
+                match self.quota_guard.check_and_consume(
+                    "antigravity",
+                    ctx.antigravity_account.as_deref(),
+                    prio,
+                ) {
+                    Ok(acc) => {
+                        ctx.antigravity_account = Some(acc.clone());
+                        ctx.headers.insert("x-pylos-agy-account".into(), acc);
+                    }
+                    Err(e) => {
+                        warn!(provider = "antigravity", error = %e, "[QuotaGuard] Skipping/shedding antigravity");
+                        if !e.to_string().contains("quota_low_shedding") {
+                            self.availability.mark_saturated("antigravity", 60, e.to_string());
+                        }
+                        last_error = Some(e);
+                        continue;
+                    }
+                }
+            }
+
             let mut req_to_send = request.clone();
             if let Some(forced_m) = &ctx.force_model {
                 req_to_send.set_model(forced_m.clone());
@@ -522,7 +610,12 @@ impl InferenceOrchestrator {
             }
         }
 
-        if ordered.is_empty() && !providers.is_empty() {
+        if ordered.is_empty()
+            && !providers.is_empty()
+            && providers
+                .iter()
+                .any(|(p, _)| !self.availability.is_selectable(p.name()))
+        {
             return Err(PylosError::ServiceUnavailable(format!(
                 "No available providers for model '{}'",
                 request.model()
@@ -590,6 +683,28 @@ impl InferenceOrchestrator {
                 continue;
             }
             ctx.tried_providers.push(provider.name().to_string());
+
+            if provider.name() == "antigravity" {
+                let prio = RequestPriority::from_header(ctx.request_priority.as_deref());
+                match self.quota_guard.check_and_consume(
+                    "antigravity",
+                    ctx.antigravity_account.as_deref(),
+                    prio,
+                ) {
+                    Ok(acc) => {
+                        ctx.antigravity_account = Some(acc.clone());
+                        ctx.headers.insert("x-pylos-agy-account".into(), acc);
+                    }
+                    Err(e) => {
+                        warn!(provider = "antigravity", error = %e, "[QuotaGuard] Skipping/shedding antigravity");
+                        if !e.to_string().contains("quota_low_shedding") {
+                            self.availability.mark_saturated("antigravity", 60, e.to_string());
+                        }
+                        last_error = Some(e);
+                        continue;
+                    }
+                }
+            }
 
             let mut req_to_send = request.clone();
             if let Some(forced_m) = &ctx.force_model {
@@ -666,7 +781,12 @@ impl InferenceOrchestrator {
             }
         }
 
-        if ordered_stream.is_empty() && !providers.is_empty() {
+        if ordered_stream.is_empty()
+            && !providers.is_empty()
+            && providers
+                .iter()
+                .any(|(p, _)| !self.availability.is_selectable(p.name()))
+        {
             return Err(PylosError::ServiceUnavailable(format!(
                 "No available providers for model '{}'",
                 request.model()
@@ -1394,5 +1514,40 @@ mod tests {
         });
         let err = orch.complete(req, RequestContext::default()).await.unwrap_err();
         assert!(matches!(err, PylosError::ServiceUnavailable(_)));
+    }
+
+    #[tokio::test]
+    async fn test_free_provider_prioritized_over_paid_and_fallback_when_saturated() {
+        use pylos_core::domain::provider::{ProviderKey, ProviderKind};
+
+        let mut free_cfg = ProviderConfig::new(ProviderKind::Ollama, vec![]);
+        free_cfg.max_retries = 0;
+        let mut paid_cfg =
+            ProviderConfig::new(ProviderKind::OpenAI, vec![ProviderKey::new("sk-paid")]);
+        paid_cfg.max_retries = 0;
+
+        let providers: ProviderList = vec![
+            (Arc::new(DummyProvider("openai")), paid_cfg),
+            (Arc::new(DummyProvider("ollama-jo3")), free_cfg),
+        ];
+
+        let orch = InferenceOrchestrator::new(providers, vec![]);
+        let providers_arc = orch.providers();
+        let guard = providers_arc.read().await;
+        let ctx = RequestContext::default();
+
+        // Free tier (ollama-jo3) must come before Paid tier (openai)
+        let ordered = orch.select_and_order_providers(&guard, "llama3.1:8b", &ctx);
+        assert_eq!(ordered.len(), 2);
+        assert_eq!(ordered[0].0.name(), "ollama-jo3");
+        assert_eq!(ordered[1].0.name(), "openai");
+
+        // Saturate free tier -> Paid fallback takes over and increments FinOps counter
+        orch.availability()
+            .mark_saturated("ollama-jo3", 60, "429 Too Many Requests");
+        let ordered_sat = orch.select_and_order_providers(&guard, "llama3.1:8b", &ctx);
+        assert_eq!(ordered_sat.len(), 1);
+        assert_eq!(ordered_sat[0].0.name(), "openai");
+        assert_eq!(orch.availability().finops_stats().free_to_paid_fallbacks, 1);
     }
 }

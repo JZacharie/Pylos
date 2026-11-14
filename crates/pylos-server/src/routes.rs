@@ -109,6 +109,9 @@ pub fn create_router(state: AppState) -> Router {
         // Config management routes
         .route("/config", get(config::get_config))
         .route("/config/reload", post(config::reload_config))
+        .route("/v1/quotas", get(config::get_quotas))
+        .route("/v1/quotas/policy", post(config::update_quota_policy))
+        .route("/v1/routing/finops", get(config::get_finops_routing_stats))
         .route("/api/github/promote", post(config::promote_to_prod_handler))
         // Access Control routes
         .route(

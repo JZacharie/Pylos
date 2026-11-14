@@ -197,11 +197,27 @@ pub async fn chat_completions(
         }
     }
 
+    let request_priority = headers
+        .get("x-pylos-priority")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let antigravity_account = headers
+        .get("x-pylos-agy-account")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let reasoning_effort = headers
+        .get("x-pylos-reasoning-effort")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
     let request = PylosRequest::ChatCompletion(payload);
     let mut ctx = RequestContext {
         trace_id: Some(request_id.clone()),
         force_provider,
         force_model,
+        request_priority,
+        antigravity_account,
+        reasoning_effort,
         ..Default::default()
     };
     if let Some(vk) = &vk_info {

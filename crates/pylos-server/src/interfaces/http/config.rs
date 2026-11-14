@@ -861,3 +861,35 @@ pub async fn update_guardrails(
             .into_response(),
     }
 }
+
+pub async fn get_quotas(State(state): State<AppState>) -> impl IntoResponse {
+    Json(state.orchestrator.quota_guard().overview())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateQuotaPolicyRequest {
+    pub economy_mode: Option<bool>,
+    pub low_threshold_pct: Option<f64>,
+}
+
+pub async fn update_quota_policy(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateQuotaPolicyRequest>,
+) -> impl IntoResponse {
+    let qg = state.orchestrator.quota_guard();
+    if let Some(em) = req.economy_mode {
+        qg.set_economy_mode(em);
+    }
+    if let Some(pct) = req.low_threshold_pct {
+        qg.set_low_threshold_pct(pct);
+    }
+    Json(qg.overview())
+}
+
+pub async fn get_finops_routing_stats(State(state): State<AppState>) -> impl IntoResponse {
+    let avail = state.orchestrator.availability();
+    Json(json!({
+        "finops": avail.finops_stats(),
+        "providers": avail.list_snapshots(),
+    }))
+}

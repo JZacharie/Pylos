@@ -121,4 +121,13 @@ pub struct RequestContext {
     pub cache_query_vector: Option<Vec<f32>>,
     pub force_provider: Option<String>,
     pub force_model: Option<String>,
+    /// Priorité de la requête ("interactive" | "recurring" | "background") pour le délestage quota (#212)
+    pub request_priority: Option<String>,
+    /// Compte AGY_ACCOUNT ciblé ou sélectionné par rotation (#209)
+    pub antigravity_account: Option<String>,
+    /// Niveau d'effort de raisonnement demandé ("low" | "medium" | "high") (#210, #211)
+    pub reasoning_effort: Option<String>,
+    /// Historique des tiers/modèles déjà tentés (escalade & observabilité fallbacks #210, #211)
+    pub attempted_tiers: Vec<String>,
+    pub attempted_fallbacks: Vec<String>,
 }

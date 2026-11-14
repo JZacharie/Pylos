@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { logsApi } from '../lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { logsApi, quotasApi } from '../lib/api'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
 } from 'recharts'
@@ -675,6 +675,69 @@ export default function CostTracking() {
           </section>
         </>
       )}
+
+      <QuotasPanel />
     </div>
+  )
+}
+
+function QuotasPanel() {
+  const qc = useQueryClient()
+  const { data: quotas } = useQuery({
+    queryKey: ['quotas'],
+    queryFn: quotasApi.get,
+    refetchInterval: 15_000,
+  })
+  const toggleEconomy = useMutation({
+    mutationFn: (enabled: boolean) => quotasApi.updatePolicy({ economy_mode: enabled }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['quotas'] }),
+  })
+
+  if (!quotas) return null
+
+  return (
+    <section className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-5 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-white">Quotas & Comptes (Antigravity / Free Tiers)</h2>
+          <p className="text-xs text-zinc-400">
+            Seuil bas : {quotas.low_threshold_pct}% · Tâches récurrentes délestées : {quotas.shed_count}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => toggleEconomy.mutate(!quotas.economy_mode)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+            quotas.economy_mode
+              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+              : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+          }`}
+        >
+          Mode Économie (bloquer tâches récurrentes &lt; {quotas.low_threshold_pct}%) : {quotas.economy_mode ? 'Actif' : 'Inactif'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {quotas.accounts.map(acc => {
+          const barColor =
+            acc.status === 'ok'
+              ? 'bg-emerald-500'
+              : acc.status === 'low'
+                ? 'bg-amber-500'
+                : 'bg-red-500'
+          return (
+            <div key={`${acc.provider}-${acc.account}`} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono text-zinc-200">{acc.provider} / {acc.account}</span>
+                <span className="text-zinc-400">{acc.remaining_pct.toFixed(0)}% restant ({acc.used_requests}/{acc.soft_cap})</span>
+              </div>
+              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className={`h-full ${barColor} transition-all`} style={{ width: `${acc.remaining_pct}%` }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }

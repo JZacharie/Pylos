@@ -831,6 +831,44 @@ impl AppState {
         )
         .await;
         let orchestrator = Arc::new(InferenceOrchestrator::new(providers, plugins));
+        // Sync pricing & health from ModelCatalog into ProviderAvailabilityService (#207, #208)
+        let catalog_models = model_catalog.list_models(None, false).await;
+        let prices: Vec<(String, f64, f64)> = catalog_models
+            .iter()
+            .map(|m| {
+                (
+                    m.provider.clone(),
+                    m.input_price_per_1m_usd,
+                    m.output_price_per_1m_usd,
+                )
+            })
+            .collect();
+        orchestrator
+            .availability()
+            .sync_billing_tiers_from_pricing(&prices);
+        if let Ok(health_list) = model_catalog.list_model_health().await {
+            for h in health_list {
+                orchestrator.availability().sync_from_model_health(
+                    &h.provider,
+                    &h.health_status,
+                    h.error_details.as_deref(),
+                );
+            }
+        }
+        // Register configured Antigravity accounts in QuotaGuard (#209, #212)
+        if let Some(agy_cfg) = cfg.providers.get("antigravity") {
+            let accounts: Vec<String> = agy_cfg
+                .keys
+                .iter()
+                .map(|k| k.name.clone())
+                .filter(|n| !n.trim().is_empty())
+                .collect();
+            if !accounts.is_empty() {
+                orchestrator
+                    .quota_guard()
+                    .register_accounts("antigravity", accounts, 50, 60);
+            }
+        }
         let metrics = Arc::new(Metrics::new());
         let vk_registry = Self::register_virtual_keys(&cfg, &vk_store).await;
 

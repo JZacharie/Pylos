@@ -648,3 +648,37 @@ export const setupApi = {
   setup: (password: string, confirmPassword: string) =>
     api.post<{ status: string; message: string }>('/api/setup', { password, confirm_password: confirmPassword }).then(r => r.data),
 }
+
+export interface AccountQuotaSnapshot {
+  provider: string
+  account: string
+  used_requests: number
+  soft_cap: number
+  hard_cap: number
+  remaining_pct: number
+  reset_at_ms: number
+  status: 'ok' | 'low' | 'saturated' | 'blocked'
+  cooldown_until_ms: number | null
+}
+
+export interface QuotaOverview {
+  accounts: AccountQuotaSnapshot[]
+  economy_mode: boolean
+  low_threshold_pct: number
+  shed_count: number
+}
+
+export const quotasApi = {
+  get: () => api.get<QuotaOverview>('/v1/quotas').then(r => r.data),
+  updatePolicy: (data: { economy_mode?: boolean; low_threshold_pct?: number }) =>
+    api.post<QuotaOverview>('/v1/quotas/policy', data).then(r => r.data),
+}
+
+export interface FinOpsRoutingStats {
+  finops: { total_priority_routes: number; free_to_paid_fallbacks: number }
+  providers: ProviderAvailability[]
+}
+
+export const finopsApi = {
+  get: () => api.get<FinOpsRoutingStats>('/v1/routing/finops').then(r => r.data),
+}

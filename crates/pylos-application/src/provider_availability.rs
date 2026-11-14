@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -129,10 +130,18 @@ impl ProviderState {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FinOpsRoutingStats {
+    pub total_priority_routes: u64,
+    pub free_to_paid_fallbacks: u64,
+}
+
 /// Service centralisé de disponibilité, santé et saturation des providers LLM (#207, #208).
 #[derive(Default)]
 pub struct ProviderAvailabilityService {
     states: Mutex<HashMap<String, ProviderState>>,
+    total_priority_routes: AtomicU64,
+    free_to_paid_fallbacks: AtomicU64,
 }
 
 impl ProviderAvailabilityService {
@@ -274,6 +283,54 @@ impl ProviderAvailabilityService {
         entry.billing_tier = tier;
     }
 
+    pub fn billing_tier(&self, provider: &str) -> BillingTier {
+        let guard = self.states.lock().unwrap_or_else(|e| e.into_inner());
+        guard
+            .get(provider)
+            .map(|e| e.billing_tier)
+            .unwrap_or_else(|| BillingTier::classify_provider(provider))
+    }
+
+    pub fn sync_billing_tiers_from_pricing(&self, provider_prices: &[(String, f64, f64)]) {
+        let mut per_provider: HashMap<String, bool> = HashMap::new();
+        for (prov, in_p, out_p) in provider_prices {
+            let is_free = *in_p <= 0.0 && *out_p <= 0.0;
+            per_provider
+                .entry(prov.clone())
+                .and_modify(|all_free| *all_free = *all_free && is_free)
+                .or_insert(is_free);
+        }
+        let mut guard = self.states.lock().unwrap_or_else(|e| e.into_inner());
+        for (prov, all_free) in per_provider {
+            let tier = if prov == "antigravity" {
+                BillingTier::QuotaSubscription
+            } else if all_free || prov.starts_with("ollama") {
+                BillingTier::Free
+            } else {
+                BillingTier::Paid
+            };
+            let entry = guard
+                .entry(prov.clone())
+                .or_insert_with(|| ProviderState::new(&prov));
+            entry.billing_tier = tier;
+        }
+    }
+
+    pub fn record_priority_route(&self) {
+        self.total_priority_routes.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_free_to_paid_fallback(&self) {
+        self.free_to_paid_fallbacks.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn finops_stats(&self) -> FinOpsRoutingStats {
+        FinOpsRoutingStats {
+            total_priority_routes: self.total_priority_routes.load(Ordering::Relaxed),
+            free_to_paid_fallbacks: self.free_to_paid_fallbacks.load(Ordering::Relaxed),
+        }
+    }
+
     pub fn record_success(&self, provider: &str) {
         let mut guard = self.states.lock().unwrap_or_else(|e| e.into_inner());
         let entry = guard
@@ -318,10 +375,11 @@ impl ProviderAvailabilityService {
             || lower.contains("rate limit");
 
         if is_rate_limit {
+            let cooldown = Self::extract_retry_after_secs(&lower)
+                .unwrap_or(DEFAULT_SATURATION_COOLDOWN_SECS);
             entry.status = AvailabilityStatus::Saturated;
             entry.reason = Some(format!("Rate limit / quota saturated: {}", msg));
-            entry.cooldown_until =
-                Some(Instant::now() + Duration::from_secs(DEFAULT_SATURATION_COOLDOWN_SECS));
+            entry.cooldown_until = Some(Instant::now() + Duration::from_secs(cooldown));
             return;
         }
 
@@ -335,6 +393,21 @@ impl ProviderAvailabilityService {
             entry.cooldown_until =
                 Some(Instant::now() + Duration::from_secs(DEFAULT_COOLDOWN_SECS));
         }
+    }
+
+    fn extract_retry_after_secs(lower_msg: &str) -> Option<u64> {
+        for marker in ["retry-after:", "retry after ", "retry_after="] {
+            if let Some(idx) = lower_msg.find(marker) {
+                let rest = lower_msg[idx + marker.len()..].trim_start();
+                let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+                if let Ok(secs) = digits.parse::<u64>() {
+                    if secs > 0 {
+                        return Some(secs.min(3600));
+                    }
+                }
+            }
+        }
+        None
     }
 
     pub fn is_selectable(&self, provider: &str) -> bool {

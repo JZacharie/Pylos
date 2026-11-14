@@ -383,6 +383,16 @@ function ModelSelect({
                             <span className="truncate font-mono text-[11px] sm:text-xs">
                               {m.id}
                             </span>
+                            {m.availability?.billing_tier === 'quota_subscription' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 flex-shrink-0">
+                                Abonnement (0$)
+                              </span>
+                            )}
+                            {m.availability?.billing_tier === 'free' && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex-shrink-0">
+                                Gratuit
+                              </span>
+                            )}
                             {isUnavailable && (
                               <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30 flex-shrink-0">
                                 {m.availability?.status === 'saturated' ? 'Saturé' : 'Indisponible'}

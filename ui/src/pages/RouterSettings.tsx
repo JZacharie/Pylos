@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { configApi, providersApi } from '../lib/api'
+import { configApi, finopsApi, providersApi } from '../lib/api'
 import {
   Route,
   Settings,
@@ -413,6 +413,12 @@ export default function RouterSettings() {
     refetchInterval: 30_000,
   })
 
+  const { data: finopsData } = useQuery({
+    queryKey: ['finops-routing'],
+    queryFn: finopsApi.get,
+    refetchInterval: 15_000,
+  })
+
   const providerNames = providersData?.providers?.map(p => p.name) ?? []
   const routingRules: RoutingRuleConfig[] = config?.governance?.routing_rules ?? []
   const sortedRules = [...routingRules].sort((a, b) => a.priority - b.priority)
@@ -525,9 +531,17 @@ export default function RouterSettings() {
 
       {/* Load Balancing Summary */}
       <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-5">
-        <div className="flex items-center gap-3 mb-4">
-          <Zap size={16} className="text-amber-400" />
-          <span className="font-semibold text-white">Load Balancing</span>
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Zap size={16} className="text-amber-400" />
+            <span className="font-semibold text-white">Load Balancing & FinOps</span>
+          </div>
+          {finopsData?.finops && (
+            <div className="flex items-center gap-3 text-xs text-zinc-400">
+              <span>Routes Tier 1 (Gratuit/Quota) : <strong className="text-emerald-400">{finopsData.finops.total_priority_routes}</strong></span>
+              <span>Bascules Gratuit → Payant : <strong className="text-amber-400">{finopsData.finops.free_to_paid_fallbacks}</strong></span>
+            </div>
+          )}
         </div>
         {providerKeysSummary.length > 0 ? (
           <div className="space-y-3">
@@ -547,14 +561,26 @@ export default function RouterSettings() {
                 status === 'unavailable'
                   ? 'Indisponible'
                   : status === 'saturated'
-                    ? 'Saturé'
+                    ? `Saturé${avail?.retry_after_secs ? ` (${avail.retry_after_secs}s)` : ''}`
                     : status === 'degraded'
                       ? 'Dégradé'
                       : 'Disponible'
+              const tier = avail?.billing_tier ?? 'paid'
+              const tierLabel =
+                tier === 'free' ? 'Gratuit' : tier === 'quota_subscription' ? 'Abonnement' : 'Payant'
+              const tierCls =
+                tier === 'free'
+                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                  : tier === 'quota_subscription'
+                    ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
 
               return (
-                <div key={p.name} className="flex items-center gap-4 text-sm">
+                <div key={p.name} className="flex items-center gap-3 text-sm">
                   <span className="text-zinc-300 font-medium capitalize min-w-[100px]">{p.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${tierCls}`}>
+                    {tierLabel}
+                  </span>
                   <span
                     title={avail?.reason ?? undefined}
                     className={`text-[10px] px-1.5 py-0.5 rounded border ${badgeCls}`}

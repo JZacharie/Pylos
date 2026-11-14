@@ -13,6 +13,7 @@ pub mod otel_plugin;
 pub mod prefix_cache;
 pub mod prompt_registry;
 pub mod provider_availability;
+pub mod quota_guard;
 pub mod rag_plugin;
 pub mod rate_limit_plugin;
 pub mod semantic_cache;
@@ -38,8 +39,10 @@ pub use otel_plugin::{OtelConfig, OtelPlugin};
 pub use prefix_cache::PrefixCachePlugin;
 pub use prompt_registry::PromptRegistryPlugin;
 pub use provider_availability::{
-    AvailabilityStatus, BillingTier, ProviderAvailabilityService, ProviderStatusSnapshot,
+    AvailabilityStatus, BillingTier, FinOpsRoutingStats, ProviderAvailabilityService,
+    ProviderStatusSnapshot,
 };
+pub use quota_guard::{AccountQuotaSnapshot, QuotaGuard, QuotaOverview, QuotaStatus, RequestPriority};
 pub use rag_plugin::{RagConfig, RagPlugin};
 pub use rate_limit_plugin::RateLimitPlugin;
 pub use semantic_cache::SemanticCachePlugin;
