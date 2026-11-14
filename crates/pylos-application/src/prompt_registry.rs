@@ -168,6 +168,7 @@ mod tests {
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         });
 
         let mut ctx = RequestContext::default();

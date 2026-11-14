@@ -36,6 +36,8 @@ pub(crate) struct OpenAIChatRequest<'a> {
     pub tools: Option<&'a [pylos_core::domain::openai::Tool]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<&'a pylos_core::domain::openai::ToolChoice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<&'a str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -222,6 +224,7 @@ pub(crate) fn to_openai_request<'a>(
         },
         tools: req.tools.as_deref(),
         tool_choice: req.tool_choice.as_ref(),
+        reasoning_effort: req.reasoning_effort.as_deref(),
     }
 }
 

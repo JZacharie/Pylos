@@ -36,6 +36,47 @@ impl RequestTier {
     }
 }
 
+/// Thème fonctionnel détecté ou demandé pour le routage agnostique (#211)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskTheme {
+    Code,
+    Reasoning,
+    Summary,
+    Vision,
+    General,
+}
+
+impl TaskTheme {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TaskTheme::Code => "code",
+            TaskTheme::Reasoning => "reasoning",
+            TaskTheme::Summary => "summary",
+            TaskTheme::Vision => "vision",
+            TaskTheme::General => "general",
+        }
+    }
+
+    pub fn parse(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "code" | "coding" | "dev" => TaskTheme::Code,
+            "reasoning" | "math" | "logic" | "architecture" => TaskTheme::Reasoning,
+            "summary" | "summarize" | "tldr" => TaskTheme::Summary,
+            "vision" | "image" | "multimodal" => TaskTheme::Vision,
+            _ => TaskTheme::General,
+        }
+    }
+}
+
+/// Résultat du pré-analyseur léger de complexité et thème (#211)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreAnalyzerResult {
+    pub theme: TaskTheme,
+    pub tier: RequestTier,
+    pub reasoning_effort: &'static str,
+    pub escalated: bool,
+}
+
 /// Métriques CPS (Cost Per Successful task), ExecRate, Taux d'escalade
 #[derive(Debug, Default)]
 pub struct RouterMetrics {
@@ -254,6 +295,127 @@ impl SmartRouterPlugin {
         RequestTier::Mid
     }
 
+    /// Détecte le thème fonctionnel à partir du contexte, du nom de modèle agnostique ou du contenu (#211)
+    pub fn classify_theme(&self, request: &PylosRequest, ctx: &RequestContext) -> TaskTheme {
+        if let Some(ref explicit) = ctx.theme {
+            return TaskTheme::parse(explicit);
+        }
+        let model_lower = request.model().to_ascii_lowercase();
+        if let Some(suffix) = model_lower
+            .strip_prefix("auto:")
+            .or_else(|| model_lower.strip_prefix("pylos/"))
+        {
+            return TaskTheme::parse(suffix);
+        }
+
+        let chat_req = match request {
+            PylosRequest::ChatCompletion(ref req) => req,
+            _ => return TaskTheme::General,
+        };
+
+        let mut combined = String::new();
+        for m in &chat_req.messages {
+            if let Some(c) = &m.content {
+                combined.push_str(&c.to_ascii_lowercase());
+                combined.push('\n');
+            }
+        }
+
+        if combined.contains("image_url") || combined.contains("data:image/") {
+            return TaskTheme::Vision;
+        }
+        if combined.contains("```")
+            || combined.contains("fn ")
+            || combined.contains("impl ")
+            || combined.contains("def ")
+            || combined.contains("select ")
+            || combined.contains("async ")
+            || combined.contains("stack trace")
+        {
+            return TaskTheme::Code;
+        }
+        if combined.contains("prove")
+            || combined.contains("démontre")
+            || combined.contains("architecture")
+            || combined.contains("tradeoff")
+            || combined.contains("step by step")
+            || combined.contains("étape par étape")
+            || combined.contains("pourquoi")
+        {
+            return TaskTheme::Reasoning;
+        }
+        if combined.contains("résume")
+            || combined.contains("summarize")
+            || combined.contains("tl;dr")
+            || combined.contains("synthèse")
+        {
+            return TaskTheme::Summary;
+        }
+        TaskTheme::General
+    }
+
+    /// Pré-analyseur léger : détermine thème, tier et `reasoning_effort` standardisé,
+    /// et applique l'escalade automatique si une tentative précédente a échoué (`ctx.escalate` / `attempted_tiers`) (#211).
+    pub fn analyze_request(
+        &self,
+        request: &PylosRequest,
+        ctx: &RequestContext,
+    ) -> PreAnalyzerResult {
+        let theme = self.classify_theme(request, ctx);
+        let mut tier = self.classify(request);
+
+        // Ajustement par thème : reasoning ou code -> au moins Mid
+        if matches!(theme, TaskTheme::Reasoning | TaskTheme::Code) && tier == RequestTier::Flash {
+            tier = RequestTier::Mid;
+        }
+
+        let mut escalated = false;
+        let should_escalate = ctx.escalate || !ctx.attempted_tiers.is_empty();
+        if should_escalate {
+            let max_attempted = ctx
+                .attempted_tiers
+                .iter()
+                .map(|t| RequestTier::from_str(t))
+                .fold(None::<RequestTier>, |acc, t| match (acc, t) {
+                    (None, x) => Some(x),
+                    (Some(RequestTier::Flash), x) => Some(x),
+                    (Some(RequestTier::Mid), RequestTier::Frontier) => Some(RequestTier::Frontier),
+                    (Some(a), _) => Some(a),
+                });
+
+            let target = match max_attempted.unwrap_or(tier) {
+                RequestTier::Flash => RequestTier::Mid,
+                RequestTier::Mid | RequestTier::Frontier => RequestTier::Frontier,
+            };
+            if target != tier || ctx.escalate {
+                tier = target;
+                escalated = true;
+            }
+        }
+
+        let default_effort = match (tier, theme) {
+            (RequestTier::Frontier, _) => "high",
+            (RequestTier::Mid, TaskTheme::Reasoning | TaskTheme::Code) => "medium",
+            (RequestTier::Mid, _) => "medium",
+            (RequestTier::Flash, TaskTheme::Reasoning) => "medium",
+            (RequestTier::Flash, _) => "low",
+        };
+
+        let reasoning_effort = match ctx.reasoning_effort.as_deref() {
+            Some("high") => "high",
+            Some("medium") => if escalated { "high" } else { "medium" },
+            Some("low") => if escalated { "medium" } else { "low" },
+            _ => default_effort,
+        };
+
+        PreAnalyzerResult {
+            theme,
+            tier,
+            reasoning_effort,
+            escalated,
+        }
+    }
+
     /// Compacte le contexte : résume les messages anciens
     fn compact_context(request: &mut PylosRequest, target: usize) -> bool {
         let chat_req = match request {
@@ -330,13 +492,36 @@ impl LlmPlugin for SmartRouterPlugin {
             return Ok(None);
         }
 
-        // 1. Classification du niveau de complexité
-        let tier = self.classify(request);
+        // 1. Pré-analyseur : thème, complexité, reasoning_effort et escalade automatique (#211)
+        let analysis = self.analyze_request(request, ctx);
+        let tier = analysis.tier;
+        if analysis.escalated {
+            if ctx.attempted_tiers.iter().any(|t| t == "flash") {
+                self.metrics
+                    .flash_escalation
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            } else {
+                self.metrics
+                    .mid_escalation
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+
+        ctx.theme = Some(analysis.theme.as_str().to_string());
+        ctx.reasoning_effort = Some(analysis.reasoning_effort.to_string());
+        if !ctx.attempted_tiers.iter().any(|t| t == tier.as_str()) {
+            ctx.attempted_tiers.push(tier.as_str().to_string());
+        }
+        if let PylosRequest::ChatCompletion(ref mut chat_req) = request {
+            if chat_req.reasoning_effort.is_none() || analysis.escalated {
+                chat_req.reasoning_effort = Some(analysis.reasoning_effort.to_string());
+            }
+        }
 
         // 2. Compaction du contexte si nécessaire
         let compacted = if request.model().contains("gemma4:e2b")
             || request.model().contains("flash")
-            || self.classify(request) == RequestTier::Flash
+            || tier == RequestTier::Flash
         {
             // Compaction uniquement pour les conversations longues sur SLM
             let chat_req = match request {
@@ -554,6 +739,7 @@ mod tests {
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         })
     }
 
@@ -653,6 +839,7 @@ mod tests {
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         });
 
         let compacted = SmartRouterPlugin::compact_context(&mut req, 10);
@@ -702,6 +889,7 @@ mod tests {
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         });
 
         let compacted = SmartRouterPlugin::compact_context(&mut req, 10);
@@ -741,5 +929,44 @@ mod tests {
         // 150 tokens * $0.10 / 1M * 100_000 = 0.0015 millicents... let me recalculate
         // cost = 150 * 0.10 / 1_000_000 * 100_000 = 150 * 0.01 = 1.5
         assert!(cost > 0, "Cost should be positive, got {}", cost);
+    }
+
+    #[tokio::test]
+    async fn test_pre_analyzer_theme_and_reasoning_effort() {
+        let plugin = make_plugin();
+        let mut req = make_request(
+            vec![(MessageRole::User, "```rust\nfn main() {}\n```\nFix this bug.")],
+            false,
+            false,
+        );
+        let mut ctx = RequestContext::default();
+        plugin.pre_hook(&mut req, &mut ctx).await.unwrap();
+
+        assert_eq!(ctx.theme.as_deref(), Some("code"));
+        assert_eq!(ctx.reasoning_effort.as_deref(), Some("medium"));
+        assert_eq!(ctx.attempted_tiers, vec!["mid".to_string()]);
+        if let PylosRequest::ChatCompletion(chat) = &req {
+            assert_eq!(chat.reasoning_effort.as_deref(), Some("medium"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_automatic_escalation_on_attempted_tiers_and_header() {
+        let plugin = make_plugin();
+        let mut req = make_request(vec![(MessageRole::User, "Hello")], false, false);
+        let mut ctx = RequestContext {
+            escalate: true,
+            attempted_tiers: vec!["flash".to_string()],
+            reasoning_effort: Some("low".to_string()),
+            ..Default::default()
+        };
+
+        plugin.pre_hook(&mut req, &mut ctx).await.unwrap();
+
+        assert_eq!(req.model(), "qwen2.5-coder:7b"); // escalated to Mid
+        assert_eq!(ctx.reasoning_effort.as_deref(), Some("medium"));
+        assert!(ctx.attempted_tiers.contains(&"mid".to_string()));
+        let snap = plugin.metrics().snapshot();
+        assert_eq!(snap.flash_escalation, 1);
     }
 }

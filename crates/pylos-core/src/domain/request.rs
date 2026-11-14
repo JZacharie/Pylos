@@ -4,6 +4,7 @@ use std::collections::HashMap;
 /// Requête unifiée Pylos — équivalent de BifrostRequest en Go
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum PylosRequest {
     ChatCompletion(crate::domain::openai::ChatCompletionRequest),
     TextCompletion(crate::domain::openai::TextCompletionRequest),
@@ -130,4 +131,8 @@ pub struct RequestContext {
     /// Historique des tiers/modèles déjà tentés (escalade & observabilité fallbacks #210, #211)
     pub attempted_tiers: Vec<String>,
     pub attempted_fallbacks: Vec<String>,
+    /// Escalade automatique demandée via header `x-pylos-escalate: true` (#211)
+    pub escalate: bool,
+    /// Thème détecté ou demandé (`code`, `reasoning`, `summary`, `vision`, `general`) (#211)
+    pub theme: Option<String>,
 }

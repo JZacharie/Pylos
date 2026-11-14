@@ -1100,6 +1100,7 @@ async fn execute_single_health_check(
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         };
         let request = PylosRequest::ChatCompletion(req);
         provider.complete(&request, config).await.map(|_| ())

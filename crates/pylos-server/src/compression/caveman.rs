@@ -404,6 +404,7 @@ mod tests {
             max_completion_tokens: None,
             session_id: None,
             account: None,
+            reasoning_effort: None,
         };
         assert!(is_critical_request(&req));
     }
@@ -437,6 +438,7 @@ mod tests {
             max_completion_tokens: None,
             session_id: None,
             account: None,
+            reasoning_effort: None,
         };
 
         let saved = apply_caveman(&mut req, CavemanMode::Full, true);

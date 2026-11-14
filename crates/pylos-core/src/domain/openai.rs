@@ -133,6 +133,30 @@ pub struct ChatCompletionRequest {
     /// Limite spécifique pour les tokens générés (OpenAI o1/o3, DeepSeek R1)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_completion_tokens: Option<i32>,
+    /// Niveau d'effort de raisonnement standardisé ("low" | "medium" | "high") (#210, #211)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
+}
+
+/// Nettoie les frontières de raisonnement (blocs `reasoning_content` / `<thought>`) lors
+/// d'un basculement cross-provider afin d'éviter les erreurs de compatibilité (#210, #211).
+pub fn sanitize_reasoning_boundaries(messages: &mut [ChatCompletionMessage]) -> usize {
+    let mut cleaned = 0usize;
+    for msg in messages.iter_mut() {
+        if msg.reasoning_content.take().is_some() {
+            cleaned += 1;
+        }
+        if let Some(content) = msg.content.as_mut() {
+            if let (Some(start), Some(end)) = (content.find("<thought>"), content.find("</thought>")) {
+                if end >= start {
+                    let after = &content[end + "</thought>".len()..];
+                    *content = format!("{}{}", &content[..start], after).trim().to_string();
+                    cleaned += 1;
+                }
+            }
+        }
+    }
+    cleaned
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -32,6 +32,16 @@ pub(crate) struct AnthropicRequest {
     /// Contrôle quel outil est appelé : "auto" | "any" | {"type":"tool","name":"..."}
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<serde_json::Value>,
+    /// Extended thinking traduit depuis `reasoning_effort` (#210, #211)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<AnthropicThinkingConfig>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct AnthropicThinkingConfig {
+    #[serde(rename = "type")]
+    pub thinking_type: &'static str,
+    pub budget_tokens: i32,
 }
 
 /// Message Anthropic — le contenu peut être texte ou une liste de blocs
@@ -304,17 +314,34 @@ pub(crate) fn to_anthropic_request(
         }
     });
 
+    let thinking = match req.reasoning_effort.as_deref() {
+        Some("medium") => Some(AnthropicThinkingConfig {
+            thinking_type: "enabled",
+            budget_tokens: 4096,
+        }),
+        Some("high") => Some(AnthropicThinkingConfig {
+            thinking_type: "enabled",
+            budget_tokens: 16384,
+        }),
+        _ => None,
+    };
+    let max_tokens = match &thinking {
+        Some(t) if max_tokens <= t.budget_tokens => t.budget_tokens + 2048,
+        _ => max_tokens,
+    };
+
     AnthropicRequest {
         model: req.model.clone(),
         messages,
         max_tokens,
         system,
-        temperature: req.temperature,
+        temperature: if thinking.is_some() { None } else { req.temperature },
         top_p: req.top_p,
         stream: if stream { Some(true) } else { None },
         stop_sequences,
         tools,
         tool_choice,
+        thinking,
     }
 }
 

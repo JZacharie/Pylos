@@ -622,6 +622,7 @@ mod tests {
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         };
         let cohere_req = to_cohere_request(&req, false);
         assert_eq!(cohere_req.messages[0].role, "system");

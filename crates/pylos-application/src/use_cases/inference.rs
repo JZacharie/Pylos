@@ -383,6 +383,16 @@ impl InferenceOrchestrator {
                     ) {
                         return Err(e);
                     }
+                    let err_lower = e.to_string().to_ascii_lowercase();
+                    let fb_kind = if err_lower.contains("429") || err_lower.contains("rate limit") {
+                        "rate_limit_fallback"
+                    } else if err_lower.contains("context") || err_lower.contains("token") {
+                        "context_window_fallback"
+                    } else {
+                        "error_fallback"
+                    };
+                    ctx.attempted_fallbacks
+                        .push(format!("{}:{}", fb_kind, provider.name()));
                     last_error = Some(e);
                 }
             }
@@ -429,6 +439,7 @@ impl InferenceOrchestrator {
                 min_p: None,
                 repetition_penalty: None,
                 max_completion_tokens: None,
+                reasoning_effort: ctx.reasoning_effort.clone(),
             };
             let original_model = tc.model.clone();
             request = PylosRequest::ChatCompletion(chat_req);
@@ -506,6 +517,20 @@ impl InferenceOrchestrator {
             }
 
             let mut req_to_send = request.clone();
+            if last_error.is_some() {
+                if let PylosRequest::ChatCompletion(ref mut chat_req) = req_to_send {
+                    let cleaned = pylos_core::domain::openai::sanitize_reasoning_boundaries(
+                        &mut chat_req.messages,
+                    );
+                    if cleaned > 0 {
+                        debug!(
+                            provider = provider.name(),
+                            cleaned,
+                            "[Fallback] Sanitized reasoning boundaries across provider switch"
+                        );
+                    }
+                }
+            }
             if let Some(forced_m) = &ctx.force_model {
                 req_to_send.set_model(forced_m.clone());
             } else {
@@ -605,6 +630,16 @@ impl InferenceOrchestrator {
                     ) {
                         return Err(e);
                     }
+                    let err_lower = e.to_string().to_ascii_lowercase();
+                    let fb_kind = if err_lower.contains("429") || err_lower.contains("rate limit") {
+                        "rate_limit_fallback"
+                    } else if err_lower.contains("context") || err_lower.contains("token") {
+                        "context_window_fallback"
+                    } else {
+                        "error_fallback"
+                    };
+                    ctx.attempted_fallbacks
+                        .push(format!("{}:{}", fb_kind, provider.name()));
                     last_error = Some(e);
                 }
             }
@@ -707,6 +742,20 @@ impl InferenceOrchestrator {
             }
 
             let mut req_to_send = request.clone();
+            if last_error.is_some() {
+                if let PylosRequest::ChatCompletion(ref mut chat_req) = req_to_send {
+                    let cleaned = pylos_core::domain::openai::sanitize_reasoning_boundaries(
+                        &mut chat_req.messages,
+                    );
+                    if cleaned > 0 {
+                        debug!(
+                            provider = provider.name(),
+                            cleaned,
+                            "[Fallback] Sanitized reasoning boundaries across provider switch"
+                        );
+                    }
+                }
+            }
             if let Some(forced_m) = &ctx.force_model {
                 req_to_send.set_model(forced_m.clone());
             } else {
@@ -776,6 +825,16 @@ impl InferenceOrchestrator {
                     ) {
                         return Err(e);
                     }
+                    let err_lower = e.to_string().to_ascii_lowercase();
+                    let fb_kind = if err_lower.contains("429") || err_lower.contains("rate limit") {
+                        "rate_limit_fallback"
+                    } else if err_lower.contains("context") || err_lower.contains("token") {
+                        "context_window_fallback"
+                    } else {
+                        "error_fallback"
+                    };
+                    ctx.attempted_fallbacks
+                        .push(format!("{}:{}", fb_kind, provider.name()));
                     last_error = Some(e);
                 }
             }

@@ -75,6 +75,14 @@ pub(crate) struct GeminiGenerationConfig {
     pub top_p: Option<f32>,
     #[serde(rename = "stopSequences", skip_serializing_if = "Option::is_none")]
     pub stop_sequences: Option<Vec<String>>,
+    #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
+    pub thinking_config: Option<GeminiThinkingConfig>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct GeminiThinkingConfig {
+    #[serde(rename = "thinkingBudget")]
+    pub thinking_budget: i32,
 }
 
 // ── Définitions d'outils Gemini ───────────────────────────────────────────────
@@ -276,6 +284,15 @@ pub(crate) fn to_gemini_request(
         })
     };
 
+    let thinking_config = req.reasoning_effort.as_deref().map(|effort| {
+        let thinking_budget = match effort {
+            "high" => 16384,
+            "medium" => 4096,
+            _ => 512,
+        };
+        GeminiThinkingConfig { thinking_budget }
+    });
+
     let generation_config = Some(GeminiGenerationConfig {
         max_output_tokens: req.max_tokens,
         temperature: req.temperature,
@@ -285,6 +302,7 @@ pub(crate) fn to_gemini_request(
             Some(pylos_core::domain::openai::StopCondition::Multiple(v)) => Some(v.clone()),
             None => None,
         },
+        thinking_config,
     });
 
     // Conversion des tools OpenAI → Gemini functionDeclarations
@@ -624,6 +642,7 @@ mod tests {
             repetition_penalty: None,
             max_completion_tokens: None,
             account: None,
+            reasoning_effort: None,
         }
     }
 

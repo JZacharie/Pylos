@@ -208,7 +208,26 @@ pub async fn chat_completions(
     let reasoning_effort = headers
         .get("x-pylos-reasoning-effort")
         .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| payload.reasoning_effort.clone());
+    let escalate = headers
+        .get("x-pylos-escalate")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|s| matches!(s.trim().to_ascii_lowercase().as_str(), "true" | "1" | "yes"));
+    let theme = headers
+        .get("x-pylos-theme")
+        .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
+    let attempted_tiers: Vec<String> = headers
+        .get("x-pylos-attempted-tiers")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| {
+            s.split(',')
+                .map(|part| part.trim().to_string())
+                .filter(|part| !part.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
 
     let request = PylosRequest::ChatCompletion(payload);
     let mut ctx = RequestContext {
@@ -218,6 +237,9 @@ pub async fn chat_completions(
         request_priority,
         antigravity_account,
         reasoning_effort,
+        attempted_tiers,
+        escalate,
+        theme,
         ..Default::default()
     };
     if let Some(vk) = &vk_info {
@@ -389,6 +411,42 @@ async fn complete_response(
                     axum::http::header::HeaderName::from_static("x-pylos-model"),
                     val,
                 );
+            }
+            if let Some(ref effort) = final_ctx.reasoning_effort {
+                if let Ok(val) = axum::http::header::HeaderValue::from_str(effort) {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-pylos-reasoning-effort"),
+                        val,
+                    );
+                }
+            }
+            if let Some(ref theme) = final_ctx.theme {
+                if let Ok(val) = axum::http::header::HeaderValue::from_str(theme) {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-pylos-theme"),
+                        val,
+                    );
+                }
+            }
+            if !final_ctx.attempted_tiers.is_empty() {
+                if let Ok(val) =
+                    axum::http::header::HeaderValue::from_str(&final_ctx.attempted_tiers.join(","))
+                {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-pylos-attempted-tiers"),
+                        val,
+                    );
+                }
+            }
+            if !final_ctx.attempted_fallbacks.is_empty() {
+                if let Ok(val) = axum::http::header::HeaderValue::from_str(
+                    &final_ctx.attempted_fallbacks.join(","),
+                ) {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-pylos-attempted-fallbacks"),
+                        val,
+                    );
+                }
             }
             if actual_provider == "antigravity" || resp_id.starts_with("chatcmpl-agy-") {
                 let conv_id = resp_id.trim_start_matches("chatcmpl-agy-");
